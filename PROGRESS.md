@@ -50,28 +50,33 @@ router live run, runs/<ts> UUID suffix).
   - Coverage: 3/10 sampled_logprobs, 3/10 top_logprobs, 1/10 token_ids,
     1/10 seed_supported.
 
-### Dense mismatch (Qwen3-32B, 128 tokens, seed=1234, four cells)
-| rollout engine | precision | ESS | mean \|Δlogp\| | max \|log_ratio\| | seq_log_ratio |
+### Dense mismatch (Qwen3-32B, 8 prompts × 128 tokens = 1024 tokens per cell, seed=1234)
+| rollout engine | precision | mean ESS (n=8) | mean \|Δlogp\| | worst max\|log_ratio\| | mean seq_log_ratio |
 |---|---|---:|---:|---:|---:|
-| vLLM 0.20.1 | bf16 | 0.9991 | 0.012 | 0.165 | +0.28 |
-| vLLM 0.20.1 | fp8 | 0.9949 | 0.033 | 0.377 | -0.72 |
-| sglang 0.5.11 | bf16 | 0.9898 | 0.061 | 0.550 | -5.40 |
-| sglang 0.5.11 | fp8 | 0.9641 | 0.092 | 0.941 | -5.16 |
+| vLLM 0.20.1 | bf16 | **0.9987** | 0.014 | 0.362 | +0.13 |
+| vLLM 0.20.1 | fp8 | 0.9920 | 0.033 | 0.756 | -0.34 |
+| sglang 0.5.11 | bf16 | 0.9845 | 0.066 | 0.711 | -4.67 |
+| sglang 0.5.11 | fp8 | **0.9733** | 0.076 | **1.140** | -4.81 |
 
 Trainer reference is HF transformers 5.8.0 bf16 with `sdpa` attention in all
-four cells. clipped_fraction = 0, veto_fraction = 0 across the board, so all
-four route OPBC -> `train` / `within_budget`.
+four cells. `clipped_fraction = 0`, `veto_fraction = 0` across all 32 runs,
+so OPBC routes every cell to `train` / `within_budget`.
 
-Insights this surfaces:
-- **Engine choice is at least as load-bearing as precision class.** sglang
-  bf16 (ESS 0.99) drifts more from the HF reference than vLLM bf16 *or*
-  vLLM FP8 do.
-- **sglang has a systematic over-confidence** — the rollout side scores
-  the response ~5 nats higher than HF over 128 tokens (negative
-  sequence_log_ratio of ~-5). vLLM stays within ±1 nat.
-- **FP8 adds drift on top of the engine baseline.** vLLM gains ~0.2 in
-  worst max|log_ratio| moving bf16 -> fp8; sglang gains ~0.4. Quantization
-  noise is engine-specific, not just a precision-class effect.
+The 8-prompt run confirms the single-prompt observations as robust (not an
+artifact of one prompt):
+- **Engine choice dominates precision class.** sglang bf16 (mean ESS 0.985)
+  drifts more from the HF reference than vLLM bf16 *or* vLLM FP8 do.
+- **sglang carries a systematic ~-4.7 nat sequence-log-ratio bias** that
+  vLLM does not. Same prompts, same seed, same trainer reference. Both
+  sglang variants over-score by 4-5 nats per 128 tokens; vLLM stays within
+  ±0.4 nats.
+- **FP8 adds drift on top of the engine baseline, engine-specifically.**
+  vLLM bf16 -> fp8 doubles the worst max\|log_ratio\| (0.36 -> 0.76);
+  sglang bf16 -> fp8 inflates it 1.6× (0.71 -> 1.14). The worst single-
+  token disagreement of the whole matrix is sglang FP8 at 1.14 nats — an
+  importance weight ratio of e^1.14 ≈ 3.13×. Still well below clamp=20,
+  but exactly the kind of single-token spike that would blow up under
+  longer generations.
 
 ### Marketplace stack on real data
   - bf16 worker on bf16-pinned manifest -> validators PASS, OPBC `train`.

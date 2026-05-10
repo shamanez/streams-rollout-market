@@ -158,6 +158,53 @@ rows: `vllm`, `vllm-fp8`, `sglang`, `sglang-fp8`, all paired with
 \|log_ratio\| columns let a reviewer see at a glance which engine ×
 precision combinations stay closest to the trainer's logprob view.
 
+## Multi-prompt matrix (8 prompts × 4 engine cells)
+
+The same scripts batch when `PROMPTS_FILE` points at a JSON list of
+strings. `scripts/live/prompts.json` carries 8 reasoning + coding +
+translation + meta prompts. Single-prompt mode (no `PROMPTS_FILE`)
+still works and writes the legacy `/tmp/rollout.json` flat schema.
+
+```bash
+# 1. Run each engine cell. Each emits /tmp/rollouts.json + /tmp/trainers.json
+#    on the spot, which we pull labelled.
+for cell in vllm-bf16 vllm-fp8 sglang-bf16 sglang-fp8; do
+    case "$cell" in
+        vllm-bf16)   ENV="MODEL=Qwen/Qwen3-32B ROLLOUT_LABEL=vllm-bf16 TRAINER_REFERENCE=Qwen/Qwen3-32B" RUNNER=run_vllm_rollout.py PREP="" ;;
+        vllm-fp8)    ENV="MODEL=Qwen/Qwen3-32B-FP8 ROLLOUT_LABEL=vllm-fp8 TRAINER_REFERENCE=Qwen/Qwen3-32B" RUNNER=run_vllm_rollout.py PREP="" ;;
+        sglang-bf16) ENV="MODEL=Qwen/Qwen3-32B ROLLOUT_LABEL=sglang-bf16 TRAINER_REFERENCE=Qwen/Qwen3-32B" RUNNER=run_sglang_rollout.py PREP="export CUDA_HOME=/opt/pytorch/lib/python3.13/site-packages/nvidia/cu13; export PATH=\$CUDA_HOME/bin:\$PATH;" ;;
+        sglang-fp8)  ENV="MODEL=Qwen/Qwen3-32B-FP8 ROLLOUT_LABEL=sglang-fp8 TRAINER_REFERENCE=Qwen/Qwen3-32B" RUNNER=run_sglang_rollout.py PREP="export CUDA_HOME=/opt/pytorch/lib/python3.13/site-packages/nvidia/cu13; export PATH=\$CUDA_HOME/bin:\$PATH;" ;;
+    esac
+    case "$RUNNER" in run_sglang_rollout.py) VENV=sglenv ;; *) VENV=rmenv ;; esac
+    ssh my-vllm-spot-instance "$PREP source ~/$VENV/bin/activate && export HF_HOME=/home/ubuntu/hf-cache && cd ~ && PROMPTS_FILE=/home/ubuntu/prompts.json $ENV python $RUNNER"
+    ssh my-vllm-spot-instance "source ~/rmenv/bin/activate && export HF_HOME=/home/ubuntu/hf-cache && cd ~ && python run_hf_reference.py"
+    scp my-vllm-spot-instance:/tmp/rollouts.json "/tmp/rollouts.$cell.json"
+    scp my-vllm-spot-instance:/tmp/trainers.json "/tmp/trainers.$cell.json"
+done
+
+# 2. Build 32 fixtures (4 cells × 8 prompts), one per (engine, prompt) pair.
+for cell in vllm-bf16 vllm-fp8 sglang-bf16 sglang-fp8; do
+    python scripts/live/build_dense_matrix.py \
+        --label "$cell" \
+        --rollouts "/tmp/rollouts.$cell.json" \
+        --trainers "/tmp/trainers.$cell.json" \
+        --out-dir "/tmp/fixtures/$cell"
+done
+
+# 3. Run the lab on every fixture, then aggregate.
+for f in /tmp/fixtures/*/*.json; do
+    python -m rollout_market.cli.dense_mismatch_lab --input "$f" --out-root runs/live/dense
+done
+python -m rollout_market.cli.dense_dashboard \
+    --reports-glob 'runs/live/dense/*/dense_mismatch_report.json' \
+    --out-dir runs/live/dense_dashboard
+```
+
+The dashboard's per-pair aggregates now reflect means across 8 prompts
+× 128 tokens = 1024 tokens per cell, so the per-cell ESS / clipped /
+worst max\|log_ratio\| numbers carry actual statistical weight rather
+than a single-prompt point estimate.
+
 ## Marketplace stack validation
 
 ```bash
