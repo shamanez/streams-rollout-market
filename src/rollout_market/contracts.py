@@ -15,6 +15,28 @@ class GroupStatus(str, Enum):
     REJECTED = "rejected"
 
 
+class RejectionReason(str, Enum):
+    """Typed reasons a SampleGroup may be rejected before OPBC scoring.
+
+    Each value names a single, distinct contract violation so downstream
+    auditing can attribute losses precisely (mixed-version vs. tokenizer
+    drift vs. precision drift) instead of collapsing into a generic error.
+    """
+
+    MIXED_POLICY_VERSION = "mixed_policy_version"
+    POLICY_VERSION_MISMATCH = "policy_version_mismatch"
+    CHECKPOINT_MISMATCH = "checkpoint_mismatch"
+    TOKENIZER_MISMATCH = "tokenizer_mismatch"
+    PRECISION_MISMATCH = "precision_mismatch"
+    QUANTIZATION_MISMATCH = "quantization_mismatch"
+    MISSING_TOKEN_IDS = "missing_token_ids"
+    MISSING_LOGPROBS = "missing_logprobs"
+    GROUP_SIZE_MISMATCH = "group_size_mismatch"
+    IDEMPOTENCY_KEY_MISMATCH = "idempotency_key_mismatch"
+    EXPIRED_LEASE = "expired_lease"
+    CONTEXT_OVERFLOW = "context_overflow"
+
+
 class PolicyManifest(BaseModel):
     """Immutable description of a policy snapshot a worker must serve.
 
@@ -285,5 +307,14 @@ class GroupDecision(BaseModel):
     group_id: str
     status: GroupStatus
     reason: str
+    rejection_reason: RejectionReason | None = None
     budget_report: BudgetReport | None = None
     recommended_action: Literal["train", "train_with_correction", "quarantine", "reject"]
+
+    @model_validator(mode="after")
+    def _consistent_rejection(self) -> "GroupDecision":
+        if self.status == GroupStatus.REJECTED and self.rejection_reason is None:
+            raise ValueError("rejected decision must carry a rejection_reason")
+        if self.status != GroupStatus.REJECTED and self.rejection_reason is not None:
+            raise ValueError("rejection_reason is only valid when status is REJECTED")
+        return self

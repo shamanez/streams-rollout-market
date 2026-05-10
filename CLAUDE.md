@@ -62,6 +62,7 @@ python examples/local_worker_demo.py   # smoke test
 | `livestore.py` | InMemoryLiveStore: push/get_batch/quarantine for sample groups |
 | `dispatcher.py` | choose_worker(), make_assignment() for policy-aware dispatch |
 | `verifier.py` | canonical_group_hash(), verify_group_hash() for integrity |
+| `validators.py` | validate_group_against_lease() returns typed RejectionReason decisions |
 | `worker.py` | WorkerRuntime skeleton |
 
 ## Development plan
