@@ -70,6 +70,10 @@ python examples/local_worker_demo.py   # smoke test
 | `cli/dense_dashboard.py` | `python -m rollout_market.cli.dense_dashboard --reports-glob ... --out-dir ...` |
 | `observatory/router_dashboard.py` | Aggregates router_mismatch_report.json files: per-pair flip rates + per-run layer-level summary |
 | `cli/router_dashboard.py` | `python -m rollout_market.cli.router_dashboard --reports-glob ... --out-dir ...` |
+| `observatory/agent_trajectory_lab.py` | AgentStep / AgentTrajectory / ToolCallRecord contracts, compute_trajectory_divergence, side-by-side HTML diff |
+| `observatory/agent_dashboard.py` | Aggregates agent_divergence_report.json files: per-(rollout, trainer) first-div-step / tool-jaccard / answer-match aggregates |
+| `cli/agent_trajectory_lab.py` | `python -m rollout_market.cli.agent_trajectory_lab --rollout ... --trainer ...` |
+| `cli/agent_dashboard.py` | `python -m rollout_market.cli.agent_dashboard --reports-glob ... --out-dir ...` |
 | `dispatcher.py` | choose_worker(), make_assignment() for policy-aware dispatch |
 | `verifier.py` | canonical_group_hash(), verify_group_hash() for integrity |
 | `validators.py` | validate_group_against_lease() returns typed RejectionReason decisions |

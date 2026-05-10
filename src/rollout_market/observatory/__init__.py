@@ -42,6 +42,21 @@ from .router_mismatch_lab import (
     compute_router_mismatch,
     write_router_mismatch,
 )
+from .agent_trajectory_lab import (
+    AgentStep,
+    AgentTrajectory,
+    ToolCallRecord,
+    TrajectoryDivergenceReport,
+    compute_trajectory_divergence,
+    load_trajectory,
+    load_trajectories_glob,
+    write_trajectory_diff,
+)
+from .agent_dashboard import (
+    AgentDashboard,
+    AgentEnginePairAggregate,
+    AgentRow,
+)
 
 __all__ = [
     "EndpointContractReport",
@@ -69,4 +84,15 @@ __all__ = [
     "RouterDashboard",
     "RouterRow",
     "RouterEnginePairAggregate",
+    "AgentStep",
+    "AgentTrajectory",
+    "ToolCallRecord",
+    "TrajectoryDivergenceReport",
+    "compute_trajectory_divergence",
+    "load_trajectory",
+    "load_trajectories_glob",
+    "write_trajectory_diff",
+    "AgentDashboard",
+    "AgentEnginePairAggregate",
+    "AgentRow",
 ]
