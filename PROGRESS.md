@@ -4,45 +4,37 @@
 2026-05-10
 
 ## Current phase
-Phase 3 -- Local market loop. Task 3.1 complete; 3.2 next.
+Phase 3 -- Local market loop. Tasks 3.1 and 3.2 complete; 3.3 next.
 
 ## Completed
-- Initial scaffold: contracts, opbc, mismatch_metrics, registry, livestore,
-  dispatcher, verifier, worker
-- Docs: why_rollout_market, mismatch_observatory, opbc_metrics, evidence_map,
-  agent_task_packets, evaluation_plan, protocol, problem_design_survey
-- Experiment configs: endpoint probe, controlled dense, MoE router
-- Examples: local_worker_demo.py, minimal_grpo_group.json (demo updated to
-  use new LiveStore API)
+- Initial scaffold and Phase 0 docs/configs/examples
 - Phase 1.1: Expanded PolicyManifest; added WorkerManifest. Cleared two
   pre-existing F401 unused-import lint errors.
-- Phase 1.2: Added RolloutJob and RolloutLease (idempotency + expiry).
-- Phase 1.3: Added typed RejectionReason enum and validators.py module.
-- Phase 2.1: Endpoint identity gap probe (observatory + CLI, transport seam).
+- Phase 1.2: RolloutJob and RolloutLease (idempotency + expiry).
+- Phase 1.3: Typed RejectionReason enum + validators.py module.
+- Phase 2.1: Endpoint identity gap probe (observatory + CLI).
 - Phase 2.2: Controlled dense mismatch lab (Pydantic schema + JSON/HTML + CLI).
-- Phase 2.3: Small MoE router mismatch lab (RouterTrace + RouterMismatchReport).
-- Phase 3.1: LiveStore lifecycle. Replaced ad-hoc push_group/quarantine_group
-  with submit(group, decision) + transition(group_id, new_state, ...) over
-  the GroupStatus state machine. Idempotency: duplicate group_id raises
-  DuplicateGroupError; decision.group_id must match group.group_id; once
-  REJECTED, no further transitions allowed; rejection_reason invariant
-  mirrors GroupDecision. get_batch defaults to ACCEPTED+CORRECTABLE in
-  insertion order, with include_quarantined=True opt-in for replay-tier
-  consumers; REJECTED is never served. count_by_state, has, get,
-  StoredGroup.served_count for observability. Updated
-  examples/local_worker_demo.py to the new API.
+- Phase 2.3: Small MoE router mismatch lab.
+- Phase 3.1: LiveStore lifecycle. submit (idempotent on group_id), transition
+  (terminal REJECTED), get_batch (ACCEPTED+CORRECTABLE default, QUARANTINED
+  opt-in), count_by_state, served_count.
+- Phase 3.2: Trainer client API. New trainer_client.py with TrainerClient,
+  TrainerBatch, ReplayTier. fetch() filters by policy_version (required),
+  max_staleness (policy_lag_steps), precision_class, and replay_tier
+  (FRESH excludes QUARANTINED, REPLAY admits it; REJECTED never served).
+  TrainerBatch.metadata() returns lightweight per-group rows with no token
+  payload — safe to log. Module is firewall-clean (no PPO/GRPO/optimizer/
+  loss code). Added examples/fake_trainer.py demonstrating FRESH vs REPLAY
+  pulls; smoke-tested.
 
 ## Next tasks
-- Phase 3.2: Trainer client API (consumer pulls valid groups by
-  policy_version, max_staleness, precision_class, replay_tier; example fake
-  trainer prints batch metadata only).
 - Phase 3.3: Worker SDK (registration, heartbeats, lease fetch, group submit,
-  failure reporting; three fake workers run concurrently).
+  failure reporting; three fake workers run concurrently in a local demo).
 
 ## Known issues
 - src/rollout_market/dispatcher.py and opbc.py fail `ruff format --check`
   (pre-existing formatting only). Not blocking `ruff check .` or pytest.
 
 ## Test status
-- Last run: 2026-05-10, 96 passed, 0 failed (pytest -q)
+- Last run: 2026-05-10, 108 passed, 0 failed (pytest -q)
 - ruff check .: clean
