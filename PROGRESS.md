@@ -4,7 +4,7 @@
 2026-05-10
 
 ## Current phase
-Phase 4 -- OPBC v0. Task 4.1 complete; 4.2 next.
+Phase 4 -- OPBC v0. **Complete.** Phase 5 next.
 
 ## Completed
 - Phase 0 scaffold and docs/configs/examples
@@ -17,33 +17,29 @@ Phase 4 -- OPBC v0. Task 4.1 complete; 4.2 next.
 - Phase 3.1: LiveStore lifecycle.
 - Phase 3.2: Trainer client API.
 - Phase 3.3: Worker SDK + LocalWorkerBroker (3-worker concurrent demo).
-- Phase 4.1: OPBC decision reasons. New typed DecisionReason enum
-  (within_budget, high_clipped_fraction, low_ess, stale_policy_lag,
-  replay_tier_lag, replay_tier_ess, veto_threshold_exceeded). GroupDecision
-  carries `decision_reasons: list[DecisionReason]` and a fifth
-  recommended_action `replay`. decide_group() now emits a graduated
-  taxonomy: veto -> quarantine -> train_with_correction -> replay -> train,
-  with reasons accumulated where multiple thresholds fire (e.g. low_ess +
-  stale_policy_lag together). New BudgetPolicy fields replay_lag_threshold
-  (default 4) and replay_ess_threshold (default 0.60). Validators continue
-  to handle contract-violation rejections (mixed_policy_version,
-  missing_logprobs, etc.) — those still surface as recommended_action
-  "reject" with rejection_reason. 17 new tests cover all six acceptance
-  scenarios plus replay paths.
+- Phase 4.1: Typed DecisionReason + replay path in OPBC.
+- Phase 4.2: Trainer feedback ingestion. New feedback.py with
+  TrainerFeedback (Pydantic contract: group_id + worker_id + engine
+  attribution + policy_version + ess_observed + clipped_fraction_observed
+  + accepted_by_trainer + trainer_rejection_reason +
+  current_policy_logprob_mean/std) and FeedbackAggregator (per-worker,
+  per-engine, per-policy QualityStats with running counts and means;
+  idempotent on group_id; rejection-reason histogram). Aggregator is
+  pure data — no callbacks into trainer/dispatcher/broker, so trainer
+  logic is unchanged. examples/fake_trainer.py extended to demo
+  ingestion. 16 new tests.
 
 ## Next tasks
-- Phase 4.2: Trainer feedback ingestion (external trainers report ESS,
-  clipped fraction, accepted/rejected, and current-policy logprob stats
-  after consuming a group; updates per-engine/per-worker quality stats
-  without changing trainer logic).
-- Phase 5.1: Heartbeat and lease timeout (already partially in Phase 3.3
-  via reap_expired; needs audit-trail and timed-out-lease return).
+- Phase 5.1: Heartbeat and lease timeout audit trail (broker already
+  reaps expired leases; this task adds explicit abandoned-lease
+  reporting and heartbeat-staleness detection).
+- Phase 5.2: k-of-n reload quorum design doc (per-group policy pinning
+  remains strict; per-pool sync may be quorum-based).
 
 ## Known issues
 - src/rollout_market/dispatcher.py and opbc.py fail `ruff format --check`
-  (pre-existing formatting only; opbc.py was rewritten in this PR but
-  retains the pre-existing line-length style).
+  (pre-existing formatting only). Not blocking `ruff check .` or pytest.
 
 ## Test status
-- Last run: 2026-05-10, 136 passed, 0 failed (pytest -q)
+- Last run: 2026-05-10, 152 passed, 0 failed (pytest -q)
 - ruff check .: clean

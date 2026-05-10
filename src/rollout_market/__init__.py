@@ -19,6 +19,7 @@ from .livestore import (
     StoredGroup,
     UnknownGroupError,
 )
+from .feedback import FeedbackAggregator, QualityStats, TrainerFeedback
 from .opbc import compute_budget_report, decide_group
 from .trainer_client import ReplayTier, TrainerBatch, TrainerClient
 from .validators import validate_group_against_lease
@@ -48,6 +49,9 @@ __all__ = [
     "LocalWorkerBroker",
     "LeaseRecord",
     "LeaseState",
+    "TrainerFeedback",
+    "FeedbackAggregator",
+    "QualityStats",
     "compute_budget_report",
     "decide_group",
     "validate_group_against_lease",
