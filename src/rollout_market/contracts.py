@@ -96,6 +96,116 @@ class WorkerManifest(BaseModel):
         return self
 
 
+class RolloutJob(BaseModel):
+    """Pinned rollout request issued before any trajectory begins.
+
+    Carries every field the dispatcher needs to bind a single worker to a
+    single policy snapshot for one group of samples: tokenized prompt, policy
+    pin, sampling-config hash, group size, engine constraints, and an
+    idempotency key so retries do not produce duplicate work.
+    """
+
+    job_id: str
+    task_id: str
+    prompt_id: str
+    prompt_token_ids: list[int]
+    policy_version: str
+    checkpoint_digest: str
+    tokenizer_hash: str
+    sampling_config_hash: str
+    sampling_config: dict[str, Any] = Field(default_factory=dict)
+    group_size: int
+    required_precision_class: str
+    required_quantization_class: str | None = None
+    allowed_engines: list[str] = Field(default_factory=list)
+    max_context_tokens: int
+    idempotency_key: str
+    deadline: datetime | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    @field_validator(
+        "job_id",
+        "task_id",
+        "prompt_id",
+        "policy_version",
+        "checkpoint_digest",
+        "tokenizer_hash",
+        "sampling_config_hash",
+        "required_precision_class",
+        "idempotency_key",
+    )
+    @classmethod
+    def _non_empty(cls, value: str) -> str:
+        if not value or not value.strip():
+            raise ValueError("must be a non-empty string")
+        return value
+
+    @model_validator(mode="after")
+    def _validate(self) -> "RolloutJob":
+        if self.group_size < 1:
+            raise ValueError("group_size must be >= 1")
+        if self.max_context_tokens <= 0:
+            raise ValueError("max_context_tokens must be positive")
+        if not self.prompt_token_ids:
+            raise ValueError("prompt_token_ids must be non-empty")
+        if self.deadline is not None and self.deadline <= self.created_at:
+            raise ValueError("deadline must be strictly after created_at")
+        return self
+
+
+class RolloutLease(BaseModel):
+    """Dispatcher-issued ticket binding one worker to one job for a window.
+
+    A lease is the server's promise that exactly one worker may produce the
+    group described by `job_id`. It pins the policy snapshot the worker must
+    serve and carries the idempotency key from the job so duplicate
+    submissions can be deduped without consulting the job table.
+    """
+
+    lease_id: str
+    job_id: str
+    assignment_id: str
+    worker_id: str
+    policy_version: str
+    required_precision_class: str
+    required_quantization_class: str | None = None
+    max_context_tokens: int
+    group_size: int
+    idempotency_key: str
+    issued_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    expires_at: datetime
+
+    @field_validator(
+        "lease_id",
+        "job_id",
+        "assignment_id",
+        "worker_id",
+        "policy_version",
+        "required_precision_class",
+        "idempotency_key",
+    )
+    @classmethod
+    def _non_empty(cls, value: str) -> str:
+        if not value or not value.strip():
+            raise ValueError("must be a non-empty string")
+        return value
+
+    @model_validator(mode="after")
+    def _validate(self) -> "RolloutLease":
+        if self.group_size < 1:
+            raise ValueError("group_size must be >= 1")
+        if self.max_context_tokens <= 0:
+            raise ValueError("max_context_tokens must be positive")
+        if self.expires_at <= self.issued_at:
+            raise ValueError("expires_at must be strictly after issued_at")
+        return self
+
+    def is_expired(self, now: datetime | None = None) -> bool:
+        """Return True if the lease has expired at the given (UTC) instant."""
+        ref = now if now is not None else datetime.now(timezone.utc)
+        return ref >= self.expires_at
+
+
 class WorkerHeartbeat(BaseModel):
     worker_id: str
     engine_name: str

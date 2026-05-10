@@ -1,0 +1,14 @@
+{
+  "lease_id": "lease-0001",
+  "job_id": "job-0001",
+  "assignment_id": "assign-0001",
+  "worker_id": "worker-l40s-0",
+  "policy_version": "v0001",
+  "required_precision_class": "bf16",
+  "required_quantization_class": null,
+  "max_context_tokens": 32768,
+  "group_size": 8,
+  "idempotency_key": "idem-job-0001",
+  "issued_at": "2026-05-10T00:00:00+00:00",
+  "expires_at": "2026-05-10T00:05:00+00:00"
+}

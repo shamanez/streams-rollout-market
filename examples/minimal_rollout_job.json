@@ -1,0 +1,24 @@
+{
+  "job_id": "job-0001",
+  "task_id": "math-eval-001",
+  "prompt_id": "prompt-001",
+  "prompt_token_ids": [101, 202, 303, 404],
+  "policy_version": "v0001",
+  "checkpoint_digest": "sha256:abcdef0123456789",
+  "tokenizer_hash": "tok-qwen3-32b",
+  "sampling_config_hash": "smp-bf16-temp07-nucleus09",
+  "sampling_config": {
+    "temperature": 0.7,
+    "top_p": 0.9,
+    "max_tokens": 512,
+    "seed": 42
+  },
+  "group_size": 8,
+  "required_precision_class": "bf16",
+  "required_quantization_class": null,
+  "allowed_engines": ["vllm"],
+  "max_context_tokens": 32768,
+  "idempotency_key": "idem-job-0001",
+  "deadline": "2099-01-01T00:00:00+00:00",
+  "created_at": "2026-05-10T00:00:00+00:00"
+}
