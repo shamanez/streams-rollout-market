@@ -16,11 +16,16 @@ Implement a feature task from the development plan.
 ## Workflow
 
 1. **Read AGENTS.md** -- MANDATORY before any code changes
-2. **Look up the task** in `streams_rollout_market_git_agent_plan_v2.md`
+2. **Create a feature branch** from main:
+   ```bash
+   git checkout main && git pull origin main
+   git checkout -b feature/phase-X.Y-<short-description>
+   ```
+3. **Look up the task** in `streams_rollout_market_git_agent_plan_v2.md`
    - Find the task matching `$ARGUMENTS`
    - Note: Context, Goal, Non-goals, Required changes, Acceptance criteria
-3. **Read relevant source files** listed in the task's context
-4. **Implement** using contract-first order:
+4. **Read relevant source files** listed in the task's context
+5. **Implement** using contract-first order:
    a. Pydantic models / contracts first
    b. Feature logic second
    c. Tests third
@@ -43,6 +48,11 @@ Implement a feature task from the development plan.
 
    <what was done and why>
    ```
+9. **Push branch and create PR**:
+   ```bash
+   git push -u origin feature/phase-X.Y-<short-description>
+   ```
+   Create a PR to main with the task description as the PR body.
 
 ## Conventions
 

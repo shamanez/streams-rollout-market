@@ -24,7 +24,12 @@ Each iteration of this loop performs ONE task from the development plan:
 - Find the next incomplete task from PROGRESS.md's "Next tasks" section
 - If no tasks remain in the current phase, advance to the next phase
 
-### 3. Implementation
+### 3. Implementation (git-flow)
+- Create a feature branch from main:
+  ```bash
+  git checkout main && git pull origin main
+  git checkout -b feature/phase-X.Y-<short-description>
+  ```
 - Use the `/implement-feature` skill workflow:
   - Read AGENTS.md (mandatory)
   - Read relevant source files
@@ -43,7 +48,7 @@ Each iteration of this loop performs ONE task from the development plan:
   - Record the issue in PROGRESS.md
   - Move to the next task
 
-### 5. Record and commit
+### 5. Record, commit, and push
 - Update PROGRESS.md:
   - Move completed task to "Completed" section
   - Set next task(s) in "Next tasks"
@@ -52,8 +57,15 @@ Each iteration of this loop performs ONE task from the development plan:
   ```
   Phase X.Y: <task title>
   ```
+- Push the feature branch and create a PR to main:
+  ```bash
+  git push -u origin feature/phase-X.Y-<short-description>
+  gh pr create --title "Phase X.Y: <task title>" --body "<acceptance criteria>"
+  ```
+- After PR is created, merge it (if auto-merge is enabled) or move on
 
-### 6. Continue or stop
+### 6. Return to main and continue
+- `git checkout main && git pull origin main`
 - If more tasks remain: continue to next iteration
 - If AGENT_STOP appeared: stop after handoff
 - If STEER.md appeared: follow the new direction
