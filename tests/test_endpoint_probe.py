@@ -133,6 +133,10 @@ def test_probe_endpoint_records_full_capabilities_with_seed():
     assert "Authorization" in transport.captured["headers"]
     assert transport.captured["headers"]["Authorization"] == "Bearer not-a-real-key"
     assert transport.captured["url"].endswith("/chat/completions")
+    # Cerebras / Groq sit behind Cloudflare, which 1010s the default
+    # `Python-urllib/...` User-Agent. The probe must send its own UA.
+    assert "User-Agent" in transport.captured["headers"]
+    assert "rollout-market" in transport.captured["headers"]["User-Agent"]
 
 
 def test_probe_endpoint_seed_unsupported_when_no_fingerprint():

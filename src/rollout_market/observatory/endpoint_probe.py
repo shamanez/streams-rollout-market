@@ -128,9 +128,14 @@ def probe_endpoint(
         **sampling_config,
     }
     body = json.dumps(request_payload).encode("utf-8")
+    # Many providers (Cerebras, Groq) front their API with Cloudflare, which
+    # rejects the default `Python-urllib/...` User-Agent with error 1010.
+    # We send a generic UA the probe owns so requests are not silently blocked.
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
+        "User-Agent": "rollout-market-endpoint-probe/0.1",
+        "Accept": "application/json",
     }
     url = base_url.rstrip("/") + "/chat/completions"
     request_hash = _stable_hash(
