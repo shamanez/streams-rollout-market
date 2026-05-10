@@ -18,6 +18,11 @@ from .dense_dashboard import (
     DenseRow,
     EnginePairAggregate,
 )
+from .router_dashboard import (
+    RouterDashboard,
+    RouterEnginePairAggregate,
+    RouterRow,
+)
 from .endpoint_dashboard import (
     EndpointDashboard,
     EndpointRow,
@@ -61,4 +66,7 @@ __all__ = [
     "DenseDashboard",
     "DenseRow",
     "EnginePairAggregate",
+    "RouterDashboard",
+    "RouterRow",
+    "RouterEnginePairAggregate",
 ]
