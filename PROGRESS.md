@@ -4,7 +4,7 @@
 2026-05-10
 
 ## Current phase
-Phase 2 -- Mismatch Observatory. Task 2.1 complete; 2.2 next.
+Phase 2 -- Mismatch Observatory. Tasks 2.1 and 2.2 complete; 2.3 next.
 
 ## Completed
 - Initial scaffold: contracts, opbc, mismatch_metrics, registry, livestore,
@@ -19,26 +19,31 @@ Phase 2 -- Mismatch Observatory. Task 2.1 complete; 2.2 next.
 - Phase 1.2: Added RolloutJob and RolloutLease (idempotency + expiry).
 - Phase 1.3: Added typed RejectionReason enum and validators.py module with
   validate_group_against_lease() covering 12 distinct rejection branches.
-- Phase 2.1: Endpoint identity gap probe. New `observatory/endpoint_probe.py`
-  with `EndpointContractReport`, `inspect_chat_completion_response()`,
-  `probe_endpoint()` (transport seam for tests), `write_report()`. CLI at
-  `cli/endpoint_probe.py` (python -m). Reports to
-  runs/<UTC-ts>/endpoint_contract_report.json with provider, model_label,
-  token/logprob/top-logprob/seed flags, tokenizer_id, raw_response_hash.
-  API key only in Authorization header — excluded from request_hash and
-  never persisted. 12 new tests with no live API calls.
+- Phase 2.1: Endpoint identity gap probe — observatory/endpoint_probe.py +
+  cli/endpoint_probe.py. EndpointContractReport, transport seam for tests,
+  API key isolated from request_hash, CLI writes
+  runs/<ts>/endpoint_contract_report.json.
+- Phase 2.2: Controlled dense mismatch lab — observatory/dense_mismatch_lab.py
+  + cli/dense_mismatch_lab.py. DenseMismatchReport (Pydantic) pinned to
+  schema_version "mismatch_observatory.v0", carries identity + all
+  acceptance metrics (delta_logprob_mean/abs, sequence_log_ratio, ESS,
+  second_moment, clipped_fraction, veto_fraction, max_abs_log_ratio,
+  top_1pct_gradient_mass). render_html() emits a self-contained one-page
+  view with HTML escaping; write_dense_mismatch() persists JSON + HTML.
+  CLI consumes a JSON fixture (examples/dense_mismatch_input.json) — no
+  trainer code, no model run required.
 
 ## Next tasks
-- Phase 2.2: Controlled dense mismatch lab (same checkpoint via reference
-  forward + serving backend; compute delta_t, log_ratio, ESS, E[w^2],
-  clipped_fraction, max_abs_log_ratio, top_1pct_gradient_mass).
-- Phase 2.3: Small MoE router mismatch lab (router_flip_rate,
-  token_expert_disagreement_rate).
+- Phase 2.3: Small MoE router mismatch lab (router trace contract,
+  router_flip_rate, token_expert_disagreement_rate). Design + contract +
+  metrics — model run can stay deferred.
+- Phase 3.1: LiveStore lifecycle (accepted/correctable/quarantine/reject
+  with idempotency).
 
 ## Known issues
 - src/rollout_market/dispatcher.py and opbc.py fail `ruff format --check`
   (pre-existing formatting only). Not blocking `ruff check .` or pytest.
 
 ## Test status
-- Last run: 2026-05-10, 56 passed, 0 failed (pytest -q)
+- Last run: 2026-05-10, 65 passed, 0 failed (pytest -q)
 - ruff check .: clean
