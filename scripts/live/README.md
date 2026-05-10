@@ -244,6 +244,63 @@ python -m rollout_market.cli.router_dashboard \
   --out-dir runs/live/router_dashboard
 ```
 
+## Agent trajectory matrix (multi-step, tool-using)
+
+The trajectory-level lens for the mismatch story. vLLM-or-sglang serves
+Qwen3-32B with `--enable-auto-tool-choice`; the Mac orchestrator at
+`scripts/live/agent_runner.py` drives a hand-rolled agent loop
+(deterministic simulated tools — `web_search`, `calculator`,
+`python_eval`, `read_file`) and writes one `AgentTrajectory` JSON per
+task. The lab + dashboard from PR #27 do the rest.
+
+```bash
+# 1. Start vLLM (or sglang) on the spot with tool calling enabled.
+ssh my-vllm-spot-instance \
+  'MODEL=Qwen/Qwen3-32B nohup bash ~/serve_qwen_for_agent.sh \
+   > /tmp/vllm_serve.log 2>&1 &'
+# Wait for "Application startup complete" in the log, then open the
+# tunnel.
+ssh -f -N -L 8000:localhost:8000 my-vllm-spot-instance
+
+# 2. Run the agent matrix (one engine cell at a time — load each model
+#    once, drain all tasks against it).
+BASE_URL=http://localhost:8000/v1 \
+MODEL=Qwen/Qwen3-32B \
+MODEL_ID=Qwen/Qwen3-32B \
+ENGINE_LABEL=vllm-bf16 \
+ENGINE_FINGERPRINT=sha256:vllm-0.20.1-tp4-bf16-l40s \
+OUT_DIR=runs/live/agent/vllm-bf16 \
+python scripts/live/agent_runner.py
+# Tear down, swap to FP8 / sglang, and repeat.
+
+# 3. Build divergence reports against the bf16 reference.
+for engine in vllm-fp8 sglang-bf16 sglang-fp8; do
+    for task in $(jq -r '.[].task_id' scripts/live/agent_tasks.json); do
+        python -m rollout_market.cli.agent_trajectory_lab \
+            --rollout "runs/live/agent/$engine/$task.json" \
+            --trainer "runs/live/agent/vllm-bf16/$task.json" \
+            --out-root runs/live/agent_diff
+    done
+done
+
+# 4. Aggregate.
+python -m rollout_market.cli.agent_dashboard \
+    --reports-glob 'runs/live/agent_diff/*/agent_divergence_report.json' \
+    --out-dir runs/live/agent_dashboard
+```
+
+Two operational notes:
+- `MODEL_ID` is the *logical* checkpoint; `MODEL` is what the API
+  expects. Quantized variants (`Qwen/Qwen3-32B-FP8`) and bf16
+  reference (`Qwen/Qwen3-32B`) share `MODEL_ID=Qwen/Qwen3-32B` so the
+  divergence comparator treats them as the same checkpoint, different
+  engine.
+- Qwen3 has a "thinking mode" that interleaves chain-of-thought before
+  answering. The runner disables it
+  (`extra_body={"chat_template_kwargs": {"enable_thinking": False}}`)
+  so the 256-token budget is spent on tool calls + concise answers
+  instead of CoT.
+
 ## Marketplace stack validation
 
 ```bash
