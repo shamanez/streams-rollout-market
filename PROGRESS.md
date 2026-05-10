@@ -4,8 +4,8 @@
 2026-05-10
 
 ## Current phase
-Phase 6 -- Launch demos. Two of four shipped (marketplace simulation,
-endpoint identity-gap dashboard). Two dashboards remaining.
+Phase 6 -- Launch demos. Three of four shipped. MoE router demo
+remaining.
 
 ## Completed
 - Phase 0 scaffold and docs/configs/examples
@@ -23,28 +23,28 @@ endpoint identity-gap dashboard). Two dashboards remaining.
 - Phase 5.1: Heartbeat / lease timeout / audit trail.
 - Phase 5.2: k-of-n reload quorum.
 - Phase 6 (Demo 3): Local marketplace simulation with toxic workers.
-- Phase 6 (Demo 1): Endpoint identity-gap dashboard. New
-  observatory/endpoint_dashboard.py aggregates endpoint_contract_report
-  .json files (latest-per-(provider, model) wins) into an
-  EndpointDashboard with capability totals and per-row coverage scores.
-  render_html emits a self-contained HTML5 page with a coverage matrix
-  (token_ids / sampled_logprobs / top_logprobs / seed_supported × every
-  probed pair). New CLI cli/endpoint_dashboard.py consumes a glob and
-  writes <out-dir>/endpoint_dashboard.{json,html}. 10 new tests.
+- Phase 6 (Demo 1): Endpoint identity-gap dashboard.
+- Phase 6 (Demo 2): Controlled dense mismatch dashboard. New
+  observatory/dense_dashboard.py aggregates dense_mismatch_report.json
+  files into a DenseDashboard with per-run table (chronological by
+  created_at) and per-(rollout_engine, trainer_engine) aggregate
+  (count, mean ESS, mean clipped fraction, mean sequence_log_ratio,
+  mean |delta logp|, worst max|log_ratio|, total tokens). Useful for
+  answering 'is this engine pair systematically worse than that one?'
+  CLI cli/dense_dashboard.py consumes a glob and writes
+  <out-dir>/dense_dashboard.{json,html}. 11 new tests.
 
 ## Next tasks
-- Phase 6 (Demo 2): Controlled dense mismatch dashboard — same shape over
-  dense_mismatch_report.json runs.
 - Phase 6 (Demo 4): MoE router mismatch demo — same shape over
   router_mismatch_report.json runs.
 
 ## Known issues
 - src/rollout_market/dispatcher.py and opbc.py fail `ruff format --check`
   (pre-existing formatting only).
-- No live model has been run yet. The endpoint-probe and dashboard
-  pipeline is wired end-to-end but every report consumed so far is
-  fixture-built.
+- No live model has been run yet. The dashboards are ready to consume
+  real reports; producing them requires a separate "run live" pass on
+  the spot instance / free-tier APIs.
 
 ## Test status
-- Last run: 2026-05-10, 206 passed, 0 failed (pytest -q)
+- Last run: 2026-05-10, 218 passed, 0 failed (pytest -q)
 - ruff check .: clean

@@ -13,6 +13,11 @@ from .dense_mismatch_lab import (
     render_html,
     write_dense_mismatch,
 )
+from .dense_dashboard import (
+    DenseDashboard,
+    DenseRow,
+    EnginePairAggregate,
+)
 from .endpoint_dashboard import (
     EndpointDashboard,
     EndpointRow,
@@ -53,4 +58,7 @@ __all__ = [
     "build_dashboard",
     "load_reports_glob",
     "write_dashboard",
+    "DenseDashboard",
+    "DenseRow",
+    "EnginePairAggregate",
 ]

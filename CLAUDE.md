@@ -66,6 +66,8 @@ python examples/local_worker_demo.py   # smoke test
 | `observatory/marketplace_simulation.py` | End-to-end concurrent simulation with honest/noisy/stale/toxic worker profiles; aggregates verdicts to JSON+HTML dashboard |
 | `observatory/endpoint_dashboard.py` | Aggregates many endpoint_contract_report.json files into one HTML+JSON dashboard (provider × model coverage matrix) |
 | `cli/endpoint_dashboard.py` | `python -m rollout_market.cli.endpoint_dashboard --reports-glob ... --out-dir ...` |
+| `observatory/dense_dashboard.py` | Aggregates dense_mismatch_report.json files: per-(rollout_engine, trainer_engine) pair stats + per-run table |
+| `cli/dense_dashboard.py` | `python -m rollout_market.cli.dense_dashboard --reports-glob ... --out-dir ...` |
 | `dispatcher.py` | choose_worker(), make_assignment() for policy-aware dispatch |
 | `verifier.py` | canonical_group_hash(), verify_group_hash() for integrity |
 | `validators.py` | validate_group_against_lease() returns typed RejectionReason decisions |
