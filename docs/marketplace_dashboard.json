@@ -5,7 +5,7 @@
     {
       "worker_id": "w00-honest",
       "action": "train",
-      "count": 3
+      "count": 2
     },
     {
       "worker_id": "w01-honest",
@@ -45,14 +45,14 @@
     {
       "worker_id": "w08-toxic_version_drift",
       "action": "reject",
-      "count": 3
+      "count": 4
     }
   ],
   "by_profile_action": [
     {
       "profile": "honest",
       "action": "train",
-      "count": 9
+      "count": 8
     },
     {
       "profile": "noisy",
@@ -82,25 +82,25 @@
     {
       "profile": "toxic_version_drift",
       "action": "reject",
-      "count": 3
+      "count": 4
     }
   ],
   "rejection_reasons": {
     "missing_logprobs": 3,
-    "policy_version_mismatch": 3,
+    "policy_version_mismatch": 4,
     "precision_mismatch": 3,
     "tokenizer_mismatch": 3
   },
   "decision_reasons": {
     "high_clipped_fraction": 3,
     "stale_policy_lag": 3,
-    "within_budget": 9
+    "within_budget": 8
   },
   "livestore_by_state": {
-    "accepted": 9,
+    "accepted": 8,
     "correctable": 3,
     "quarantined": 3,
-    "rejected": 12
+    "rejected": 13
   },
   "audit_event_counts": {
     "job_enqueued": 27,

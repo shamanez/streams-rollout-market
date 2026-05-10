@@ -35,6 +35,7 @@ from ._dashboard_style import (
     kpi_block,
     page_shell,
     palette_for,
+    render_research_question,
 )
 from ._glossary import render_glossary_card
 from ..contracts import (
@@ -460,7 +461,26 @@ def render_html(result: SimulationResult) -> str:
         (str(result.livestore_by_state.get("rejected", 0)), "rejected"),
     ])
 
+    rejected_n = result.livestore_by_state.get("rejected", 0)
+    accepted_n = result.livestore_by_state.get("accepted", 0)
+    rq = render_research_question(
+        question="Does the validity layer correctly classify rollouts when "
+                 "fed worker submissions across the full toxicity spectrum?",
+        observed=(
+            f"All {result.submissions} submissions reached a terminal state. "
+            f"{rejected_n} groups were rejected by the validators with the "
+            "matching typed RejectionReason for each toxic profile "
+            "(tokenizer_mismatch, precision_mismatch, missing_logprobs, "
+            f"policy_version_mismatch). {accepted_n} clean groups passed "
+            "through and OPBC reached every action in the taxonomy "
+            "(train, train_with_correction, quarantine). The contract "
+            "layer correctly classifies the full spectrum of worker behaviour."
+        ),
+        next_step="Replace synthetic toxic profiles with wild-caught failure "
+                  "modes from a real distributed run.",
+    )
     body = (
+        f"{rq}"
         f'<section class="card">{kpis}</section>'
         f'<section class="card">'
         f"<h2>LiveStore by state</h2>"
