@@ -21,6 +21,7 @@ from .livestore import (
 )
 from .feedback import FeedbackAggregator, QualityStats, TrainerFeedback
 from .opbc import compute_budget_report, decide_group
+from .pool_reload import PoolReloadTracker, QuorumViolation, ReloadAck
 from .trainer_client import ReplayTier, TrainerBatch, TrainerClient
 from .validators import validate_group_against_lease
 from .worker import WorkerSDK
@@ -60,6 +61,9 @@ __all__ = [
     "TrainerFeedback",
     "FeedbackAggregator",
     "QualityStats",
+    "PoolReloadTracker",
+    "ReloadAck",
+    "QuorumViolation",
     "compute_budget_report",
     "decide_group",
     "validate_group_against_lease",
