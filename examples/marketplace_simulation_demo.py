@@ -13,19 +13,15 @@ broker audit) reaching the right verdicts on each profile.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
 from pathlib import Path
 
+from rollout_market.cli._runs import run_dir_name
 from rollout_market.observatory.marketplace_simulation import (
     WorkerProfile,
     render_html,
     run_simulation,
     write_simulation,
 )
-
-
-def _utc_timestamp() -> str:
-    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
 
 def main() -> None:
@@ -44,7 +40,7 @@ def main() -> None:
 
     print(json.dumps(result.as_dict(), indent=2))
 
-    out_dir = Path("runs") / _utc_timestamp()
+    out_dir = Path("runs") / run_dir_name()
     paths = write_simulation(result, out_dir)
     print(str(paths["json"]))
     print(str(paths["html"]))
