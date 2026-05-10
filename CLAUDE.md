@@ -14,6 +14,20 @@ ruff format --check .                  # format check
 python examples/local_worker_demo.py   # smoke test
 ```
 
+## Phase 1 constraint: FREE TIER ONLY (MANDATORY)
+
+- Do NOT make any paid API calls. Only use free-tier models and endpoints.
+- Do NOT sign up for paid plans or enter payment information on any provider.
+- Respect rate limits — add delays between API calls, never burst.
+- Available free-tier providers (API keys stored in .env, NEVER committed):
+  - **NVIDIA NIM** (NVIDIA_API_KEY): free inference for many open models
+  - **Groq** (GROQ_API_KEY): free fast inference for Llama, Mixtral, Gemma
+  - **Cerebras** (CEREBRAS_API_KEY): free fast inference for Llama models
+  - **OpenRouter** (OPENROUTER_API_KEY): free-tier models only (check model pricing)
+  - **OpenCode** (OPENCODE_API_KEY): free inference endpoint
+- If a model or endpoint requires payment, skip it and document in PROGRESS.md.
+- This constraint applies to ALL experiments, tests, and observatory probes.
+
 ## Architecture (src/rollout_market/)
 
 | Module | Purpose |

@@ -25,4 +25,21 @@ BLOCKED
   exit 2
 fi
 
+# Block hardcoded API keys / secrets from being written to any file
+SECRET_PATTERNS="(nvapi-[A-Za-z0-9]{20,}|gsk_[A-Za-z0-9]{20,}|csk-[A-Za-z0-9]{20,}|sk-or-v1-[A-Za-z0-9]{20,}|sk-[A-Za-z0-9]{20,})"
+
+# Allow secrets only in .env files (which are gitignored)
+if echo "$INPUT" | grep -qE '"(file_path|path)"\s*:\s*"[^"]*\.env"'; then
+  exit 0
+fi
+
+if echo "$INPUT" | grep -qE "$SECRET_PATTERNS"; then
+  cat <<'BLOCKED' >&2
+BLOCKED: Detected hardcoded API key or secret.
+API keys must ONLY be stored in .env (which is gitignored).
+Use os.environ["KEY_NAME"] or python-dotenv to load them in code.
+BLOCKED
+  exit 2
+fi
+
 exit 0
