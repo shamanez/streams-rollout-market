@@ -28,6 +28,18 @@ python examples/local_worker_demo.py   # smoke test
 - If a model or endpoint requires payment, skip it and document in PROGRESS.md.
 - This constraint applies to ALL experiments, tests, and observatory probes.
 
+## Infrastructure constraint: SPOT INSTANCE ONLY (MANDATORY)
+
+- The ONLY AWS resource available is a single spot instance: `ssh my-vllm-spot-instance`
+- SSH config is in `~/.ssh/config` (NEVER commit SSH keys, hostnames, or PEM paths to git)
+- **DO NOT** create, modify, terminate, or resize any AWS resources
+- **DO NOT** run `aws` CLI commands that create/modify infrastructure
+- **DO NOT** install heavy dependencies without checking disk space first
+- This instance is for running vLLM inference and experiments ONLY
+- Spot instances can be terminated by AWS at any time — never store critical data only there
+- The hostname is dynamic (changes on stop/start) — always use the SSH alias, not the IP
+- Copy experiment results back to local before the instance is reclaimed
+
 ## Architecture (src/rollout_market/)
 
 | Module | Purpose |

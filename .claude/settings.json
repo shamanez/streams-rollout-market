@@ -25,6 +25,8 @@
       "Bash(chmod*)",
       "Bash(sha256sum*)",
       "Bash(bash .claude/scripts/*)",
+      "Bash(ssh my-vllm-spot-instance*)",
+      "Bash(scp *my-vllm-spot-instance*)",
       "Read",
       "Write",
       "Edit",
@@ -34,7 +36,16 @@
     "deny": [
       "Bash(rm -rf /)",
       "Bash(curl*|sh)",
-      "Bash(wget*|sh)"
+      "Bash(wget*|sh)",
+      "Bash(aws ec2 create*)",
+      "Bash(aws ec2 terminate*)",
+      "Bash(aws ec2 modify*)",
+      "Bash(aws ec2 run*)",
+      "Bash(aws ec2 stop*)",
+      "Bash(aws ec2 start*)",
+      "Bash(aws s3 rm*)",
+      "Bash(aws iam*)",
+      "Bash(aws cloudformation*)"
     ]
   },
   "hooks": {
@@ -55,6 +66,15 @@
           {
             "type": "command",
             "command": "bash .claude/scripts/firewall-check.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/scripts/aws-guard.sh"
           }
         ]
       },
