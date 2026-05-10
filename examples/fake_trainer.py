@@ -17,6 +17,7 @@ from rollout_market.contracts import (
     RejectionReason,
     SampleGroup,
 )
+from rollout_market.feedback import FeedbackAggregator, TrainerFeedback
 from rollout_market.livestore import InMemoryLiveStore
 from rollout_market.trainer_client import ReplayTier, TrainerClient
 
@@ -91,6 +92,36 @@ def main() -> None:
     print("REPLAY batch metadata:")
     print(json.dumps(replay.metadata(), indent=2))
     print(f"size={replay.size}, replay_tier={replay.replay_tier.value}")
+
+    # Feedback ingestion: trainer reports observed stats per consumed group.
+    # No loss, no optimizer — just synthetic numbers a real trainer would
+    # have on hand at the end of a step.
+    aggregator = FeedbackAggregator()
+    for record in replay.groups:
+        g: SampleGroup = record.group
+        accepted = record.state == GroupStatus.ACCEPTED
+        aggregator.ingest(
+            TrainerFeedback(
+                group_id=g.group_id,
+                worker_id=g.worker_id,
+                engine_name=g.engine_name,
+                engine_version=g.engine_version,
+                policy_version=g.policy_version,
+                num_policy_tokens=sum(len(t.response_token_ids) for t in g.trajectories),
+                ess_observed=0.95 if accepted else 0.45,
+                clipped_fraction_observed=0.01 if accepted else 0.18,
+                accepted_by_trainer=accepted,
+                trainer_rejection_reason=None if accepted else "low_observed_ess",
+                current_policy_logprob_mean=-0.4,
+                current_policy_logprob_std=0.05,
+            )
+        )
+    print("Feedback aggregator (per worker):")
+    for wid, stats in aggregator.all_worker_stats().items():
+        print(f"  {wid}: {stats.as_dict()}")
+    print("Feedback aggregator (per engine):")
+    for engine, stats in aggregator.all_engine_stats().items():
+        print(f"  {engine}: {stats.as_dict()}")
 
 
 if __name__ == "__main__":
