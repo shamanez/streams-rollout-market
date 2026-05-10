@@ -67,6 +67,8 @@ python examples/local_worker_demo.py   # smoke test
 | `cli/endpoint_probe.py` | `python -m rollout_market.cli.endpoint_probe` writes runs/<ts>/endpoint_contract_report.json |
 | `observatory/dense_mismatch_lab.py` | DenseMismatchReport contract + JSON/HTML renderer for one paired (rollout, trainer) logprob run |
 | `cli/dense_mismatch_lab.py` | `python -m rollout_market.cli.dense_mismatch_lab` writes runs/<ts>/dense_mismatch_report.{json,html} |
+| `observatory/router_mismatch_lab.py` | RouterTrace + RouterMismatchReport (router_flip_rate, token_expert_disagreement_rate, per-layer rates) |
+| `cli/router_mismatch_lab.py` | `python -m rollout_market.cli.router_mismatch_lab` writes runs/<ts>/router_mismatch_report.{json,html} |
 | `worker.py` | WorkerRuntime skeleton |
 
 ## Development plan
