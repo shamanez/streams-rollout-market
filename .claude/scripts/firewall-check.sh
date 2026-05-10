@@ -26,7 +26,7 @@ BLOCKED
 fi
 
 # Block hardcoded API keys / secrets from being written to any file
-SECRET_PATTERNS="(nvapi-[A-Za-z0-9]{20,}|gsk_[A-Za-z0-9]{20,}|csk-[A-Za-z0-9]{20,}|sk-or-v1-[A-Za-z0-9]{20,}|sk-[A-Za-z0-9]{20,})"
+SECRET_PATTERNS="(nvapi-[A-Za-z0-9]{20,}|gsk_[A-Za-z0-9]{20,}|csk-[A-Za-z0-9]{20,}|sk-or-v1-[A-Za-z0-9]{20,}|sk-[A-Za-z0-9]{20,}|hf_[A-Za-z0-9]{20,})"
 
 # Allow secrets only in .env files (which are gitignored)
 if echo "$INPUT" | grep -qE '"(file_path|path)"\s*:\s*"[^"]*\.env"'; then
