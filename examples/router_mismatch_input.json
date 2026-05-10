@@ -1,0 +1,37 @@
+{
+  "run_id": "demo-router-001",
+  "model_id": "Qwen/Qwen3-30B-A3B",
+  "rollout_engine": {
+    "name": "vllm",
+    "version": "0.6.0",
+    "fingerprint": "sha256:vllm-bf16-l40s"
+  },
+  "trainer_engine": {
+    "name": "transformers",
+    "version": "4.45.0",
+    "fingerprint": "sha256:hf-bf16-cuda"
+  },
+  "rollout_trace": {
+    "num_layers": 2,
+    "num_experts": 8,
+    "top_k": 2,
+    "expert_ids": [
+      [[0, 1], [3, 4]],
+      [[2, 5], [6, 7]],
+      [[1, 0], [3, 4]]
+    ]
+  },
+  "trainer_trace": {
+    "num_layers": 2,
+    "num_experts": 8,
+    "top_k": 2,
+    "expert_ids": [
+      [[0, 1], [3, 4]],
+      [[5, 2], [6, 7]],
+      [[1, 2], [3, 4]]
+    ]
+  },
+  "notes": [
+    "synthetic fixture for smoke tests; expert ids are illustrative only"
+  ]
+}

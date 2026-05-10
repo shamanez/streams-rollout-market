@@ -19,6 +19,12 @@ from .endpoint_probe import (
     probe_endpoint,
     write_report,
 )
+from .router_mismatch_lab import (
+    RouterMismatchReport,
+    RouterTrace,
+    compute_router_mismatch,
+    write_router_mismatch,
+)
 
 __all__ = [
     "EndpointContractReport",
@@ -31,4 +37,8 @@ __all__ = [
     "load_input_fixture",
     "render_html",
     "write_dense_mismatch",
+    "RouterTrace",
+    "RouterMismatchReport",
+    "compute_router_mismatch",
+    "write_router_mismatch",
 ]
