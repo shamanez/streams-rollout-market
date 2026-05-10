@@ -72,7 +72,7 @@ python examples/local_worker_demo.py   # smoke test
 | `observatory/router_mismatch_lab.py` | RouterTrace + RouterMismatchReport (router_flip_rate, token_expert_disagreement_rate, per-layer rates) |
 | `cli/router_mismatch_lab.py` | `python -m rollout_market.cli.router_mismatch_lab` writes runs/<ts>/router_mismatch_report.{json,html} |
 | `worker.py` | WorkerSDK: register / heartbeat / fetch_lease / submit_group / report_failure |
-| `worker_broker.py` | LocalWorkerBroker: thread-safe registry, lease issuance, idempotent submission, failure recording, lease reaping |
+| `worker_broker.py` | LocalWorkerBroker: thread-safe registry, lease issuance, idempotent submission, failure recording, lease reaping (EXPIRED), abandon_stale_workers (ABANDONED), heartbeat-derived WorkerHealth, append-only audit log |
 
 ## Development plan
 

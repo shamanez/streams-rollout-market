@@ -24,7 +24,13 @@ from .opbc import compute_budget_report, decide_group
 from .trainer_client import ReplayTier, TrainerBatch, TrainerClient
 from .validators import validate_group_against_lease
 from .worker import WorkerSDK
-from .worker_broker import LeaseRecord, LeaseState, LocalWorkerBroker
+from .worker_broker import (
+    AuditEntry,
+    LeaseRecord,
+    LeaseState,
+    LocalWorkerBroker,
+    WorkerHealth,
+)
 
 __all__ = [
     "PolicyManifest",
@@ -49,6 +55,8 @@ __all__ = [
     "LocalWorkerBroker",
     "LeaseRecord",
     "LeaseState",
+    "WorkerHealth",
+    "AuditEntry",
     "TrainerFeedback",
     "FeedbackAggregator",
     "QualityStats",
