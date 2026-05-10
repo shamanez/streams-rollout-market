@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Rollout Market + Mismatch Observatory</title>
+  <style>
+    :root {
+      --bg:#07111f; --panel:#0e1726; --panel2:#111f33; --text:#eef5ff; --muted:#9fb0ca;
+      --cyan:#70e1ff; --green:#9cf6c8; --yellow:#ffe695; --red:#ffb4b4; --line:#2b405e;
+      --blue:#8ab4ff;
+    }
+    *{box-sizing:border-box} body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:radial-gradient(circle at 12% 0%,#143d6a 0,transparent 25%),radial-gradient(circle at 88% 12%,#144d3a 0,transparent 22%),var(--bg);color:var(--text);line-height:1.55}
+    a{color:var(--cyan);text-decoration:none} a:hover{text-decoration:underline}.wrap{max-width:1220px;margin:0 auto;padding:44px 22px 80px}header{padding:50px 0 26px}.eyebrow{display:inline-block;border:1px solid rgba(112,225,255,.3);color:var(--cyan);border-radius:999px;padding:7px 12px;background:rgba(14,23,38,.74);font-size:13px;letter-spacing:.06em;text-transform:uppercase}h1{font-size:clamp(42px,7vw,82px);line-height:.95;margin:20px 0;letter-spacing:-.06em}h2{font-size:31px;margin:56px 0 18px;letter-spacing:-.025em}h3{font-size:19px;margin:0 0 7px}.lead{font-size:clamp(18px,2vw,23px);max-width:980px;color:var(--muted)}.grid{display:grid;gap:16px}.cols3{grid-template-columns:repeat(3,minmax(0,1fr))}.cols2{grid-template-columns:repeat(2,minmax(0,1fr))}.card{background:linear-gradient(180deg,rgba(17,31,51,.94),rgba(9,19,34,.94));border:1px solid rgba(159,176,202,.22);border-radius:22px;padding:22px;box-shadow:0 22px 70px rgba(0,0,0,.26)}.muted{color:var(--muted)}.callout{border-color:rgba(156,246,200,.35);background:linear-gradient(135deg,rgba(156,246,200,.13),rgba(112,225,255,.08));}.danger{border-color:rgba(255,180,180,.35);background:rgba(255,180,180,.08)}.tag{display:inline-block;font-size:12px;padding:4px 9px;border-radius:999px;background:rgba(112,225,255,.1);border:1px solid rgba(112,225,255,.22);color:var(--cyan);margin:0 5px 6px 0}.tag.g{color:var(--green);background:rgba(156,246,200,.09);border-color:rgba(156,246,200,.22)}.tag.y{color:var(--yellow);background:rgba(255,230,149,.09);border-color:rgba(255,230,149,.24)}.flow{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin-top:18px}.node{border:1px solid rgba(159,176,202,.26);background:rgba(14,23,38,.8);border-radius:18px;padding:15px;min-height:130px;position:relative}.node:after{content:"->";position:absolute;right:-12px;top:42%;font-weight:800;color:var(--cyan)}.node:last-child:after{content:""}.node b{display:block;margin-bottom:6px}.node span{font-size:13px;color:var(--muted)}table{width:100%;border-collapse:collapse;overflow:hidden;border-radius:16px;border:1px solid var(--line);font-size:14px}th,td{padding:13px 14px;border-bottom:1px solid var(--line);vertical-align:top}th{background:rgba(112,225,255,.1);text-align:left;color:#dff7ff}tr:last-child td{border-bottom:0}.metric{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:rgba(0,0,0,.22);border:1px solid rgba(159,176,202,.17);padding:10px;border-radius:12px;color:#d7e6ff}.timeline{position:relative}.mile{padding-left:48px;position:relative;margin:16px 0}.mile:before{content:attr(data-step);position:absolute;left:0;top:8px;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:var(--cyan);color:#06111f;font-weight:900}.mile:after{content:"";position:absolute;left:16px;top:42px;bottom:-20px;width:2px;background:rgba(112,225,255,.3)}.mile:last-child:after{display:none}.sources{columns:2;column-gap:26px}.src{break-inside:avoid;border:1px solid rgba(159,176,202,.15);border-radius:14px;padding:11px;margin:0 0 10px;background:rgba(14,23,38,.58);font-size:13px}.src b{color:#fff}.src small{color:var(--muted)}footer{margin-top:54px;color:var(--muted);font-size:13px}@media(max-width:900px){.cols3,.cols2,.flow{grid-template-columns:1fr}.node:after{display:none}.sources{columns:1}}
+  </style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="eyebrow">Open-source thesis</div>
+  <h1>Cheap rollouts are useless unless they are trainable.</h1>
+  <p class="lead">streams-rollout-market should launch as a rollout validity layer plus a public Mismatch Observatory: a way to show, measure, and control whether remote agentic trajectories still represent a usable behavior policy for policy-gradient training.</p>
+  <div><span class="tag">No trainer</span><span class="tag g">Policy-pinned groups</span><span class="tag y">OPBC</span><span class="tag">MoE routing mismatch</span><span class="tag g">Token/logprob contracts</span></div>
+</header>
+
+<section class="card callout">
+  <h2 style="margin-top:0">Decision</h2>
+  <p><b>Proceed only if the project is more than a worker queue.</b> A generic distributed rollout queue is useful but not a wow open-source project. A quality-scored rollout marketplace with token-level integrity, policy pinning, mismatch telemetry, and a public benchmark is a real wedge.</p>
+</section>
+
+<section>
+  <h2>Why this place needs to exist</h2>
+  <div class="grid cols3">
+    <div class="card"><h3>Rollouts starve trainers</h3><p class="muted">Long, multi-turn, tool-using trajectories make rollout generation the bottleneck. More trainer GPUs do not help when accepted groups arrive too slowly.</p></div>
+    <div class="card"><h3>Remote workers create policy debt</h3><p class="muted">Stale weights, precision drift, tokenization drift, engine mismatch, quantization, MoE routing, and device differences all change the behavior policy.</p></div>
+    <div class="card"><h3>The unit is not a token</h3><p class="muted">The unit of supply is a verified trajectory group: same logical policy, token IDs, behavior logprobs, masks, policy version, engine fingerprint, and OPBC decision.</p></div>
+  </div>
+</section>
+
+<section>
+  <h2>The architecture to show</h2>
+  <div class="flow">
+    <div class="node"><b>External trainer</b><span>Publishes policy versions; pulls accepted groups. No PPO/GRPO implementation in this repo.</span></div>
+    <div class="node"><b>PolicyRegistry</b><span>Version, checkpoint digest, tokenizer hash, precision and engine contract.</span></div>
+    <div class="node"><b>Dispatcher</b><span>Routes jobs by policy lease, context length, device, cost, and reliability.</span></div>
+    <div class="node"><b>Workers</b><span>Run env + inference; return token IDs, sampled logprobs, rewards, traces.</span></div>
+    <div class="node"><b>OPBC + verifier</b><span>Train / replay / quarantine / reject with reasons.</span></div>
+    <div class="node"><b>LiveStore</b><span>Trainer-facing store of valid groups, not raw completions.</span></div>
+  </div>
+</section>
+
+<section>
+  <h2>What to demo first</h2>
+  <table>
+    <thead><tr><th>Demo</th><th>Why</th><th>Recommendation</th></tr></thead>
+    <tbody>
+      <tr><td><b>A. Endpoint identity gap</b></td><td>Use free/cheap endpoints to show that same model label is not enough and metadata/logprob contracts vary.</td><td>Fast awareness demo, not paper-quality evidence.</td></tr>
+      <tr><td><b>B. Controlled dense mismatch lab</b></td><td>Host the same small dense checkpoint under Transformers, vLLM, SGLang, BF16/FP16/FP8 where possible.</td><td>First rigorous benchmark. Compute policy-gradient materiality.</td></tr>
+      <tr><td><b>C. Small MoE router mismatch</b></td><td>Use Qwen1.5-MoE-A2.7B or similar to record expert indices and compare rollout vs training routing.</td><td>The wow demo. Do it after dense lab so the story is credible.</td></tr>
+      <tr><td><b>D. Market simulation</b></td><td>Simulate 10-50 workers with varied lag, precision, engine, churn, and missing metadata.</td><td>Product demo: OPBC scores supply, not just tokens.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2>Policy-gradient materiality</h2>
+  <div class="grid cols2">
+    <div class="card"><h3>Metrics</h3><p class="metric">delta_t = log_pi_t - log_mu_t<br>log_ratio = sum(mask_t * delta_t)<br>w = exp(clip(log_ratio, -C, C))<br>ESS = (sum w)^2 / (n * sum w^2)</p></div>
+    <div class="card"><h3>Decisions</h3><p class="muted">A rollout is not accepted because it completed. It is accepted because its token IDs, behavior logprobs, masks, policy version, precision class, and mismatch budget make it usable by an external trainer.</p></div>
+  </div>
+</section>
+
+<section>
+  <h2>Agent-built development plan</h2>
+  <div class="timeline">
+    <div class="mile" data-step="0"><div class="card"><h3>Repo reset</h3><p class="muted">README, AGENTS.md, non-goals, architecture docs, issue template, no-trainer boundary.</p></div></div>
+    <div class="mile" data-step="1"><div class="card"><h3>Contract-first core</h3><p class="muted">PolicyManifest, WorkerManifest, RolloutJob, RolloutLease, RolloutGroup, OPBCReport, RejectionReason, schemas, fixtures.</p></div></div>
+    <div class="mile" data-step="2"><div class="card"><h3>Mismatch Observatory</h3><p class="muted">Endpoint probe, controlled dense lab, metrics JSON, HTML dashboard, reproducibility docs.</p></div></div>
+    <div class="mile" data-step="3"><div class="card"><h3>Local market loop</h3><p class="muted">Dispatcher, LiveStore, PolicyRegistry, fake workers, fake trainer client, and OPBC decisions.</p></div></div>
+    <div class="mile" data-step="4"><div class="card"><h3>Remote workers</h3><p class="muted">Heartbeats, leases, policy sync, spot interruption handling, group commit, idempotency.</p></div></div>
+    <div class="mile" data-step="5"><div class="card"><h3>MoE wow demo</h3><p class="muted">Router trace contract, router mismatch plots, replay improvement, OPBC source decomposition.</p></div></div>
+  </div>
+</section>
+
+<section>
+  <h2>Go / no-go</h2>
+  <div class="grid cols2">
+    <div class="card callout"><h3>Go</h3><p>Launch as the open rollout validity market: policy-pinned groups, OPBC, verifier, mismatch observatory, worker SDK, trainer client.</p></div>
+    <div class="card danger"><h3>No-go</h3><p>Do not spend serious effort on a generic queue, a payment layer, or a homegrown trainer. Those are not the wedge.</p></div>
+  </div>
+</section>
+
+<section>
+  <h2>Evidence map</h2>
+  <p class="muted">The project should keep this source list in the repo and update it as papers/frameworks move. The point is to make the pain points visible and current.</p>
+  <div class="sources">
+
+<div class="src"><b>Accelerating RL Post-Training with Speculative Decoding in NeMo RL</b><br><small>2026-04 - rollout bottleneck</small><br>Reports rollout generation as the dominant RL post-training cost; 65-72% of step time in 8B workloads, with 1.5x-1.8x rollout speedups and up to 1.4x end-to-end step speedup.<br><a href="https://research.nvidia.com/labs/nemotron/rl-speculative-decoding/">https://research.nvidia.com/labs/nemotron/rl-speculative-decoding/</a></div>
+<div class="src"><b>ProRL Agent: Rollout-as-a-Service for RL Training of Multi-Turn LLM Agents</b><br><small>2026-03 - rollout as service</small><br>Directly validates that rollout orchestration should be decoupled from the trainer and exposed as an API service for multi-turn agent RL.<br><a href="https://www.microsoft.com/en-us/research/publication/prorl-agent-rollout-as-a-service-for-rl-training-of-multi-turn-llm-agents/">https://www.microsoft.com/en-us/research/publication/prorl-agent-rollout-as-a-service-for-rl-training-of-multi-turn-llm-agents/</a></div>
+<div class="src"><b>SortedRL: Accelerating RL Training for LLMs through Online Length-Aware Scheduling</b><br><small>2026-03 - rollout bottleneck</small><br>Reports rollout phase can account for up to 70% of training time for long trajectories and motivates scheduling plus controlled off-policy replay.<br><a href="https://www.microsoft.com/en-us/research/publication/sortedrl-accelerating-rl-training-for-llms-through-online-length-aware-scheduling/">https://www.microsoft.com/en-us/research/publication/sortedrl-accelerating-rl-training-for-llms-through-online-length-aware-scheduling/</a></div>
+<div class="src"><b>Heddle: Agentic RL Training Needs Trajectory-Centric Scheduling</b><br><small>2026-03 - rollout bottleneck</small><br>Post-Jan-2026 system direction: long-tailed tool calls and trajectory placement become first-class scheduling problems. Use as a search/triage placeholder if exact arXiv changes.<br><a href="https://arxiv.org/abs/2603.28101">https://arxiv.org/abs/2603.28101</a></div>
+<div class="src"><b>Accelerating RL Post-Training Rollouts via System-Integrated Speculative Decoding</b><br><small>2026-04 - speculative rollout</small><br>Formalizes lossless rollout acceleration where verifier policy semantics are preserved, distinguishing pure throughput from off-policy rollout changes.<br><a href="https://arxiv.org/abs/2604.26779">https://arxiv.org/abs/2604.26779</a></div>
+<div class="src"><b>VeRL Rollout Importance Sampling documentation</b><br><small>2025-10 - training-inference mismatch</small><br>Operationalizes rollout-vs-training mismatch metrics and rollout IS; useful blueprint for OPBC telemetry.<br><a href="https://verl.readthedocs.io/en/latest/advance/rollout_is.html">https://verl.readthedocs.io/en/latest/advance/rollout_is.html</a></div>
+<div class="src"><b>When Speed Kills Stability: RL Collapse from Inference-Training Mismatch</b><br><small>2025-10 - training-inference mismatch</small><br>Core conceptual reference for treating inference engine mismatch as a behavior-policy mismatch.<br><a href="https://yingru.notion.site/When-Speed-Kills-Stability-Demystifying-RL-Collapse-from-the-Inference-Training-Mismatch-271211a558b7808d8b12d403fd15edda">https://yingru.notion.site/When-Speed-Kills-Stability-Demystifying-RL-Collapse-from-the-Inference-Training-Mismatch-271211a558b7808d8b12d403fd15edda</a></div>
+<div class="src"><b>Defeating the Training-Inference Mismatch via FP16</b><br><small>2025-10 - training-inference mismatch</small><br>Argues BF16 precision itself can create mismatch and that FP16 can improve RL stability; motivates precision as marketplace metadata.<br><a href="https://huggingface.co/papers/2510.26788">https://huggingface.co/papers/2510.26788</a></div>
+<div class="src"><b>Precision-RL repository</b><br><small>2025-11 - training-inference mismatch</small><br>Tracks implementation support for FP16 RL and experiments across algorithms/model families including MoE.<br><a href="https://github.com/sail-sg/Precision-RL">https://github.com/sail-sg/Precision-RL</a></div>
+<div class="src"><b>No More Train-Inference Mismatch: Bitwise Consistent On-Policy RL with vLLM and TorchTitan</b><br><small>2025-11 - training-inference mismatch</small><br>Shows the ecosystem is moving from correction-only toward bitwise/numerical consistency as a systems requirement.<br><a href="https://blog.vllm.ai/2025/11/10/bitwise-consistent-train-inference.html">https://blog.vllm.ai/2025/11/10/bitwise-consistent-train-inference.html</a></div>
+<div class="src"><b>No More Retokenization Drift: Returning Token IDs via OpenAI Compatible API Matters in Agent RL</b><br><small>2025-10 - token integrity</small><br>Supports the hard contract that token IDs must be returned across API boundaries to avoid retokenization drift.<br><a href="https://vllm.ai/blog/agent-lightning">https://vllm.ai/blog/agent-lightning</a></div>
+<div class="src"><b>Swift Training-Inference-Mismatch documentation</b><br><small>2026 - training-inference mismatch</small><br>Explains GRPO assumptions and IS correction for rollout/training policy mismatch in practitioner documentation.<br><a href="https://swift.readthedocs.io/en/v4.0/Instruction/GRPO/AdvancedResearch/training_inference_mismatch.html">https://swift.readthedocs.io/en/v4.0/Instruction/GRPO/AdvancedResearch/training_inference_mismatch.html</a></div>
+<div class="src"><b>Router Replay R3: Why It Failed and How We Fixed It</b><br><small>2026-01 - MoE mismatch</small><br>Explains MoE-specific training-inference mismatch, routing replay, and failure modes when correction discards too many samples.<br><a href="https://macaron.im/mindlab/research/router-replay-r3-why-it-failed-and-how-we-fixed-it">https://macaron.im/mindlab/research/router-replay-r3-why-it-failed-and-how-we-fixed-it</a></div>
+<div class="src"><b>Rollout Routing Replay / R3 paper</b><br><small>2025-10 - MoE mismatch</small><br>Key MoE mismatch primitive: record rollout router choices and replay them during training.<br><a href="https://huggingface.co/papers/2510.11370">https://huggingface.co/papers/2510.11370</a></div>
+<div class="src"><b>Qwen1.5-MoE-A2.7B model card</b><br><small>2024-03 - MoE model candidate</small><br>Practical small MoE candidate: 14.3B total, 2.7B activated, with vLLM support according to the model card.<br><a href="https://huggingface.co/Qwen/Qwen1.5-MoE-A2.7B">https://huggingface.co/Qwen/Qwen1.5-MoE-A2.7B</a></div>
+<div class="src"><b>Qwen1.5-MoE-A2.7B-Chat model card</b><br><small>2024-03 - MoE model candidate</small><br>Chat variant; model card states 14.3B total/2.7B activated and faster inference than Qwen1.5-7B.<br><a href="https://huggingface.co/Qwen/Qwen1.5-MoE-A2.7B-Chat">https://huggingface.co/Qwen/Qwen1.5-MoE-A2.7B-Chat</a></div>
+<div class="src"><b>Qwen1.5-MoE blog</b><br><small>2024-03 - MoE model candidate</small><br>Explains why the model is a good small MoE demo: 2.7B active parameters, 75% training cost reduction, 1.74x inference speed vs Qwen1.5-7B.<br><a href="https://qwenlm.github.io/blog/qwen-moe/">https://qwenlm.github.io/blog/qwen-moe/</a></div>
+<div class="src"><b>QuRL: Efficient Reinforcement Learning with Quantized Rollout</b><br><small>2026-02 - quantized rollouts</small><br>ICLR 2026 quantized rollout work; rollout can be up to 70% of training time and quantized actors require adaptive correction.<br><a href="https://openreview.net/forum?id=eG0bpCwdKn">https://openreview.net/forum?id=eG0bpCwdKn</a></div>
+<div class="src"><b>QaRL: Rollout-Aligned Quantization-Aware RL</b><br><small>2026-04 - quantized rollouts</small><br>Highlights quantized rollout instability via training-inference gap and long-form error tokens, especially relevant to MoE.<br><a href="https://arxiv.org/abs/2604.07853">https://arxiv.org/abs/2604.07853</a></div>
+<div class="src"><b>NeMo RL Quantization-Aware RL guide</b><br><small>2026 - quantized rollouts</small><br>Practical evidence that quantizer state must be transferred/refit through the RL loop.<br><a href="https://docs.nvidia.com/nemo/rl/nightly/guides/quantization-aware-rl.html">https://docs.nvidia.com/nemo/rl/nightly/guides/quantization-aware-rl.html</a></div>
+<div class="src"><b>QeRL: Quantization-enhanced Reinforcement Learning for LLMs</b><br><small>2025-10 - quantized rollouts</small><br>Shows quantization is not just a speed knob; it changes exploration and policy entropy, so marketplace metadata must expose it.<br><a href="https://research.nvidia.com/labs/eai/publication/qerl/">https://research.nvidia.com/labs/eai/publication/qerl/</a></div>
+<div class="src"><b>VeRL FP8 rollout documentation</b><br><small>2026-03 - quantized rollouts</small><br>Implementation details for BF16 training with FP8 rollout and end-to-end FP8, motivating precision-aware contracts.<br><a href="https://verl.readthedocs.io/en/latest/perf/fp8.html">https://verl.readthedocs.io/en/latest/perf/fp8.html</a></div>
+<div class="src"><b>Stable Asynchrony: Variance-Controlled Off-Policy RL for LLMs</b><br><small>2026-02 - async staleness</small><br>Connects stale rollouts to heavy-tailed importance weights and ESS collapse; validates OPBC metrics.<br><a href="https://huggingface.co/papers/2602.17616">https://huggingface.co/papers/2602.17616</a></div>
+<div class="src"><b>Stable Asynchrony emergentmind summary</b><br><small>2026-02 - async staleness</small><br>Summarizes VCPO and the use of ESS to control high-asynchrony policy-gradient variance.<br><a href="https://www.emergentmind.com/papers/2602.17616">https://www.emergentmind.com/papers/2602.17616</a></div>
+<div class="src"><b>Prosperity before Collapse: M2PO</b><br><small>2025-10 - async staleness</small><br>Shows stale rollouts can be useful if second-moment trust is controlled; motivates keeping replay but scoring it.<br><a href="https://infini-ai-lab.github.io/M2PO/">https://infini-ai-lab.github.io/M2PO/</a></div>
+<div class="src"><b>BAPO: Adaptive Clipping for Diverse Off-Policy Scenarios</b><br><small>2026 - async staleness</small><br>Evidence that off-policy clipping should adapt to scenario rather than use one static threshold.<br><a href="https://openreview.net/forum?id=jIeJJqG7dz">https://openreview.net/forum?id=jIeJJqG7dz</a></div>
+<div class="src"><b>VESPO: Variance-Enhanced Stable Policy Optimization</b><br><small>2026 - async staleness</small><br>Identifies policy staleness and training-inference mismatch as behavior/current policy divergence; source to verify during implementation.<br><a href="https://arxiv.org/abs/2602.10693">https://arxiv.org/abs/2602.10693</a></div>
+<div class="src"><b>AReaL: Asynchronous Reinforcement Learning for LLMs</b><br><small>2025-05 - async RL framework</small><br>Decoupled generation/training with bounded policy lag; central baseline for async rollout systems.<br><a href="https://arxiv.org/abs/2505.24298">https://arxiv.org/abs/2505.24298</a></div>
+<div class="src"><b>ROLL Flash: Efficient Async RL</b><br><small>2025-10 - async RL framework</small><br>Async RL design with ratio scheduling and agentic task speedups; useful baseline for marketplace comparisons.<br><a href="https://arxiv.org/abs/2510.11345">https://arxiv.org/abs/2510.11345</a></div>
+<div class="src"><b>SkyRL-Agent</b><br><small>2025-11 - async RL framework</small><br>Agent training/evaluation framework with long-horizon multi-turn RL concerns and backend interoperability.<br><a href="https://arxiv.org/abs/2511.16108">https://arxiv.org/abs/2511.16108</a></div>
+<div class="src"><b>VeRL fully_async documentation</b><br><small>2025 - async RL framework</small><br>Practical async RL knobs; important for trainer-client integration examples.<br><a href="https://verl.readthedocs.io/en/latest/examples/config.html">https://verl.readthedocs.io/en/latest/examples/config.html</a></div>
+<div class="src"><b>Agent Lightning</b><br><small>2025-08 - async RL framework</small><br>Contract-oriented transition/span store and API style relevant to streams contracts.<br><a href="https://arxiv.org/abs/2508.03680">https://arxiv.org/abs/2508.03680</a></div>
+<div class="src"><b>INTELLECT-2 Release</b><br><small>2025-05 - decentralized RL</small><br>Shows globally distributed asynchronous RL with TOPLOC rollout verification and SHARDCAST weight broadcast.<br><a href="https://www.primeintellect.ai/blog/intellect-2-release">https://www.primeintellect.ai/blog/intellect-2-release</a></div>
+<div class="src"><b>Prime-RL async documentation</b><br><small>2026 - decentralized RL</small><br>Practical async/decentralized RL framework with behavior-policy/current-policy corrections.<br><a href="https://github.com/PrimeIntellect-ai/prime-rl">https://github.com/PrimeIntellect-ai/prime-rl</a></div>
+<div class="src"><b>INTELLECT-3 release</b><br><small>2026 - decentralized RL</small><br>Demonstrates 100B+ MoE distributed RL direction, reinforcing the need for async rollout protocols.<br><a href="https://www.primeintellect.ai/blog/intellect-3-release">https://www.primeintellect.ai/blog/intellect-3-release</a></div>
+<div class="src"><b>OpenDiLoCo</b><br><small>2024-07 - decentralized training</small><br>Useful prior for decentralized compute utilization and intermittent synchronization, though not directly rollout-market specific.<br><a href="https://arxiv.org/abs/2407.07852">https://arxiv.org/abs/2407.07852</a></div>
+<div class="src"><b>Streaming DiLoCo</b><br><small>2025-01 - decentralized training</small><br>Bandwidth-reduction primitive relevant to weight-update propagation under churn.<br><a href="https://arxiv.org/abs/2501.18512">https://arxiv.org/abs/2501.18512</a></div>
+<div class="src"><b>TOPLOC</b><br><small>2025 - verification</small><br>Approximate verification of rollout/inference claims across devices; conceptually relevant to policy attestation.<br><a href="https://arxiv.org/abs/2501.16007">https://arxiv.org/abs/2501.16007</a></div>
+<div class="src"><b>PULSE sparse patch broadcast</b><br><small>2026-02 - weight sync</small><br>Suggests RL weight deltas may be sparse enough for frequent patch transport, a key rollout-market primitive.<br><a href="https://arxiv.org/abs/2602.03839">https://arxiv.org/abs/2602.03839</a></div>
+<div class="src"><b>vLLM weight-sync RFC / layerwise reloading threads</b><br><small>2026 - weight sync</small><br>Operational signal that production weight reload paths are non-trivial and need contracts, ACKs, and audits.<br><a href="https://github.com/vllm-project/vllm/issues">https://github.com/vllm-project/vllm/issues</a></div>
+<div class="src"><b>Vast.ai instance types documentation</b><br><small>2026 - spot GPU marketplace</small><br>Defines on-demand, reserved, interruptible; interruptible instances can be paused if outbid or on-demand requested.<br><a href="https://docs.vast.ai/documentation/instances/choosing/instance-types">https://docs.vast.ai/documentation/instances/choosing/instance-types</a></div>
+<div class="src"><b>Vast.ai rental types FAQ</b><br><small>2026 - spot GPU marketplace</small><br>Direct-bidding, 50-80% cost savings, and interruptions create a realistic churn model for rollout workers.<br><a href="https://docs.vast.ai/guides/reference/faq/rental-types">https://docs.vast.ai/guides/reference/faq/rental-types</a></div>
+<div class="src"><b>RunPod savings / spot instance documentation</b><br><small>2026 - spot GPU marketplace</small><br>Spot instances may terminate with a short SIGTERM window, requiring checkpointing and trajectory commit protocols.<br><a href="https://docs.runpod.io/pods/savings-plans">https://docs.runpod.io/pods/savings-plans</a></div>
+<div class="src"><b>RunPod pricing guide</b><br><small>2026 - spot GPU marketplace</small><br>Pricing input for cost-per-accepted-rollout-token benchmarks.<br><a href="https://www.runpod.io/pricing">https://www.runpod.io/pricing</a></div>
+<div class="src"><b>Fireworks completion API logprobs</b><br><small>2026 - endpoint probe</small><br>Free/cheap endpoint probe candidate because completions expose sampled-token logprobs and top_logprobs.<br><a href="https://docs.fireworks.ai/api-reference/post-completions">https://docs.fireworks.ai/api-reference/post-completions</a></div>
+<div class="src"><b>Fireworks chat completion API logprobs</b><br><small>2026 - endpoint probe</small><br>Useful for endpoint identity gap demo, with warnings about provider-specific logprob semantics.<br><a href="https://docs.fireworks.ai/api-reference/post-chatcompletions">https://docs.fireworks.ai/api-reference/post-chatcompletions</a></div>
+<div class="src"><b>Together AI OpenAI-compatible API docs</b><br><small>2026 - endpoint probe</small><br>Endpoint probe candidate for comparing identical model labels across providers.<br><a href="https://docs.together.ai/docs/openai-api-compatibility">https://docs.together.ai/docs/openai-api-compatibility</a></div>
+<div class="src"><b>OpenRouter API docs and logprobs parameters</b><br><small>2026 - endpoint probe</small><br>Router/proxy case study: great for demonstrating that model label, provider, and logprob semantics must be explicit.<br><a href="https://openrouter.ai/docs/api-reference/parameters">https://openrouter.ai/docs/api-reference/parameters</a></div>
+<div class="src"><b>vLLM documentation</b><br><small>2026 - inference engine</small><br>Primary local rollout serving engine for controlled dense/MoE experiments.<br><a href="https://docs.vllm.ai/">https://docs.vllm.ai/</a></div>
+<div class="src"><b>SGLang documentation</b><br><small>2026 - inference engine</small><br>Second local rollout serving engine for mismatch decomposition and MoE routing experiments.<br><a href="https://docs.sglang.ai/">https://docs.sglang.ai/</a></div>
+<div class="src"><b>ROCm vLLM documentation / AMD blogs</b><br><small>2026 - hardware heterogeneity</small><br>Supports CUDA/ROCm heterogeneity as a practical rollout-market issue.<br><a href="https://rocm.blogs.amd.com/artificial-intelligence/vllm-optimize/README.html">https://rocm.blogs.amd.com/artificial-intelligence/vllm-optimize/README.html</a></div>
+<div class="src"><b>Liger Kernel ROCm support</b><br><small>2026 - hardware heterogeneity</small><br>Kernel-level cross-platform support is improving, but end-to-end RL-loop numerical fidelity remains open.<br><a href="https://github.com/linkedin/Liger-Kernel">https://github.com/linkedin/Liger-Kernel</a></div>
+<div class="src"><b>Helix heterogeneous inference scheduling</b><br><small>2025 - scheduler</small><br>Layer placement and routing over heterogeneous GPU clusters; useful background for worker capability routing.<br><a href="https://arxiv.org/abs/2406.01566">https://arxiv.org/abs/2406.01566</a></div>
+<div class="src"><b>HexGen-2</b><br><small>2025 - scheduler</small><br>Prefill/decode disaggregation and heterogeneous scheduling inform long-context rollout routing.<br><a href="https://arxiv.org/abs/2502.07903">https://arxiv.org/abs/2502.07903</a></div>
+<div class="src"><b>Llumnix</b><br><small>2025 - scheduler</small><br>Live KV migration concepts relevant to worker churn, though cross-vendor KV portability remains hard.<br><a href="https://github.com/AlibabaPAI/llumnix">https://github.com/AlibabaPAI/llumnix</a></div>
+<div class="src"><b>NeMo Gym</b><br><small>2026 - agent RL environment</small><br>External environment harness integration target; the rollout market should plug into env providers rather than own training.<br><a href="https://github.com/NVIDIA/NeMo-Gym">https://github.com/NVIDIA/NeMo-Gym</a></div>
+<div class="src"><b>OpenHands / SWE-agent style environments</b><br><small>2025 - agent RL environment</small><br>Representative long-horizon coding agent environment with tool calls and sandbox behavior.<br><a href="https://github.com/All-Hands-AI/OpenHands">https://github.com/All-Hands-AI/OpenHands</a></div>
+<div class="src"><b>SWE-bench Verified</b><br><small>2026 - benchmarks</small><br>Target task family where rollouts can be long, tool-heavy, and variable-latency.<br><a href="https://www.swebench.com/">https://www.swebench.com/</a></div>
+<div class="src"><b>Ionides truncated importance sampling</b><br><small>2008 - policy gradient theory</small><br>Foundational theory for heavy-tailed importance weights and clipping/truncation tradeoffs.<br><a href="https://doi.org/10.1198/106186008X320456">https://doi.org/10.1198/106186008X320456</a></div>
+<div class="src"><b>IMPALA / V-trace</b><br><small>2018 - policy gradient theory</small><br>Actor-learner off-policy correction baseline; useful but not enough for LLM long-horizon token-level ratios.<br><a href="https://arxiv.org/abs/1802.01561">https://arxiv.org/abs/1802.01561</a></div>
+<div class="src"><b>Decoupled PPO</b><br><small>2022 - policy gradient theory</small><br>Formalizes decoupling behavior and proximal policies; relevant to async RL trainers consuming stale groups.<br><a href="https://arxiv.org/abs/2209.01932">https://arxiv.org/abs/2209.01932</a></div>
+<div class="src"><b>GSPO</b><br><small>2025 - policy gradient objective</small><br>Sequence-level ratio alternative with different variance/credit assignment tradeoffs.<br><a href="https://arxiv.org/abs/2507.18071">https://arxiv.org/abs/2507.18071</a></div>
+<div class="src"><b>TIC-GRPO</b><br><small>2026 - policy gradient objective</small><br>GRPO convergence/correction analysis; relevant to one-policy-snapshot-per-group contracts.<br><a href="https://arxiv.org/abs/2508.02833">https://arxiv.org/abs/2508.02833</a></div>
+<div class="src"><b>SORL / turn-level IS for tool use</b><br><small>2025 - tool RL</small><br>Supports per-turn or segmented IS because tool-output tokens should be masked and long trajectories explode token-level ratios.<br><a href="https://arxiv.org/abs/2511.20718">https://arxiv.org/abs/2511.20718</a></div>
+<div class="src"><b>Turn-PPO / turn-level MDP proposals</b><br><small>2026 - tool RL</small><br>Motivates a future OPBC feature: turn-level budget rather than only token-level or sequence-level metrics.<br><a href="https://arxiv.org/abs/2512.17008">https://arxiv.org/abs/2512.17008</a></div>
+<div class="src"><b>OpenAI Codex cloud documentation</b><br><small>2026 - agent coding</small><br>Confirms Codex can read, modify, and run code in sandboxed cloud containers and work on parallel tasks.<br><a href="https://platform.openai.com/docs/codex">https://platform.openai.com/docs/codex</a></div>
+<div class="src"><b>Introducing Codex</b><br><small>2025-05 - agent coding</small><br>Explains AGENTS.md guidance, cloud sandbox task execution, test logs, and PR-style workflows.<br><a href="https://openai.com/index/introducing-codex/">https://openai.com/index/introducing-codex/</a></div>
+<div class="src"><b>How OpenAI uses Codex</b><br><small>2026 - agent coding</small><br>Recommends issue-like prompts, startup scripts, reliable environments, and AGENTS.md persistent context.<br><a href="https://openai.com/business/guides-and-resources/how-openai-uses-codex/">https://openai.com/business/guides-and-resources/how-openai-uses-codex/</a></div>
+<div class="src"><b>Claude Code Agent SDK / headless mode</b><br><small>2026 - agent coding</small><br>Supports scripted long-running implementation with claude -p, tool permissions, and structured output.<br><a href="https://code.claude.com/docs/en/headless">https://code.claude.com/docs/en/headless</a></div>
+<div class="src"><b>Claude Code headless docs</b><br><small>2026 - agent coding</small><br>Confirms non-interactive CLI execution, JSON output, resume, and allowed tools.<br><a href="https://docs.claude.com/en/docs/claude-code/sdk/sdk-headless">https://docs.claude.com/en/docs/claude-code/sdk/sdk-headless</a></div>
+
+  </div>
+</section>
+<footer>Generated for streams-rollout-market planning. Single-file HTML for sharing, landing pages, and issue kickoff.</footer>
+</div>
+</body>
+</html>

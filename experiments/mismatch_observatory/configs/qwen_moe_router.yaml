@@ -1,0 +1,15 @@
+# Small MoE router mismatch template
+model_id: Qwen/Qwen1.5-MoE-A2.7B
+chat_model_id: Qwen/Qwen1.5-MoE-A2.7B-Chat
+reference_engine: transformers
+rollout_engines:
+  - name: vllm
+    precision: fp16
+router_trace:
+  record_expert_ids: true
+  compare_training_vs_rollout: true
+prompts_file: prompts/moe_smoke.jsonl
+sampling:
+  temperature: 0.7
+  top_p: 0.95
+  max_tokens: 512

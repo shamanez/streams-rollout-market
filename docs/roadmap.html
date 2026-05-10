@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>streams-rollout-market | Open-source roadmap</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: #111827;
+      --panel2: #172033;
+      --text: #eef2ff;
+      --muted: #aab4d4;
+      --accent: #6ee7f9;
+      --accent2: #a7f3d0;
+      --warn: #fde68a;
+      --line: #334155;
+      --red: #fca5a5;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background: radial-gradient(circle at 10% 0%, #1e3a8a 0, transparent 28%), radial-gradient(circle at 80% 10%, #14532d 0, transparent 20%), var(--bg); color: var(--text); line-height: 1.55; }
+    a { color: var(--accent); }
+    .wrap { max-width: 1180px; margin: 0 auto; padding: 42px 22px 80px; }
+    header { padding: 56px 0 34px; }
+    .eyebrow { display: inline-flex; gap: 8px; align-items: center; border: 1px solid rgba(110,231,249,.35); border-radius: 999px; padding: 8px 12px; color: var(--accent); background: rgba(15,23,42,.55); font-size: 13px; letter-spacing: .03em; text-transform: uppercase; }
+    h1 { font-size: clamp(42px, 6vw, 78px); line-height: .98; margin: 22px 0 18px; letter-spacing: -0.055em; }
+    h2 { font-size: 30px; margin: 54px 0 18px; letter-spacing: -0.02em; }
+    h3 { margin: 0 0 8px; font-size: 18px; }
+    p.lead { max-width: 900px; font-size: clamp(18px, 2vw, 23px); color: var(--muted); }
+    .grid { display: grid; gap: 16px; }
+    .grid.cols3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .grid.cols2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .card { background: linear-gradient(180deg, rgba(17,24,39,.92), rgba(15,23,42,.92)); border: 1px solid rgba(148,163,184,.22); border-radius: 20px; padding: 20px; box-shadow: 0 24px 60px rgba(0,0,0,.25); }
+    .card strong { color: var(--text); }
+    .muted { color: var(--muted); }
+    .tag { display: inline-block; padding: 4px 9px; border-radius: 999px; background: rgba(110,231,249,.11); color: var(--accent); font-size: 12px; margin: 0 6px 6px 0; border: 1px solid rgba(110,231,249,.22); }
+    .tag.green { color: var(--accent2); background: rgba(167,243,208,.09); border-color: rgba(167,243,208,.20); }
+    .tag.warn { color: var(--warn); background: rgba(253,230,138,.09); border-color: rgba(253,230,138,.20); }
+    .hero-panel { margin-top: 28px; padding: 24px; border: 1px solid rgba(110,231,249,.2); background: rgba(15,23,42,.72); border-radius: 26px; }
+    .flow { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; align-items: stretch; }
+    .node { min-height: 112px; border-radius: 16px; padding: 14px; border: 1px solid rgba(148,163,184,.28); background: rgba(30,41,59,.76); position: relative; }
+    .node:after { content: "->"; position: absolute; right: -12px; top: 42%; color: var(--accent); font-weight: 700; }
+    .node:last-child:after { content: ""; }
+    .node b { display: block; margin-bottom: 6px; color: white; }
+    .node span { color: var(--muted); font-size: 13px; }
+    .timeline { position: relative; margin-top: 12px; }
+    .timeline:before { content: ""; position: absolute; left: 20px; top: 0; bottom: 0; width: 2px; background: linear-gradient(var(--accent), transparent); }
+    .mile { position: relative; padding-left: 58px; margin: 0 0 18px; }
+    .mile:before { content: attr(data-step); position: absolute; left: 0; top: 0; width: 42px; height: 42px; border-radius: 999px; display: grid; place-items: center; color: #06121f; background: var(--accent); font-weight: 800; }
+    .mile .card { padding: 18px 20px; }
+    table { width: 100%; border-collapse: collapse; overflow: hidden; border-radius: 14px; background: rgba(15,23,42,.75); }
+    th, td { text-align: left; padding: 12px 13px; border-bottom: 1px solid rgba(148,163,184,.18); vertical-align: top; }
+    th { color: var(--accent); font-size: 13px; text-transform: uppercase; letter-spacing: .04em; background: rgba(30,41,59,.8); }
+    code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    pre { background: #050816; border: 1px solid rgba(148,163,184,.2); border-radius: 16px; padding: 16px; overflow-x: auto; color: #c4b5fd; }
+    .cta { margin-top: 40px; padding: 28px; border-radius: 24px; background: linear-gradient(135deg, rgba(14,165,233,.18), rgba(34,197,94,.15)); border: 1px solid rgba(110,231,249,.25); }
+    .small { font-size: 13px; }
+    @media (max-width: 900px) { .grid.cols3, .grid.cols2 { grid-template-columns: 1fr; } .flow { grid-template-columns: 1fr; } .node:after { content: "↓"; right: 16px; top: auto; bottom: -18px; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="eyebrow">streams-rollout-market / open-source plan</div>
+      <h1>Turn rollout generation into a safe, measurable market.</h1>
+      <p class="lead">Agentic RL is bottlenecked by long, expensive, heterogeneous rollouts. The project goal is to let many workers generate trajectories while the trainer receives only versioned, token-level, budget-checked experience.</p>
+      <div>
+        <span class="tag">GRPO groups</span><span class="tag">LiveStore</span><span class="tag">PolicyRegistry</span><span class="tag green">Off-Policy Budget Controller</span><span class="tag warn">remote / spot GPUs</span>
+      </div>
+    </header>
+
+    <section class="hero-panel">
+      <div class="flow">
+        <div class="node"><b>Tasks</b><span>Prompts, env seeds, group specs</span></div>
+        <div class="node"><b>Dispatcher</b><span>Pin policy snapshot per group</span></div>
+        <div class="node"><b>Workers</b><span>Env loop + inference backend</span></div>
+        <div class="node"><b>LiveStore</b><span>Token IDs, logprobs, rewards</span></div>
+        <div class="node"><b>OPBC</b><span>ESS, E[w^2], KL, lag</span></div>
+        <div class="node"><b>Trainer</b><span>Consume accepted groups only</span></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>The problem</h2>
+      <div class="grid cols3">
+        <div class="card"><h3>Rollouts are the scarce resource</h3><p class="muted">In agentic RL, a single prompt can trigger long chains of model calls, tools, evaluators, retries, and context growth. More trainer GPUs do not help if useful groups arrive too slowly.</p></div>
+        <div class="card"><h3>Asynchrony creates policy debt</h3><p class="muted">Old policy versions, different inference engines, quantization, hardware kernels, and transport delays all mean the behavior policy is not the trainer policy.</p></div>
+        <div class="card"><h3>GRPO needs group coherence</h3><p class="muted">Sibling trajectories for the same prompt should come from one logical behavior policy. Mixing policies inside a group can corrupt advantage estimates.</p></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Core idea</h2>
+      <div class="card">
+        <p><strong>The product is the contract.</strong> The project should not begin as a full marketplace. It should begin as the open protocol that makes a future market possible: policy manifests, sample-group schemas, token-level integrity, worker heartbeats, budget metrics, and trainer-agnostic batch retrieval.</p>
+        <p class="muted">The key research hypothesis is a shared off-policyness budget: staleness, train-inference mismatch, quantization drift, device heterogeneity, and weight-transport latency are logged as measurable budget debt. The controller can use one operational guardrail while still preserving source-specific telemetry.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>MVP modules</h2>
+      <table>
+        <thead><tr><th>Module</th><th>What it does</th><th>First implementation</th></tr></thead>
+        <tbody>
+          <tr><td>contracts.py</td><td>PolicyManifest, SampleGroup, WorkerHeartbeat, BudgetReport, GroupDecision</td><td>Pydantic schemas and validators</td></tr>
+          <tr><td>livestore.py</td><td>Push, quarantine, sample, and pop rollout groups</td><td>SQLite or Postgres plus object storage</td></tr>
+          <tr><td>registry.py</td><td>Version manifests, digests, patch lineage, reload ACKs</td><td>Filesystem/S3 manifest</td></tr>
+          <tr><td>dispatcher.py</td><td>Forms groups and routes work by policy, precision, context, reliability</td><td>FIFO scheduler with freshness limits</td></tr>
+          <tr><td>opbc.py</td><td>Computes ESS, E[w^2], clipped fractions, KL proxies, lag</td><td>Pure Python library and CLI</td></tr>
+          <tr><td>worker.py</td><td>Remote worker runtime for env + inference</td><td>Dockerized heartbeat + sample submitter</td></tr>
+          <tr><td>verifier.py</td><td>Checks hashes, token/logprob contract, sample audits</td><td>Offline audit job first</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Roadmap timeline</h2>
+      <div class="timeline">
+        <div class="mile" data-step="M0"><div class="card"><h3>Contracts - Week 1</h3><p class="muted">Define schema, validation errors, sample lifecycle, and docs. Done when a minimal GRPO group can be validated and rejected with precise reasons.</p></div></div>
+        <div class="mile" data-step="M1"><div class="card"><h3>Local async loop - Weeks 2-3</h3><p class="muted">Local dispatcher, LiveStore, registry, mock worker, and mock trainer. Done when the trainer consumes groups without knowing worker or env endpoints.</p></div></div>
+        <div class="mile" data-step="M2"><div class="card"><h3>Real inference adapter - Weeks 4-5</h3><p class="muted">vLLM or SGLang adapter returning token IDs and logprobs. Done when OPBC logs real mismatch metrics.</p></div></div>
+        <div class="mile" data-step="M3"><div class="card"><h3>Remote worker runtime - Weeks 6-7</h3><p class="muted">Docker worker with heartbeat, policy pull, reload ACK, and signed sample submission. Done when a worker on a second machine contributes groups.</p></div></div>
+        <div class="mile" data-step="M4"><div class="card"><h3>Budget controller - Weeks 8-9</h3><p class="muted">Accept, correct, quarantine, or reject groups based on ESS, E[w^2], clipped fraction, lag, and contract validity.</p></div></div>
+        <div class="mile" data-step="M5"><div class="card"><h3>Weight sync and quorum - Weeks 10-12</h3><p class="muted">Full checkpoint sync first, patch transport second, k-of-n reload quorum third. Group pinning remains strict.</p></div></div>
+        <div class="mile" data-step="M6"><div class="card"><h3>Benchmark release - Week 12+</h3><p class="muted">Publish K-vs-L frontier, cross-engine/device mismatch matrix, trainer idle fraction, accepted tokens/sec/$, and quality metrics.</p></div></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Research work packages</h2>
+      <div class="grid cols2">
+        <div class="card"><h3>1. K-vs-L frontier</h3><p class="muted">How stale can a rollout be as a function of token length, turn count, and task type?</p></div>
+        <div class="card"><h3>2. Mismatch decomposition</h3><p class="muted">Measure engine, precision, quantization, device, and staleness contributions one axis at a time.</p></div>
+        <div class="card"><h3>3. Per-turn budget</h3><p class="muted">Move beyond sequence-level IS for 50k+ token tool-using trajectories with tool-output masks.</p></div>
+        <div class="card"><h3>4. Quorum reload</h3><p class="muted">Replace global hard abort with routable worker quorums while preserving one behavior policy per group.</p></div>
+        <div class="card"><h3>5. Patch transport</h3><p class="muted">Evaluate full checkpoints, LoRA deltas, sparse patches, and quantized receivers under churn.</p></div>
+        <div class="card"><h3>6. Verifiable rollout supply</h3><p class="muted">Audit claims about policy version, tokenizer, logprobs, and environment receipts without trusting every worker.</p></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>First GitHub issues</h2>
+      <pre>1. Implement PolicyManifest schema with digest and patch lineage.
+2. Implement SampleGroup schema with token IDs, logprobs, masks, rewards, telemetry.
+3. Build local LiveStore with push_group, get_batch, quarantine_group.
+4. Implement OPBC metrics: mean(w), E[w^2], ESS, clipped fraction, lag.
+5. Add strict one-policy-version-per-group validator.
+6. Build mock worker and mock trainer for CI.
+7. Add worker heartbeat and capability registration.
+8. Add FIFO scheduler with policy freshness limits.
+9. Add verifier hooks and rejection reason taxonomy.
+10. Write protocol docs for policy pinning and tool-output masking.</pre>
+    </section>
+
+    <section class="cta">
+      <h2>One-sentence pitch</h2>
+      <p class="lead">streams-rollout-market makes rollout generation a safe, measurable, and open supply layer for agentic RL: many workers, many environments, many inference backends, one coherent training loop.</p>
+      <p class="small muted">Suggested license: Apache-2.0. Suggested initial audience: RL systems researchers, VeRL/ROLL/slime users, vLLM/SGLang adapter authors, decentralized compute providers, and agent benchmark builders.</p>
+    </section>
+  </div>
+</body>
+</html>

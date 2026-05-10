@@ -1,0 +1,20 @@
+# Controlled dense mismatch template
+model_id: Qwen/Qwen2.5-0.5B-Instruct
+reference_engine: transformers
+rollout_engines:
+  - name: vllm
+    precision: bf16
+  - name: vllm
+    precision: fp16
+  - name: sglang
+    precision: bf16
+prompts_file: prompts/dense_smoke.jsonl
+sampling:
+  temperature: 1.0
+  top_p: 1.0
+  max_tokens: 512
+  seed: 1234
+metrics:
+  clamp: 20.0
+  include_token_level: true
+  include_sequence_level: true
