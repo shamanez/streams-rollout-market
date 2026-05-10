@@ -4,7 +4,7 @@
 2026-05-10
 
 ## Current phase
-Phase 5 -- Remote/spot worker hardening. Task 5.1 complete; 5.2 next.
+Phase 5 -- Remote/spot worker hardening. **Complete.** Phase 6 next.
 
 ## Completed
 - Phase 0 scaffold and docs/configs/examples
@@ -19,30 +19,32 @@ Phase 5 -- Remote/spot worker hardening. Task 5.1 complete; 5.2 next.
 - Phase 3.3: Worker SDK + LocalWorkerBroker (3-worker concurrent demo).
 - Phase 4.1: Typed DecisionReason + replay path in OPBC.
 - Phase 4.2: Trainer feedback ingestion (FeedbackAggregator).
-- Phase 5.1: Heartbeat and lease timeout audit trail. WorkerHealth enum
-  (ACTIVE / STALE / DEAD / UNKNOWN) derived from last_seen_at vs.
-  heartbeat_ttl_s. New abandon_stale_workers(now) marks dead workers and
-  flips their ISSUED leases to ABANDONED (distinct from EXPIRED, which is
-  lease-TTL only and does not imply worker death). Abandoned/expired
-  leases free their job back to the queue so a fresh worker can pick it
-  up. Append-only audit log records worker_registered, worker_revived,
-  worker_marked_dead, job_enqueued, lease_issued, lease_submitted,
-  lease_failed, lease_expired, lease_abandoned. Dead workers cannot
-  acquire new leases until they heartbeat again (revival). 15 new tests
-  covering the full lifecycle, expired-vs-abandoned distinction, and
-  audit-log content.
+- Phase 5.1: Heartbeat / lease timeout / audit trail.
+- Phase 5.2: k-of-n reload quorum. New pool_reload.PoolReloadTracker
+  records per-worker ReloadAcks, exposes ack_count, has_quorum(k, n),
+  pool_active_version(k, n), and is_worker_aligned(worker_id, version).
+  QuorumViolation raised when two workers ack the same version with
+  different checkpoint digests. New docs/k_of_n_reload_quorum.md
+  explains pool-level vs. per-group: pool advances on k acks; per-group
+  pinning is unchanged and still gated by validate_group_against_lease.
+  17 new tests including the load-bearing acceptance test that proves
+  per-group pinning is unchanged when the pool has advanced past the
+  group's version.
 
 ## Next tasks
-- Phase 5.2: k-of-n reload quorum design doc (per-group policy pinning
-  remains strict; per-pool sync may be quorum-based). Design + contract,
-  no live coordination required.
-- Phase 6: Launch demos (endpoint identity gap dashboard, controlled
-  dense dashboard, local marketplace simulation, MoE router demo).
+- Phase 6: Launch demos.
+  - Endpoint identity gap dashboard
+  - Controlled dense mismatch dashboard
+  - Local marketplace simulation with toxic workers and OPBC decisions
+  - MoE router mismatch demo
 
 ## Known issues
 - src/rollout_market/dispatcher.py and opbc.py fail `ruff format --check`
   (pre-existing formatting only). Not blocking `ruff check .` or pytest.
+- No live model has been run yet. The endpoint probe and labs accept
+  fixture inputs; running them against the spot instance / free-tier
+  APIs is a Phase 6 task.
 
 ## Test status
-- Last run: 2026-05-10, 167 passed, 0 failed (pytest -q)
+- Last run: 2026-05-10, 181 passed, 0 failed (pytest -q)
 - ruff check .: clean
