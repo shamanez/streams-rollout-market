@@ -4,15 +4,33 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from .contracts import BudgetReport, GroupDecision, GroupStatus, SampleGroup
+from .contracts import (
+    BudgetReport,
+    DecisionReason,
+    GroupDecision,
+    GroupStatus,
+    SampleGroup,
+)
 
 
 @dataclass(frozen=True)
 class BudgetPolicy:
+    """Thresholds for the off-policy budget controller.
+
+    The graduated path is:
+      veto -> quarantine
+      hard ESS / lag fail -> quarantine
+      high clipped_fraction -> train_with_correction
+      moderate ESS or lag -> replay
+      otherwise -> train
+    """
+
     clamp: float = 20.0
     min_ess: float = 0.30
+    replay_ess_threshold: float = 0.60
     max_clipped_fraction: float = 0.10
     max_policy_lag_steps: int = 8
+    replay_lag_threshold: int = 4
     veto_abs_log_ratio: float = 30.0
 
 
@@ -39,7 +57,9 @@ def compute_budget_report(
     rollout = _flatten_rollout_logprobs(group)
     train = np.asarray(train_logprobs, dtype=np.float64)
     if rollout.shape != train.shape:
-        raise ValueError(f"train_logprobs shape {train.shape} must match rollout tokens {rollout.shape}")
+        raise ValueError(
+            f"train_logprobs shape {train.shape} must match rollout tokens {rollout.shape}"
+        )
     if rollout.size == 0:
         raise ValueError("no valid policy tokens found after masks")
 
@@ -73,36 +93,78 @@ def compute_budget_report(
     )
 
 
+def _format_reasons(reasons: list[DecisionReason]) -> str:
+    return ", ".join(r.value for r in reasons)
+
+
 def decide_group(report: BudgetReport, policy: BudgetPolicy | None = None) -> GroupDecision:
+    """Map a BudgetReport to a typed decision.
+
+    Severity ordering: veto > quarantine (hard ESS / lag) > correctable (high
+    clipped) > replay (moderate ESS or lag) > train. Each branch attaches the
+    typed DecisionReason(s) that motivated it; consumers can read the enum
+    values without parsing free-text.
+    """
     policy = policy or BudgetPolicy()
+
     if report.veto_fraction > 0:
+        reasons = [DecisionReason.VETO_THRESHOLD_EXCEEDED]
         return GroupDecision(
             group_id=report.group_id,
             status=GroupStatus.QUARANTINED,
-            reason="veto threshold exceeded",
+            reason=_format_reasons(reasons),
+            decision_reasons=reasons,
             budget_report=report,
             recommended_action="quarantine",
         )
-    if report.policy_lag_steps > policy.max_policy_lag_steps or report.effective_sample_size < policy.min_ess:
+
+    quarantine_reasons: list[DecisionReason] = []
+    if report.policy_lag_steps > policy.max_policy_lag_steps:
+        quarantine_reasons.append(DecisionReason.STALE_POLICY_LAG)
+    if report.effective_sample_size < policy.min_ess:
+        quarantine_reasons.append(DecisionReason.LOW_ESS)
+    if quarantine_reasons:
         return GroupDecision(
             group_id=report.group_id,
             status=GroupStatus.QUARANTINED,
-            reason="budget exceeds freshness or ESS limits",
+            reason=_format_reasons(quarantine_reasons),
+            decision_reasons=quarantine_reasons,
             budget_report=report,
             recommended_action="quarantine",
         )
+
     if report.clipped_fraction > policy.max_clipped_fraction:
+        reasons = [DecisionReason.HIGH_CLIPPED_FRACTION]
         return GroupDecision(
             group_id=report.group_id,
             status=GroupStatus.CORRECTABLE,
-            reason="train only with correction and logging",
+            reason=_format_reasons(reasons),
+            decision_reasons=reasons,
             budget_report=report,
             recommended_action="train_with_correction",
         )
+
+    replay_reasons: list[DecisionReason] = []
+    if report.policy_lag_steps > policy.replay_lag_threshold:
+        replay_reasons.append(DecisionReason.REPLAY_TIER_LAG)
+    if report.effective_sample_size < policy.replay_ess_threshold:
+        replay_reasons.append(DecisionReason.REPLAY_TIER_ESS)
+    if replay_reasons:
+        return GroupDecision(
+            group_id=report.group_id,
+            status=GroupStatus.ACCEPTED,
+            reason=_format_reasons(replay_reasons),
+            decision_reasons=replay_reasons,
+            budget_report=report,
+            recommended_action="replay",
+        )
+
+    reasons = [DecisionReason.WITHIN_BUDGET]
     return GroupDecision(
         group_id=report.group_id,
         status=GroupStatus.ACCEPTED,
-        reason="within budget",
+        reason=_format_reasons(reasons),
+        decision_reasons=reasons,
         budget_report=report,
         recommended_action="train",
     )

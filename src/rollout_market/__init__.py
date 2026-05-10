@@ -2,6 +2,7 @@
 
 from .contracts import (
     BudgetReport,
+    DecisionReason,
     GroupDecision,
     GroupStatus,
     PolicyManifest,
@@ -35,6 +36,7 @@ __all__ = [
     "GroupDecision",
     "GroupStatus",
     "RejectionReason",
+    "DecisionReason",
     "InMemoryLiveStore",
     "StoredGroup",
     "DuplicateGroupError",
