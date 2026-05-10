@@ -1,0 +1,33 @@
+{
+  "num_runs": 1,
+  "engine_pairs": [
+    {
+      "rollout_engine": "hf-fp8",
+      "trainer_engine": "hf-bf16",
+      "count": 1,
+      "mean_router_flip_rate": 0.051432291666666664,
+      "mean_token_expert_disagreement_rate": 0.984375,
+      "worst_layer_flip_rate": 0.125,
+      "total_tokens": 64,
+      "layer_count": 48
+    }
+  ],
+  "rows": [
+    {
+      "run_id": "live-qwen3-30b-a3b-fp8-vs-bf16-001",
+      "model_id": "Qwen/Qwen3-30B-A3B",
+      "rollout_engine": "hf-fp8",
+      "trainer_engine": "hf-bf16",
+      "num_tokens": 64,
+      "num_layers": 48,
+      "top_k": 8,
+      "num_experts": 128,
+      "router_flip_rate": 0.051432291666666664,
+      "token_expert_disagreement_rate": 0.984375,
+      "layer_flip_rate_min": 0.0,
+      "layer_flip_rate_mean": 0.051432291666666664,
+      "layer_flip_rate_max": 0.125,
+      "created_at": "2026-05-10T08:30:38.171816+00:00"
+    }
+  ]
+}

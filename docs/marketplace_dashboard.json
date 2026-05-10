@@ -1,0 +1,111 @@
+{
+  "jobs_total": 27,
+  "submissions": 27,
+  "by_worker_action": [
+    {
+      "worker_id": "w00-honest",
+      "action": "train",
+      "count": 3
+    },
+    {
+      "worker_id": "w01-honest",
+      "action": "train",
+      "count": 3
+    },
+    {
+      "worker_id": "w02-honest",
+      "action": "train",
+      "count": 3
+    },
+    {
+      "worker_id": "w03-noisy",
+      "action": "train_with_correction",
+      "count": 3
+    },
+    {
+      "worker_id": "w04-stale",
+      "action": "quarantine",
+      "count": 3
+    },
+    {
+      "worker_id": "w05-toxic_tokenizer",
+      "action": "reject",
+      "count": 3
+    },
+    {
+      "worker_id": "w06-toxic_precision",
+      "action": "reject",
+      "count": 3
+    },
+    {
+      "worker_id": "w07-toxic_no_logprobs",
+      "action": "reject",
+      "count": 3
+    },
+    {
+      "worker_id": "w08-toxic_version_drift",
+      "action": "reject",
+      "count": 3
+    }
+  ],
+  "by_profile_action": [
+    {
+      "profile": "honest",
+      "action": "train",
+      "count": 9
+    },
+    {
+      "profile": "noisy",
+      "action": "train_with_correction",
+      "count": 3
+    },
+    {
+      "profile": "stale",
+      "action": "quarantine",
+      "count": 3
+    },
+    {
+      "profile": "toxic_no_logprobs",
+      "action": "reject",
+      "count": 3
+    },
+    {
+      "profile": "toxic_precision",
+      "action": "reject",
+      "count": 3
+    },
+    {
+      "profile": "toxic_tokenizer",
+      "action": "reject",
+      "count": 3
+    },
+    {
+      "profile": "toxic_version_drift",
+      "action": "reject",
+      "count": 3
+    }
+  ],
+  "rejection_reasons": {
+    "missing_logprobs": 3,
+    "policy_version_mismatch": 3,
+    "precision_mismatch": 3,
+    "tokenizer_mismatch": 3
+  },
+  "decision_reasons": {
+    "high_clipped_fraction": 3,
+    "stale_policy_lag": 3,
+    "within_budget": 9
+  },
+  "livestore_by_state": {
+    "accepted": 9,
+    "correctable": 3,
+    "quarantined": 3,
+    "rejected": 12
+  },
+  "audit_event_counts": {
+    "job_enqueued": 27,
+    "lease_issued": 27,
+    "lease_submitted": 27,
+    "worker_registered": 9
+  }
+}

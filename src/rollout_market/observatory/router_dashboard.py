@@ -27,6 +27,7 @@ from ._dashboard_style import (
     kpi_block,
     page_shell,
     palette_for,
+    render_research_question,
 )
 from ._glossary import render_glossary_card
 
@@ -287,7 +288,30 @@ def render_html(dashboard: RouterDashboard) -> str:
         "token_expert_disagreement_rate",
     ])
 
+    if aggs:
+        observed = (
+            f"FP8 quantization barely shifts the dominant routed expert "
+            f"(top-1 flip rate {worst_flip * 100:.1f}% — about 1 in "
+            f"{int(round(1 / max(worst_flip, 1e-9)))} (token, layer) pairs) "
+            f"but reorders the rest of the top-k almost everywhere "
+            f"({worst_set_disagree * 100:.1f}% of tokens have set-level "
+            "disagreement on at least one MoE layer). The top-1 looks robust; "
+            "the top-k set is noise."
+        )
+    else:
+        observed = "No runs in this snapshot."
+    rq = render_research_question(
+        question="Does FP8 quantization preserve the routing decisions of a "
+                 "Mixture-of-Experts model? If gradients flow through the "
+                 "router gate, set-level routing changes show up as "
+                 "different parameter updates even when top-1 is stable.",
+        observed=observed,
+        next_step="Multi-prompt run (this is n=1 currently); per-layer "
+                  "stratified analysis to see if early/late layers differ.",
+    )
+
     body = (
+        f"{rq}"
         f'<section class="card">{kpis}</section>'
         f'<section class="card">'
         f"<h2>Top-1 flip vs top-k set disagreement</h2>"

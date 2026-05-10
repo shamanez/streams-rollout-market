@@ -28,6 +28,7 @@ from ._dashboard_style import (
     page_shell,
     palette_for,
     quality_badge_for_ess,
+    render_research_question,
 )
 from ._glossary import render_glossary_card
 from dataclasses import dataclass, field
@@ -326,7 +327,29 @@ def render_html(dashboard: DenseDashboard) -> str:
         "top_1pct_gradient_mass",
     ])
 
+    if aggs:
+        observed = (
+            f"Across {len(aggs)} (rollout, trainer) engine pair"
+            f"{'s' if len(aggs) != 1 else ''}, mean ESS ranges from "
+            f"{best_ess:.4f} (best) to {worst_ess:.4f} (worst). The drift "
+            "between engines at the same precision is comparable to the "
+            "drift introduced by FP8 quantization. clipped_fraction = 0 "
+            "everywhere, so OPBC routes all four to `train` despite the "
+            "measurable disagreement."
+        )
+    else:
+        observed = "No runs in this snapshot."
+    rq = render_research_question(
+        question="On the same checkpoint and same prompts, how much do "
+                 "different inference engines (vLLM, sglang) and precision "
+                 "classes (bf16, FP8) disagree on per-token logprobs?",
+        observed=observed,
+        next_step="Same matrix at sequence lengths 128 / 512 / 2048 to see "
+                  "whether the drift accumulates linearly or super-linearly.",
+    )
+
     body = (
+        f"{rq}"
         f'<section class="card">{kpis}</section>'
         f'<section class="card">'
         f"<h2>ESS by engine pair</h2>"
