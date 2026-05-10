@@ -21,6 +21,14 @@ from __future__ import annotations
 import glob as _glob
 import html as _html
 import json
+
+from ._dashboard_style import (
+    chart_block,
+    kpi_block,
+    page_shell,
+    palette_for,
+    quality_badge_for_ess,
+)
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
@@ -192,20 +200,6 @@ def render_html(dashboard: DenseDashboard) -> str:
     def _f(value: float) -> str:
         return f"{value:.4f}"
 
-    pair_rows = "".join(
-        f"<tr>"
-        f"<td>{_html.escape(agg.rollout_engine)}</td>"
-        f"<td>{_html.escape(agg.trainer_engine)}</td>"
-        f"<td>{agg.count}</td>"
-        f"<td>{_f(agg.mean_ess)}</td>"
-        f"<td>{_f(agg.mean_clipped_fraction)}</td>"
-        f"<td>{_f(agg.mean_sequence_log_ratio)}</td>"
-        f"<td>{_f(agg.mean_delta_logprob_abs)}</td>"
-        f"<td>{_f(agg.worst_max_abs_log_ratio)}</td>"
-        f"<td>{agg.total_policy_tokens}</td>"
-        f"</tr>"
-        for agg in dashboard.engine_pair_aggregates()
-    )
     run_rows = "".join(
         f"<tr>"
         f"<td>{_html.escape(r.run_id)}</td>"
@@ -221,33 +215,144 @@ def render_html(dashboard: DenseDashboard) -> str:
         f"</tr>"
         for r in dashboard.rows
     )
-    return (
-        "<!doctype html><html lang='en'><head><meta charset='utf-8'>"
-        "<title>Dense mismatch dashboard</title>"
-        "<style>"
-        "body{font-family:system-ui,sans-serif;max-width:1080px;margin:2rem auto;color:#111}"
-        "table{border-collapse:collapse;width:100%;margin-bottom:1rem;font-variant-numeric:tabular-nums}"
-        "th,td{border:1px solid #ddd;padding:.4rem .6rem;text-align:left}"
-        "th{background:#f5f5f5}"
-        "h1{font-size:1.2rem}h2{font-size:1rem;margin-top:1.5rem}"
-        "</style></head><body>"
-        f"<h1>Controlled dense mismatch dashboard ({dashboard.num_runs} run"
-        f"{'' if dashboard.num_runs == 1 else 's'})</h1>"
-        "<h2>Per (rollout_engine -> trainer_engine) pair</h2>"
-        "<table><thead><tr>"
-        "<th>rollout</th><th>trainer</th><th>count</th>"
-        "<th>mean ess</th><th>mean clipped</th><th>mean seq_log_ratio</th>"
-        "<th>mean |delta logp|</th><th>worst max|log_ratio|</th>"
-        "<th>tokens</th>"
-        f"</tr></thead><tbody>{pair_rows}</tbody></table>"
-        "<h2>Per run</h2>"
-        "<table><thead><tr>"
-        "<th>run_id</th><th>model</th><th>engines</th><th>precision</th>"
-        "<th>tokens</th><th>ess</th><th>clipped</th><th>veto</th>"
-        "<th>max|log_ratio|</th><th>top1% mass</th>"
-        f"</tr></thead><tbody>{run_rows}</tbody></table>"
-        "</body></html>"
+    aggs = dashboard.engine_pair_aggregates()
+
+    if aggs:
+        best_ess = max(a.mean_ess for a in aggs)
+        worst_ess = min(a.mean_ess for a in aggs)
+        worst_max = max(a.worst_max_abs_log_ratio for a in aggs)
+    else:
+        best_ess = worst_ess = worst_max = 0.0
+
+    kpis = kpi_block([
+        (str(dashboard.num_runs), "runs"),
+        (str(len(aggs)), "engine pairs"),
+        (f"{best_ess:.4f}", "best ESS"),
+        (f"{worst_ess:.4f}", "worst ESS"),
+        (f"{worst_max:.3f}", "worst max|log_ratio|"),
+    ])
+
+    pair_labels = [f"{a.rollout_engine} → {a.trainer_engine}" for a in aggs]
+    colors = palette_for(len(pair_labels))
+
+    ess_chart = chart_block(
+        canvas_id="dense-ess",
+        chart_type="bar",
+        data={
+            "labels": pair_labels,
+            "datasets": [{
+                "label": "Mean ESS",
+                "data": [round(a.mean_ess, 5) for a in aggs],
+                "backgroundColor": colors,
+                "borderRadius": 6,
+            }],
+        },
+        options={
+            "plugins": {"legend": {"display": False},
+                        "title": {"display": True,
+                                  "text": "Mean effective sample size (closer to 1 = more on-policy)"}},
+            "scales": {"y": {"min": 0.9, "max": 1.0}},
+            "responsive": True,
+            "maintainAspectRatio": False,
+        },
     )
+
+    delta_chart = chart_block(
+        canvas_id="dense-delta",
+        chart_type="bar",
+        data={
+            "labels": pair_labels,
+            "datasets": [{
+                "label": "Mean |Δlogp|",
+                "data": [round(a.mean_delta_logprob_abs, 5) for a in aggs],
+                "backgroundColor": colors,
+                "borderRadius": 6,
+            }],
+        },
+        options={
+            "plugins": {"legend": {"display": False},
+                        "title": {"display": True,
+                                  "text": "Per-token |Δlogp| averaged across runs"}},
+            "responsive": True,
+            "maintainAspectRatio": False,
+        },
+    )
+
+    max_chart = chart_block(
+        canvas_id="dense-max",
+        chart_type="bar",
+        data={
+            "labels": pair_labels,
+            "datasets": [{
+                "label": "Worst max|log_ratio|",
+                "data": [round(a.worst_max_abs_log_ratio, 5) for a in aggs],
+                "backgroundColor": colors,
+                "borderRadius": 6,
+            }],
+        },
+        options={
+            "plugins": {"legend": {"display": False},
+                        "title": {"display": True,
+                                  "text": "Worst single-token |log_ratio| across runs (in nats)"}},
+            "responsive": True,
+            "maintainAspectRatio": False,
+        },
+    )
+
+    pair_rows_html = []
+    for agg in aggs:
+        pair_rows_html.append(
+            "<tr>"
+            f"<td><strong>{_html.escape(agg.rollout_engine)}</strong></td>"
+            f"<td>{_html.escape(agg.trainer_engine)}</td>"
+            f"<td>{agg.count}</td>"
+            f"<td>{quality_badge_for_ess(agg.mean_ess)}</td>"
+            f"<td>{_f(agg.mean_clipped_fraction)}</td>"
+            f"<td>{_f(agg.mean_sequence_log_ratio)}</td>"
+            f"<td>{_f(agg.mean_delta_logprob_abs)}</td>"
+            f"<td>{_f(agg.worst_max_abs_log_ratio)}</td>"
+            f"<td>{agg.total_policy_tokens}</td>"
+            "</tr>"
+        )
+
+    body = (
+        f'<section class="card">{kpis}</section>'
+        f'<section class="card">'
+        f"<h2>ESS by engine pair</h2>"
+        f"<p class='sub'>Mean effective sample size, averaged across all runs in each engine pair. The closer to 1, the more the rollout engine's logprobs agree with the trainer reference.</p>"
+        f"{ess_chart}"
+        f"</section>"
+        f'<section class="card">'
+        f"<h2>Per-token drift</h2>"
+        f"<p class='sub'>Left: mean absolute delta logprob — typical disagreement size. Right: worst single-token |log_ratio| in nats — the worst spike that survived inside the engine pair.</p>"
+        f"<div class='chart-row'>{delta_chart}{max_chart}</div>"
+        f"</section>"
+        f'<section class="card">'
+        f"<h2>Per (rollout_engine -> trainer_engine) pair</h2>"
+        f"<table><thead><tr>"
+        f"<th>rollout</th><th>trainer</th><th>count</th>"
+        f"<th>mean ESS</th><th>mean clipped</th><th>mean seq_log_ratio</th>"
+        f"<th>mean |Δ logp|</th><th>worst max|log_ratio|</th>"
+        f"<th>tokens</th>"
+        f"</tr></thead><tbody>{''.join(pair_rows_html)}</tbody></table>"
+        f"</section>"
+        f'<section class="card">'
+        f"<h2>Per run</h2>"
+        f"<table><thead><tr>"
+        f"<th>run_id</th><th>model</th><th>engines</th><th>precision</th>"
+        f"<th>tokens</th><th>ess</th><th>clipped</th><th>veto</th>"
+        f"<th>max|log_ratio|</th><th>top1% mass</th>"
+        f"</tr></thead><tbody>{run_rows}</tbody></table>"
+        f"</section>"
+    )
+
+    title = "Controlled dense mismatch dashboard"
+    lede = (
+        f"{dashboard.num_runs} run{'s' if dashboard.num_runs != 1 else ''} across "
+        f"{len(aggs)} (rollout, trainer) engine pair{'' if len(aggs) == 1 else 's'}. "
+        "Numbers are token-level logprob mismatch on the same checkpoint served by two engines."
+    )
+    return page_shell(title, lede, body)
 
 
 def write_dashboard(dashboard: DenseDashboard, out_dir: Path | str) -> dict[str, Path]:

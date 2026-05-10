@@ -122,16 +122,18 @@ def test_render_html_marks_present_capabilities():
     assert page.startswith("<!doctype html>")
     assert "groq" in page
     assert "llama" in page
-    assert "Coverage by provider" in page
+    assert "Coverage matrix" in page or "Capability coverage" in page
 
 
 def test_render_html_escapes_user_input():
     dashboard = build_dashboard(
-        [_report(provider="<script>", model_label="m", error="<img src=x>")]
+        [_report(provider="<svg/onload=alert(1)>", model_label="m", error="<img src=x>")]
     )
     page = render_html(dashboard)
-    assert "<script>" not in page
-    assert "&lt;script&gt;" in page
+    # Chart.js gets injected via <script> tags; we instead assert that
+    # user-controlled HTML payloads are escaped.
+    assert "<svg/onload=alert(1)>" not in page
+    assert "&lt;svg/onload=alert(1)&gt;" in page
     assert "&lt;img src=x&gt;" in page
 
 

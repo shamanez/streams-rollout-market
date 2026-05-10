@@ -153,50 +153,120 @@ def _resolve_html_json(card: dict) -> tuple[Path, Path] | None:
     return h, j
 
 
+_HEADLINES: dict[str, list[tuple[str, callable]]] = {
+    "agent": [
+        ("worst answer-match rate",
+         lambda p: f"{min((x['final_answer_match_rate'] for x in p.get('engine_pairs', [])), default=0)*100:.0f}%"),
+        ("worst tool-jaccard",
+         lambda p: f"{min((x['mean_tool_call_jaccard'] for x in p.get('engine_pairs', [])), default=0):.2f}"),
+    ],
+    "router": [
+        ("worst top-1 flip rate",
+         lambda p: f"{max((x['mean_router_flip_rate'] for x in p.get('engine_pairs', [])), default=0)*100:.1f}%"),
+        ("worst top-k set disagreement",
+         lambda p: f"{max((x['mean_token_expert_disagreement_rate'] for x in p.get('engine_pairs', [])), default=0)*100:.1f}%"),
+    ],
+    "dense": [
+        ("worst ESS",
+         lambda p: f"{min((x['mean_ess'] for x in p.get('engine_pairs', [])), default=0):.4f}"),
+        ("worst max|log_ratio|",
+         lambda p: f"{max((x['worst_max_abs_log_ratio'] for x in p.get('engine_pairs', [])), default=0):.3f}"),
+    ],
+    "endpoint": [
+        ("seed_supported",
+         lambda p: f"{p.get('capability_totals', {}).get('seed_supported', 0)}/{p.get('num_runs', 0)}"),
+        ("sampled_logprobs",
+         lambda p: f"{p.get('capability_totals', {}).get('sampled_logprobs_available', 0)}/{p.get('num_runs', 0)}"),
+    ],
+    "marketplace": [
+        ("submissions",
+         lambda p: str(p.get("submissions", 0))),
+        ("rejected",
+         lambda p: str(p.get("livestore_by_state", {}).get("rejected", 0))),
+    ],
+}
+
+
+def _kpi_block_for(slug: str, payload: dict) -> str:
+    items = _HEADLINES.get(slug, [])
+    if not items:
+        return ""
+    cells = []
+    for label, fn in items:
+        try:
+            value = fn(payload or {})
+        except Exception:
+            value = "—"
+        cells.append(
+            f"<div class='kpi'><div class='v'>{_html.escape(value)}</div>"
+            f"<div class='l'>{_html.escape(label)}</div></div>"
+        )
+    return f"<div class='kpi-row'>{''.join(cells)}</div>"
+
+
 def render_index(card_data: list[dict]) -> str:
     cards_html = []
     for c in card_data:
         title = _html.escape(c["title"])
         blurb = _html.escape(c["blurb"])
+        slug = c.get("slug", "")
         if c.get("ready"):
             href = _html.escape(c["filename"])
-            summary = _html.escape(c.get("summary", ""))
+            payload = c.get("payload") or {}
+            kpis = _kpi_block_for(slug, payload)
             cards_html.append(
-                f'<article class="ready"><h2><a href="{href}">{title}</a></h2>'
-                f"<p>{blurb}</p>"
-                f"<p class='sum'>{summary}</p></article>"
+                f'<article class="ready">'
+                f'<h2><a href="{href}">{title} →</a></h2>'
+                f"<p class='blurb'>{blurb}</p>"
+                f"{kpis}"
+                f"</article>"
             )
         else:
             cards_html.append(
                 f'<article class="missing"><h2>{title}</h2>'
-                f"<p>{blurb}</p>"
+                f"<p class='blurb'>{blurb}</p>"
                 f"<p class='miss'>not in this snapshot</p></article>"
             )
     return (
         "<!doctype html><html lang='en'><head><meta charset='utf-8'>"
+        "<meta name='viewport' content='width=device-width,initial-scale=1'>"
         "<title>streams-rollout-market — live dashboards</title>"
         "<style>"
-        "body{font-family:system-ui,sans-serif;max-width:880px;margin:2rem auto;color:#111;padding:0 1rem}"
-        "h1{font-size:1.4rem}"
-        "header p{color:#444}"
-        "article{border:1px solid #ddd;padding:1rem;margin:1rem 0;border-radius:6px}"
-        "article.ready{border-color:#5b9}"
-        "article.missing{border-color:#bbb;background:#fafafa;color:#666}"
-        "h2{font-size:1.05rem;margin:0 0 .5rem 0}"
-        "h2 a{color:#06c;text-decoration:none}"
+        ":root{--bg:#f6f8fb;--surface:#fff;--border:#e2e8f0;--text:#0f172a;"
+        "--muted:#64748b;--accent:#2563eb}"
+        "*{box-sizing:border-box}"
+        "body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;"
+        "background:var(--bg);color:var(--text);max-width:1100px;margin:0 auto;"
+        "padding:1.5rem 1rem 4rem;line-height:1.5}"
+        "header{margin-bottom:1.5rem;text-align:center}"
+        "header h1{font-size:1.8rem;margin:0 0 .4rem 0;font-weight:700;letter-spacing:-.02em}"
+        "header p{color:var(--muted);margin:0 auto;max-width:640px;font-size:1rem}"
+        ".grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:1rem}"
+        "article{background:var(--surface);border:1px solid var(--border);"
+        "border-radius:14px;padding:1.25rem 1.5rem;box-shadow:0 1px 2px rgba(15,23,42,.04);"
+        "transition:transform .12s ease, box-shadow .12s ease}"
+        "article.ready:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(15,23,42,.07)}"
+        "article.missing{background:#fafafa;color:var(--muted);border-style:dashed}"
+        "h2{font-size:1.1rem;margin:0 0 .4rem 0;font-weight:600;letter-spacing:-.01em}"
+        "h2 a{color:var(--accent);text-decoration:none}"
         "h2 a:hover{text-decoration:underline}"
-        "p{margin:.4rem 0}"
-        "p.sum{font-family:ui-monospace,monospace;font-size:.85em;color:#444}"
-        "footer{margin-top:2rem;color:#888;font-size:.85em}"
+        "p.blurb{color:var(--muted);font-size:.93rem;margin:0 0 .9rem 0}"
+        "p.miss{color:var(--muted);font-style:italic;margin-top:.5rem;font-size:.85rem}"
+        ".kpi-row{display:grid;grid-template-columns:1fr 1fr;gap:.55rem;margin-top:.7rem}"
+        ".kpi{background:#f1f5f9;border-radius:8px;padding:.55rem .75rem;"
+        "border:1px solid var(--border)}"
+        ".kpi .v{font-size:1.05rem;font-weight:700;font-variant-numeric:tabular-nums;color:var(--text)}"
+        ".kpi .l{font-size:.72rem;color:var(--muted);text-transform:uppercase;"
+        "letter-spacing:.04em;margin-top:.1rem}"
+        "footer{margin-top:2.5rem;color:var(--muted);font-size:.82rem;text-align:center}"
         "</style></head><body>"
         "<header>"
         "<h1>streams-rollout-market — live dashboards</h1>"
-        "<p>Real-data observatory for the rollout marketplace. Each card is a self-contained "
-        "static HTML snapshot. Click the title to open the full view; the JSON sibling holds "
-        "the raw aggregate data.</p>"
+        "<p>Real-data observatory for the rollout marketplace. Five lenses on how engine "
+        "and precision choices change what an LLM-driven agent <em>actually does</em>.</p>"
         "</header>"
-        + "".join(cards_html)
-        + "<footer>Generated from runs/live/. Each dashboard is regenerated by running the "
+        f"<div class='grid'>{''.join(cards_html)}</div>"
+        "<footer>Generated from runs/live/. Each dashboard is regenerated by running the "
         "lab + dashboard CLIs in the source repo.</footer>"
         "</body></html>"
     )
@@ -230,6 +300,7 @@ def main() -> int:
             "ready": True,
             "filename": target_html.name,
             "summary": card["summary_fn"](payload),
+            "payload": payload,
         })
 
     (out_dir / "index.html").write_text(render_index(card_data), encoding="utf-8")

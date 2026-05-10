@@ -114,9 +114,11 @@ def test_render_html_self_contained():
 
 
 def test_render_html_escapes_user_input():
-    d = build_dashboard([_report(rollout="<svg/onload=>", task_id="<x>")])
+    d = build_dashboard([_report(rollout="<svg/onload=alert(1)>", task_id="<x>")])
     page = render_html(d)
-    assert "<svg/onload" not in page
+    # Chart.js inserts legitimate <script> tags; we instead check that the
+    # user-controlled HTML payload itself is escaped.
+    assert "<svg/onload=alert(1)>" not in page
     assert "&lt;svg" in page or "&lt;x&gt;" in page
 
 

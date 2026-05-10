@@ -15,6 +15,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
 
+from ._dashboard_style import (
+    badge,
+    chart_block,
+    kpi_block,
+    page_shell,
+    palette_for,
+    quality_badge_for_match_rate,
+)
 from .agent_trajectory_lab import TrajectoryDivergenceReport
 
 
@@ -180,72 +188,181 @@ def load_reports_glob(pattern: str) -> list[TrajectoryDivergenceReport]:
 
 def render_html(dashboard: AgentDashboard) -> str:
     def _f(value: float | None) -> str:
-        if value is None:
-            return "—"
-        return f"{value:.3f}"
+        return "—" if value is None else f"{value:.3f}"
 
     def _i(value: int | None) -> str:
-        if value is None:
-            return "—"
-        return str(value)
+        return "—" if value is None else str(value)
 
-    pair_rows = "".join(
-        "<tr>"
-        f"<td>{_html.escape(agg.rollout_engine)}</td>"
-        f"<td>{_html.escape(agg.trainer_engine)}</td>"
-        f"<td>{agg.count}</td>"
-        f"<td>{_f(agg.mean_first_divergence_step)}</td>"
-        f"<td>{agg.fully_matched_count}/{agg.count}</td>"
-        f"<td>{_f(agg.mean_tool_choice_disagreement_rate)}</td>"
-        f"<td>{_f(agg.mean_tool_call_jaccard)}</td>"
-        f"<td>{_f(agg.final_answer_match_rate)}</td>"
-        f"<td>{_f(agg.mean_rollout_steps)}</td>"
-        f"<td>{_f(agg.mean_trainer_steps)}</td>"
-        "</tr>"
-        for agg in dashboard.engine_pair_aggregates()
-    )
-    run_rows = "".join(
-        "<tr>"
-        f"<td>{_html.escape(r.task_id)}</td>"
-        f"<td>{_html.escape(r.engine_pair_key)}</td>"
-        f"<td>{r.rollout_steps}</td>"
-        f"<td>{r.trainer_steps}</td>"
-        f"<td>{_i(r.first_divergence_step)}</td>"
-        f"<td>{_html.escape(r.first_divergence_kind or '—')}</td>"
-        f"<td>{_f(r.tool_choice_disagreement_rate)}</td>"
-        f"<td>{_f(r.tool_call_jaccard)}</td>"
-        f"<td>{'✓' if r.final_answer_match else '✗'}</td>"
-        "</tr>"
-        for r in dashboard.rows
+    aggs = dashboard.engine_pair_aggregates()
+
+    if aggs:
+        all_match_rates = [a.final_answer_match_rate for a in aggs]
+        worst_match = min(all_match_rates)
+        best_match = max(all_match_rates)
+    else:
+        worst_match = best_match = 0.0
+
+    kpis = kpi_block([
+        (str(dashboard.num_runs), "comparisons"),
+        (str(len(aggs)), "engine pairs"),
+        (f"{best_match * 100:.0f}%", "best answer-match rate"),
+        (f"{worst_match * 100:.0f}%", "worst answer-match rate"),
+    ])
+
+    # ---- chart 1: answer match rate per engine pair (the wow chart) -------
+    pair_labels = [f"{a.rollout_engine} → {a.trainer_engine}" for a in aggs]
+    colors = palette_for(len(pair_labels))
+    answer_match_chart = chart_block(
+        canvas_id="agent-answer-match",
+        chart_type="bar",
+        data={
+            "labels": pair_labels,
+            "datasets": [{
+                "label": "Final-answer match rate vs reference",
+                "data": [round(a.final_answer_match_rate, 4) for a in aggs],
+                "backgroundColor": colors,
+                "borderRadius": 6,
+            }],
+        },
+        options={
+            "indexAxis": "y",
+            "plugins": {"legend": {"display": False},
+                        "title": {"display": True,
+                                  "text": "How often the rollout engine reaches the same final answer as the reference"}},
+            "scales": {"x": {"min": 0, "max": 1,
+                             "ticks": {"callback": "__pct__",
+                                       "stepSize": 0.2}}},
+            "responsive": True,
+            "maintainAspectRatio": False,
+        },
+    ).replace('"__pct__"', "function(v){return (v*100).toFixed(0) + '%';}")
+
+    # ---- chart 2: tool-call jaccard per engine pair -----------------------
+    jaccard_chart = chart_block(
+        canvas_id="agent-jaccard",
+        chart_type="bar",
+        data={
+            "labels": pair_labels,
+            "datasets": [{
+                "label": "Tool-call Jaccard",
+                "data": [round(a.mean_tool_call_jaccard, 4) for a in aggs],
+                "backgroundColor": colors,
+                "borderRadius": 6,
+            }],
+        },
+        options={
+            "plugins": {"legend": {"display": False},
+                        "title": {"display": True,
+                                  "text": "Set similarity of (tool, args) pairs the agent invoked"}},
+            "scales": {"y": {"min": 0, "max": 1}},
+            "responsive": True,
+            "maintainAspectRatio": False,
+        },
     )
 
-    return (
-        "<!doctype html><html lang='en'><head><meta charset='utf-8'>"
-        "<title>Agent trajectory dashboard</title>"
-        "<style>"
-        "body{font-family:system-ui,sans-serif;max-width:1180px;margin:2rem auto;color:#111}"
-        "table{border-collapse:collapse;width:100%;margin-bottom:1rem;font-variant-numeric:tabular-nums}"
-        "th,td{border:1px solid #ddd;padding:.4rem .6rem;text-align:left}"
-        "th{background:#f5f5f5}"
-        "h1{font-size:1.2rem}h2{font-size:1rem;margin-top:1.5rem}"
-        "</style></head><body>"
-        f"<h1>Agent trajectory dashboard ({dashboard.num_runs} comparison"
-        f"{'' if dashboard.num_runs == 1 else 's'})</h1>"
-        "<h2>Per (rollout_engine -> trainer_engine) pair</h2>"
-        "<table><thead><tr>"
-        "<th>rollout</th><th>trainer</th><th>count</th>"
-        "<th>mean first-div step</th><th>fully matched</th>"
-        "<th>mean tool-disagree</th><th>mean tool-jaccard</th>"
-        "<th>answer match rate</th><th>mean rollout steps</th><th>mean trainer steps</th>"
-        f"</tr></thead><tbody>{pair_rows}</tbody></table>"
-        "<h2>Per task × engine pair</h2>"
-        "<table><thead><tr>"
-        "<th>task</th><th>engines</th><th>rollout steps</th><th>trainer steps</th>"
-        "<th>first-div step</th><th>div kind</th>"
-        "<th>tool-disagree</th><th>tool-jaccard</th><th>answer match</th>"
-        f"</tr></thead><tbody>{run_rows}</tbody></table>"
-        "</body></html>"
+    # ---- chart 3: mean first-divergence step ------------------------------
+    first_div_chart = chart_block(
+        canvas_id="agent-first-div",
+        chart_type="bar",
+        data={
+            "labels": pair_labels,
+            "datasets": [{
+                "label": "Mean first-divergence step",
+                "data": [round(a.mean_first_divergence_step or 0, 3) for a in aggs],
+                "backgroundColor": colors,
+                "borderRadius": 6,
+            }],
+        },
+        options={
+            "plugins": {"legend": {"display": False},
+                        "title": {"display": True,
+                                  "text": "Mean step index where the rollout first diverged from the reference"}},
+            "responsive": True,
+            "maintainAspectRatio": False,
+        },
     )
+
+    # ---- summary card -----------------------------------------------------
+    pair_rows = []
+    for agg in aggs:
+        pair_rows.append(
+            "<tr>"
+            f"<td><strong>{_html.escape(agg.rollout_engine)}</strong></td>"
+            f"<td>{_html.escape(agg.trainer_engine)}</td>"
+            f"<td>{agg.count}</td>"
+            f"<td>{_f(agg.mean_first_divergence_step)}</td>"
+            f"<td>{agg.fully_matched_count}/{agg.count}</td>"
+            f"<td>{_f(agg.mean_tool_choice_disagreement_rate)}</td>"
+            f"<td>{_f(agg.mean_tool_call_jaccard)}</td>"
+            f"<td>{quality_badge_for_match_rate(agg.final_answer_match_rate)}</td>"
+            f"<td>{_f(agg.mean_rollout_steps)}</td>"
+            f"<td>{_f(agg.mean_trainer_steps)}</td>"
+            "</tr>"
+        )
+
+    # ---- detail card ------------------------------------------------------
+    run_rows = []
+    for r in dashboard.rows:
+        is_div = r.first_divergence_step is not None
+        match_cell = (
+            "<span class='match-yes'>✓ match</span>"
+            if r.final_answer_match
+            else "<span class='match-no'>✗ different</span>"
+        )
+        kind_badge = badge(r.first_divergence_kind, "warn") if r.first_divergence_kind else badge("match", "good")
+        row_class = " class='row-divergent'" if is_div else ""
+        run_rows.append(
+            f"<tr{row_class}>"
+            f"<td>{_html.escape(r.task_id)}</td>"
+            f"<td><code>{_html.escape(r.engine_pair_key)}</code></td>"
+            f"<td>{r.rollout_steps}</td>"
+            f"<td>{r.trainer_steps}</td>"
+            f"<td>{_i(r.first_divergence_step)}</td>"
+            f"<td>{kind_badge}</td>"
+            f"<td>{_f(r.tool_choice_disagreement_rate)}</td>"
+            f"<td>{_f(r.tool_call_jaccard)}</td>"
+            f"<td>{match_cell}</td>"
+            "</tr>"
+        )
+
+    body = (
+        f'<section class="card">{kpis}</section>'
+        f'<section class="card">'
+        f"<h2>Final-answer match rate vs reference</h2>"
+        f"<p class='sub'>What fraction of tasks the rollout engine ended at the same final answer as the reference engine. Higher = closer to the reference. The headline number for the agentic story.</p>"
+        f"{answer_match_chart}"
+        f"</section>"
+        f'<section class="card">'
+        f"<h2>Tool-call Jaccard &amp; first-divergence step</h2>"
+        f"<p class='sub'>Left: how similar the set of (tool, arguments) invocations is across engines. Right: at which step the trajectory first diverged from the reference.</p>"
+        f"<div class='chart-row'>{jaccard_chart}{first_div_chart}</div>"
+        f"</section>"
+        f'<section class="card">'
+        f"<h2>Per (rollout_engine -> trainer_engine) pair</h2>"
+        f"<table><thead><tr>"
+        f"<th>rollout</th><th>trainer</th><th>count</th>"
+        f"<th>mean first-div step</th><th>fully matched</th>"
+        f"<th>mean tool-disagree</th><th>mean tool-jaccard</th>"
+        f"<th>answer match</th><th>mean rollout steps</th><th>mean trainer steps</th>"
+        f"</tr></thead><tbody>{''.join(pair_rows)}</tbody></table>"
+        f"</section>"
+        f'<section class="card">'
+        f"<h2>Per task × engine pair</h2>"
+        f"<table><thead><tr>"
+        f"<th>task</th><th>engines</th><th>rollout steps</th><th>trainer steps</th>"
+        f"<th>first-div step</th><th>div kind</th>"
+        f"<th>tool-disagree</th><th>tool-jaccard</th><th>answer match</th>"
+        f"</tr></thead><tbody>{''.join(run_rows)}</tbody></table>"
+        f"</section>"
+    )
+
+    title = "Agent trajectory dashboard"
+    lede = (
+        f"{dashboard.num_runs} multi-step tool-using comparisons across "
+        f"{len(aggs)} engine pair{'' if len(aggs) == 1 else 's'}. "
+        "Reference is on the right of each → arrow."
+    )
+    return page_shell(title, lede, body)
 
 
 def write_dashboard(dashboard: AgentDashboard, out_dir: Path | str) -> dict[str, Path]:

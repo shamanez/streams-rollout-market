@@ -22,6 +22,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
 
+from ._dashboard_style import (
+    chart_block,
+    kpi_block,
+    page_shell,
+    palette_for,
+)
+
 from .router_mismatch_lab import RouterMismatchReport
 
 
@@ -210,33 +217,101 @@ def render_html(dashboard: RouterDashboard) -> str:
         f"</tr>"
         for r in dashboard.rows
     )
-    return (
-        "<!doctype html><html lang='en'><head><meta charset='utf-8'>"
-        "<title>MoE router mismatch dashboard</title>"
-        "<style>"
-        "body{font-family:system-ui,sans-serif;max-width:1180px;margin:2rem auto;color:#111}"
-        "table{border-collapse:collapse;width:100%;margin-bottom:1rem;font-variant-numeric:tabular-nums}"
-        "th,td{border:1px solid #ddd;padding:.4rem .6rem;text-align:left}"
-        "th{background:#f5f5f5}"
-        "h1{font-size:1.2rem}h2{font-size:1rem;margin-top:1.5rem}"
-        "</style></head><body>"
-        f"<h1>MoE router mismatch dashboard ({dashboard.num_runs} run"
-        f"{'' if dashboard.num_runs == 1 else 's'})</h1>"
-        "<h2>Per (rollout_engine -> trainer_engine) pair</h2>"
-        "<table><thead><tr>"
-        "<th>rollout</th><th>trainer</th><th>count</th>"
-        "<th>mean flip rate</th><th>mean token disagreement</th>"
-        "<th>worst layer flip</th><th>layers</th><th>tokens</th>"
-        f"</tr></thead><tbody>{pair_rows}</tbody></table>"
-        "<h2>Per run</h2>"
-        "<table><thead><tr>"
-        "<th>run_id</th><th>model</th><th>engines</th>"
-        "<th>tokens</th><th>layers</th><th>top_k</th><th>experts</th>"
-        "<th>flip rate</th><th>token disagreement</th>"
-        "<th>layer min</th><th>layer mean</th><th>layer max</th>"
-        f"</tr></thead><tbody>{run_rows}</tbody></table>"
-        "</body></html>"
+    aggs = dashboard.engine_pair_aggregates()
+
+    if aggs:
+        worst_set_disagree = max(a.mean_token_expert_disagreement_rate for a in aggs)
+        worst_flip = max(a.mean_router_flip_rate for a in aggs)
+    else:
+        worst_set_disagree = worst_flip = 0.0
+
+    kpis = kpi_block([
+        (str(dashboard.num_runs), "runs"),
+        (str(len(aggs)), "engine pairs"),
+        (f"{worst_flip * 100:.1f}%", "worst top-1 flip rate"),
+        (f"{worst_set_disagree * 100:.1f}%", "worst top-k set disagreement"),
+    ])
+
+    pair_labels = [f"{a.rollout_engine} → {a.trainer_engine}" for a in aggs]
+    colors = palette_for(len(pair_labels))
+
+    flip_chart = chart_block(
+        canvas_id="router-flip",
+        chart_type="bar",
+        data={
+            "labels": pair_labels,
+            "datasets": [{
+                "label": "Top-1 flip rate",
+                "data": [round(a.mean_router_flip_rate, 4) for a in aggs],
+                "backgroundColor": colors,
+                "borderRadius": 6,
+            }],
+        },
+        options={
+            "plugins": {"legend": {"display": False},
+                        "title": {"display": True,
+                                  "text": "Mean per-(token, layer) top-1 expert flip rate"}},
+            "scales": {"y": {"min": 0, "max": 1}},
+            "responsive": True,
+            "maintainAspectRatio": False,
+        },
     )
+
+    set_chart = chart_block(
+        canvas_id="router-set",
+        chart_type="bar",
+        data={
+            "labels": pair_labels,
+            "datasets": [{
+                "label": "Token-set disagreement rate",
+                "data": [round(a.mean_token_expert_disagreement_rate, 4) for a in aggs],
+                "backgroundColor": colors,
+                "borderRadius": 6,
+            }],
+        },
+        options={
+            "plugins": {"legend": {"display": False},
+                        "title": {"display": True,
+                                  "text": "Fraction of tokens whose top-k expert *set* differed on at least one layer"}},
+            "scales": {"y": {"min": 0, "max": 1}},
+            "responsive": True,
+            "maintainAspectRatio": False,
+        },
+    )
+
+    body = (
+        f'<section class="card">{kpis}</section>'
+        f'<section class="card">'
+        f"<h2>Top-1 flip vs top-k set disagreement</h2>"
+        f"<p class='sub'>Left: how often the dominant routed expert changes between rollout and trainer. Right: how often <em>any</em> of the top-k experts changes on at least one layer. The gap between the two is the headline finding — quantization noise barely shifts the top-1 but reorders the rest of the top-k.</p>"
+        f"<div class='chart-row'>{flip_chart}{set_chart}</div>"
+        f"</section>"
+        f'<section class="card">'
+        f"<h2>Per (rollout_engine -> trainer_engine) pair</h2>"
+        f"<table><thead><tr>"
+        f"<th>rollout</th><th>trainer</th><th>count</th>"
+        f"<th>mean flip rate</th><th>mean token disagreement</th>"
+        f"<th>worst layer flip</th><th>layers</th><th>tokens</th>"
+        f"</tr></thead><tbody>{pair_rows}</tbody></table>"
+        f"</section>"
+        f'<section class="card">'
+        f"<h2>Per run</h2>"
+        f"<table><thead><tr>"
+        f"<th>run_id</th><th>model</th><th>engines</th>"
+        f"<th>tokens</th><th>layers</th><th>top_k</th><th>experts</th>"
+        f"<th>flip rate</th><th>token disagreement</th>"
+        f"<th>layer min</th><th>layer mean</th><th>layer max</th>"
+        f"</tr></thead><tbody>{run_rows}</tbody></table>"
+        f"</section>"
+    )
+
+    title = "MoE router mismatch dashboard"
+    lede = (
+        f"{dashboard.num_runs} run{'s' if dashboard.num_runs != 1 else ''} across "
+        f"{len(aggs)} (rollout, trainer) engine pair{'' if len(aggs) == 1 else 's'}. "
+        "Each cell measures how often the MoE router's top-k experts disagree between two checkpoints / engines."
+    )
+    return page_shell(title, lede, body)
 
 
 def write_dashboard(dashboard: RouterDashboard, out_dir: Path | str) -> dict[str, Path]:

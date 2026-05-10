@@ -30,6 +30,12 @@ from enum import Enum
 from pathlib import Path
 from typing import Iterable
 
+from ._dashboard_style import (
+    chart_block,
+    kpi_block,
+    page_shell,
+    palette_for,
+)
 from ..contracts import (
     GroupDecision,
     PolicyManifest,
@@ -361,50 +367,149 @@ def render_html(result: SimulationResult) -> str:
         key=lambda r: (r[0], r[1]),
     )
 
-    summary_rows = [
-        ["jobs_total", result.jobs_total],
-        ["submissions", result.submissions],
-    ]
-
-    return (
-        "<!doctype html><html lang='en'><head><meta charset='utf-8'>"
-        "<title>Marketplace simulation</title>"
-        "<style>"
-        "body{font-family:system-ui,sans-serif;max-width:920px;margin:2rem auto;color:#111}"
-        "table{border-collapse:collapse;width:100%;margin-bottom:1rem}"
-        "th,td{border:1px solid #ddd;padding:.4rem .6rem;text-align:left}"
-        "th{background:#f5f5f5}"
-        "h1{font-size:1.2rem}h2{font-size:1rem;margin-top:1.5rem}"
-        "</style></head><body>"
-        "<h1>Marketplace simulation</h1>"
-        "<h2>Run summary</h2>"
-        + _table(["metric", "value"], summary_rows)
-        + "<h2>Decisions by worker profile</h2>"
-        + _table(["profile", "action", "count"], [list(r) for r in profile_action_rows])
-        + "<h2>Decisions by worker id</h2>"
-        + _table(["worker_id", "action", "count"], [list(r) for r in worker_action_rows])
-        + "<h2>Rejection reasons (validators)</h2>"
-        + _table(
-            ["reason", "count"],
-            [[k, v] for k, v in sorted(result.rejection_reasons.items())],
-        )
-        + "<h2>Decision reasons (OPBC)</h2>"
-        + _table(
-            ["reason", "count"],
-            [[k, v] for k, v in sorted(result.decision_reasons.items())],
-        )
-        + "<h2>LiveStore by state</h2>"
-        + _table(
-            ["state", "count"],
-            [[k, v] for k, v in sorted(result.livestore_by_state.items())],
-        )
-        + "<h2>Broker audit-event counts</h2>"
-        + _table(
-            ["event", "count"],
-            [[k, v] for k, v in sorted(result.audit_event_counts.items())],
-        )
-        + "</body></html>"
+    livestore_states = sorted(result.livestore_by_state.items())
+    state_colors = {
+        "accepted": "#16a34a",
+        "correctable": "#0891b2",
+        "quarantined": "#ca8a04",
+        "rejected": "#dc2626",
+        "pending": "#475569",
+    }
+    state_chart = chart_block(
+        canvas_id="market-livestore",
+        chart_type="doughnut",
+        data={
+            "labels": [s for s, _ in livestore_states],
+            "datasets": [{
+                "data": [c for _, c in livestore_states],
+                "backgroundColor": [state_colors.get(s, "#475569") for s, _ in livestore_states],
+                "borderWidth": 0,
+            }],
+        },
+        options={
+            "plugins": {"legend": {"position": "right"},
+                        "title": {"display": True,
+                                  "text": f"Where the {result.submissions} submissions ended up"}},
+            "responsive": True,
+            "maintainAspectRatio": False,
+        },
     )
+
+    rejection_items = sorted(result.rejection_reasons.items())
+    rejection_chart = chart_block(
+        canvas_id="market-rejection",
+        chart_type="bar",
+        data={
+            "labels": [k for k, _ in rejection_items],
+            "datasets": [{
+                "label": "rejections",
+                "data": [v for _, v in rejection_items],
+                "backgroundColor": palette_for(len(rejection_items)),
+                "borderRadius": 6,
+            }],
+        },
+        options={
+            "indexAxis": "y",
+            "plugins": {"legend": {"display": False},
+                        "title": {"display": True,
+                                  "text": "Typed rejection reasons (Phase 1.3 validators)"}},
+            "responsive": True,
+            "maintainAspectRatio": False,
+        },
+    )
+
+    profile_action_chart = None
+    if result.by_profile_action:
+        # Stacked bar: profile -> {action: count}
+        profiles = sorted({p for (p, _) in result.by_profile_action.keys()})
+        actions = sorted({a for (_, a) in result.by_profile_action.keys()})
+        action_colors = {
+            "train": "#16a34a",
+            "train_with_correction": "#0891b2",
+            "replay": "#9333ea",
+            "quarantine": "#ca8a04",
+            "reject": "#dc2626",
+        }
+        datasets = []
+        for action in actions:
+            datasets.append({
+                "label": action,
+                "data": [result.by_profile_action.get((p, action), 0) for p in profiles],
+                "backgroundColor": action_colors.get(action, "#475569"),
+                "borderRadius": 4,
+            })
+        profile_action_chart = chart_block(
+            canvas_id="market-profiles",
+            chart_type="bar",
+            data={"labels": profiles, "datasets": datasets},
+            options={
+                "plugins": {"legend": {"position": "bottom"},
+                            "title": {"display": True,
+                                      "text": "Per worker-profile action mix (stacked)"}},
+                "scales": {"x": {"stacked": True}, "y": {"stacked": True}},
+                "responsive": True,
+                "maintainAspectRatio": False,
+            },
+        )
+
+    kpis = kpi_block([
+        (str(result.jobs_total), "jobs queued"),
+        (str(result.submissions), "submissions"),
+        (str(result.livestore_by_state.get("accepted", 0)), "accepted"),
+        (str(result.livestore_by_state.get("rejected", 0)), "rejected"),
+    ])
+
+    body = (
+        f'<section class="card">{kpis}</section>'
+        f'<section class="card">'
+        f"<h2>LiveStore by state</h2>"
+        f"<p class='sub'>Where the simulation's submissions landed after passing through validators + OPBC + LiveStore.</p>"
+        f"{state_chart}"
+        f"</section>"
+    )
+    if profile_action_chart:
+        body += (
+            f'<section class="card">'
+            f"<h2>Action mix per worker profile</h2>"
+            f"<p class='sub'>Each worker profile (honest / noisy / stale / 4 toxic flavours) drives a different action distribution.</p>"
+            f"{profile_action_chart}"
+            f"</section>"
+        )
+    if rejection_items:
+        body += (
+            f'<section class="card">'
+            f"<h2>Rejection reasons</h2>"
+            f"<p class='sub'>Typed reasons from <code>validate_group_against_lease</code>. Each toxic profile maps to a distinct rejection.</p>"
+            f"{rejection_chart}"
+            f"</section>"
+        )
+
+    body += (
+        f'<section class="card">'
+        f"<h2>Decisions by worker profile</h2>"
+        f"{_table(['profile', 'action', 'count'], [list(r) for r in profile_action_rows])}"
+        f"</section>"
+        f'<section class="card">'
+        f"<h2>Decisions by worker id</h2>"
+        f"{_table(['worker_id', 'action', 'count'], [list(r) for r in worker_action_rows])}"
+        f"</section>"
+        f'<section class="card">'
+        f"<h2>Decision reasons (OPBC)</h2>"
+        f"{_table(['reason', 'count'], [[k, v] for k, v in sorted(result.decision_reasons.items())])}"
+        f"</section>"
+        f'<section class="card">'
+        f"<h2>Broker audit-event counts</h2>"
+        f"{_table(['event', 'count'], [[k, v] for k, v in sorted(result.audit_event_counts.items())])}"
+        f"</section>"
+    )
+
+    title = "Marketplace simulation"
+    lede = (
+        f"{result.jobs_total} jobs through 7 worker profiles "
+        f"(honest / noisy / stale / 4 toxic). Drives the full "
+        "validators + OPBC + LiveStore + audit stack."
+    )
+    return page_shell(title, lede, body)
 
 
 def write_simulation(result: SimulationResult, out_dir: Path | str) -> dict[str, Path]:
