@@ -78,6 +78,29 @@ artifact of one prompt):
   but exactly the kind of single-token spike that would blow up under
   longer generations.
 
+### MoE router (Qwen3-30B-A3B, 64 tokens × 48 layers × top_k=8)
+Rollout side: HF transformers 5.8.0 finegrained FP8.
+Trainer side: HF transformers 5.8.0 bf16, sdpa attention.
+Both via `output_router_logits=True` on the same teacher-forced tokens.
+
+| metric | value | reading |
+|---|---:|---|
+| router_flip_rate | 5.14% | 1 in 20 (token, layer) pairs has a different top-1 expert |
+| token_expert_disagreement_rate | **98.44%** | almost every token has at least one layer where the top-k *set* differs |
+| worst layer flip rate | 12.50% | worst MoE layer flipped top-1 on 1 in 8 tokens |
+| mean per-layer flip rate | 5.14% | matches the global rate; no concentration in early or late layers |
+
+The headline reading: **FP8 quantization barely shifts top-1 routing
+(top-1 flips on ~5% of (token, layer) pairs) but reorders the lower-
+rank top-k experts almost everywhere (98% of tokens have set
+disagreement on at least one layer)**. This is exactly the regime the
+router-mismatch lab was designed to surface — quantization noise that's
+small enough to leave the dominant expert intact but large enough to
+shuffle the rest of the top-k. Under multi-step training where the
+gradient passes through the router gate, this set-level drift would
+accumulate into materially different parameter updates even when
+top-1 routing looks "stable."
+
 ### Marketplace stack on real data
   - bf16 worker on bf16-pinned manifest -> validators PASS, OPBC `train`.
   - fp8 worker on bf16-pinned manifest -> validators REJECT

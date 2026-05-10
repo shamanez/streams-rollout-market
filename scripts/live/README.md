@@ -205,6 +205,45 @@ The dashboard's per-pair aggregates now reflect means across 8 prompts
 worst max\|log_ratio\| numbers carry actual statistical weight rather
 than a single-prompt point estimate.
 
+## MoE router live run (Qwen3-30B-A3B FP8 vs bf16)
+
+The router-mismatch lab needs per-(token, layer, top_k) expert IDs
+from both sides. vLLM's chat-completions API does not surface the
+router's per-layer decisions, so this run uses HF transformers for
+both sides.
+
+`scripts/live/run_moe_router.py` does three stages:
+
+  1. Generate one response from the bf16 checkpoint with sampling
+     (temperature 0.7, top_p 0.95, seed 1234) and save the resulting
+     prompt + response token IDs.
+  2. Teacher-force the (prompt + response) tokens through the bf16
+     checkpoint with `output_router_logits=True`, then take top-k of
+     the router logits at each MoE layer for every response position.
+     This is the *trainer-side* RouterTrace.
+  3. Same teacher-force through the FP8 checkpoint
+     (Qwen3-30B-A3B-FP8). This is the *rollout-side* RouterTrace.
+
+Spot-host setup notes:
+- `pip install -U kernels` is required for HF transformers to load
+  the FP8 finegrained MoE checkpoint.
+- The HF cache directory must be writable by the runner; on this host
+  we ran `sudo chown -R ubuntu:ubuntu ~/hf-cache` once after install.
+
+```bash
+scp scripts/live/run_moe_router.py my-vllm-spot-instance:~/
+ssh my-vllm-spot-instance \
+  'source ~/rmenv/bin/activate && export HF_HOME=/home/ubuntu/hf-cache && \
+   python ~/run_moe_router.py'
+scp my-vllm-spot-instance:/tmp/router.json /tmp/router.json
+python scripts/live/build_router_input.py
+python -m rollout_market.cli.router_mismatch_lab \
+  --input /tmp/router_mismatch_input.json --out-root runs/live/router
+python -m rollout_market.cli.router_dashboard \
+  --reports-glob 'runs/live/router/*/router_mismatch_report.json' \
+  --out-dir runs/live/router_dashboard
+```
+
 ## Marketplace stack validation
 
 ```bash
