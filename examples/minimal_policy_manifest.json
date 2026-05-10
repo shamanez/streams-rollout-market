@@ -1,0 +1,13 @@
+{
+  "policy_version": "v0001",
+  "checkpoint_digest": "sha256:abcdef0123456789",
+  "tokenizer_hash": "tok-qwen3-32b",
+  "model_config_hash": "cfg-qwen3-32b",
+  "precision_class": "bf16",
+  "quantization_class": null,
+  "engine_contract_version": "v0",
+  "allowed_engines": ["vllm", "sglang"],
+  "parent_version": "v0000",
+  "patch_digest": null,
+  "patch_lineage": ["v0000"]
+}

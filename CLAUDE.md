@@ -55,7 +55,7 @@ python examples/local_worker_demo.py   # smoke test
 
 | Module | Purpose |
 |--------|---------|
-| `contracts.py` | Pydantic schemas: PolicyManifest, SampleGroup, Trajectory, WorkerHeartbeat, BudgetReport, GroupDecision, GroupStatus |
+| `contracts.py` | Pydantic schemas: PolicyManifest, WorkerManifest, SampleGroup, Trajectory, WorkerHeartbeat, BudgetReport, GroupDecision, GroupStatus |
 | `opbc.py` | Off-policy budget controller: compute_budget_report(), decide_group() |
 | `mismatch_metrics.py` | Pure-Python mismatch summary: summarize_logprob_mismatch() |
 | `registry.py` | FilePolicyRegistry: publish/latest for policy manifests |
