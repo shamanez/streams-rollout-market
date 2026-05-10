@@ -25,6 +25,7 @@ python examples/local_worker_demo.py   # smoke test
   - **Cerebras** (CEREBRAS_API_KEY): free fast inference for Llama models
   - **OpenRouter** (OPENROUTER_API_KEY): free-tier models only (check model pricing)
   - **OpenCode** (OPENCODE_API_KEY): free inference endpoint
+  - **HuggingFace** (HF_TOKEN): model downloads, gated model access (Qwen3, Llama)
 - If a model or endpoint requires payment, skip it and document in PROGRESS.md.
 - This constraint applies to ALL experiments, tests, and observatory probes.
 
