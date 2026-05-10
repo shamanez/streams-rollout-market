@@ -1,7 +1,9 @@
 """Stage 2: HF transformers reference forward over the same (prompt + response) tokens.
 Produces trainer-side logprobs for the rollout response tokens."""
 from __future__ import annotations
-import json, os, time
+import json
+import os
+import time
 from pathlib import Path
 
 os.environ.setdefault("HF_HOME", "/home/ubuntu/hf-cache")
@@ -9,7 +11,11 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 ROLLOUT = json.loads(Path("/tmp/rollout.json").read_text())
-MODEL = ROLLOUT["model"]
+# The trainer-side reference forward should use the bf16 (full-precision)
+# checkpoint even when the rollout came from a quantized variant — the
+# whole point of the cross-precision comparison is to measure how far the
+# quantized rollout drifts from the trainer's logprob view.
+MODEL = ROLLOUT.get("trainer_reference", ROLLOUT["model"])
 prompt_ids = ROLLOUT["prompt_token_ids"]
 response_ids = ROLLOUT["response_token_ids"]
 
@@ -47,5 +53,5 @@ Path("/tmp/trainer.json").write_text(json.dumps({
     "attn_impl": "sdpa",
     "dtype": "bfloat16",
 }))
-print(f"[hf] wrote /tmp/trainer.json")
+print("[hf] wrote /tmp/trainer.json")
 print(f"[hf] total {time.time()-t0:.1f}s")

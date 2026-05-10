@@ -1,5 +1,6 @@
 """Build a dense_mismatch_input.json from the real rollout + trainer logprobs."""
-import json, hashlib
+import json
+import hashlib
 from pathlib import Path
 
 rollout = json.loads(Path("/tmp/rollout.json").read_text())
