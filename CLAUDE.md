@@ -64,6 +64,8 @@ python examples/local_worker_demo.py   # smoke test
 | `feedback.py` | TrainerFeedback contract + FeedbackAggregator: per-worker / per-engine / per-policy quality stats, idempotent on group_id |
 | `pool_reload.py` | PoolReloadTracker: k-of-n weight-sync quorum, is_worker_aligned per-job gate, QuorumViolation on disagreeing digests. Per-group pinning still strict. |
 | `observatory/marketplace_simulation.py` | End-to-end concurrent simulation with honest/noisy/stale/toxic worker profiles; aggregates verdicts to JSON+HTML dashboard |
+| `observatory/endpoint_dashboard.py` | Aggregates many endpoint_contract_report.json files into one HTML+JSON dashboard (provider × model coverage matrix) |
+| `cli/endpoint_dashboard.py` | `python -m rollout_market.cli.endpoint_dashboard --reports-glob ... --out-dir ...` |
 | `dispatcher.py` | choose_worker(), make_assignment() for policy-aware dispatch |
 | `verifier.py` | canonical_group_hash(), verify_group_hash() for integrity |
 | `validators.py` | validate_group_against_lease() returns typed RejectionReason decisions |
