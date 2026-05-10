@@ -43,6 +43,7 @@ STEER.md
 # Claude Code local overrides
 .claude/settings.local.json
 .claude/evidence/
+.claude/scheduled_tasks.lock
 
 # Experiment runs
 runs/
