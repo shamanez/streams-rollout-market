@@ -183,3 +183,45 @@ def quality_badge_for_match_rate(rate: float) -> str:
     if rate >= 0.33:
         return badge(pct, "warn")
     return badge(pct, "bad")
+
+
+def render_research_question(
+    question: str,
+    observed: str,
+    next_step: str | None = None,
+) -> str:
+    """One framed 'research question -> what we observed' block.
+
+    The visitor reads this first; the dashboard's charts and tables
+    underneath act as the *evidence* for the observed answer.
+    """
+    extra = ""
+    if next_step:
+        extra = (
+            f"<p class='rq-next'><strong>Next:</strong> "
+            f"{_html.escape(next_step)}</p>"
+        )
+    return (
+        "<section class='rq-card'>"
+        "<style>"
+        ".rq-card{background:linear-gradient(180deg,#eff6ff,#fff);"
+        "border:1px solid #bfdbfe;border-left:4px solid var(--accent);"
+        "border-radius:12px;padding:1.1rem 1.4rem;margin:1rem 0;"
+        "box-shadow:0 1px 2px rgba(15,23,42,.04)}"
+        ".rq-q{font-size:.78rem;text-transform:uppercase;letter-spacing:.05em;"
+        "color:var(--accent);font-weight:600;margin:0 0 .25rem 0}"
+        ".rq-question{font-size:1.05rem;font-weight:600;color:var(--text);"
+        "margin:0 0 .65rem 0;line-height:1.4}"
+        ".rq-a{font-size:.78rem;text-transform:uppercase;letter-spacing:.05em;"
+        "color:var(--good);font-weight:600;margin:.4rem 0 .25rem 0}"
+        ".rq-observed{font-size:.95rem;color:var(--text);margin:0;line-height:1.5}"
+        ".rq-next{font-size:.85rem;color:var(--muted);margin:.7rem 0 0 0;"
+        "padding-top:.55rem;border-top:1px solid #dbeafe}"
+        "</style>"
+        f"<p class='rq-q'>Research question</p>"
+        f"<p class='rq-question'>{_html.escape(question)}</p>"
+        f"<p class='rq-a'>What we observed</p>"
+        f"<p class='rq-observed'>{_html.escape(observed)}</p>"
+        f"{extra}"
+        "</section>"
+    )

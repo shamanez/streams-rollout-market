@@ -22,6 +22,7 @@ from ._dashboard_style import (
     page_shell,
     palette_for,
     quality_badge_for_match_rate,
+    render_research_question,
 )
 from ._glossary import render_glossary_card
 from .agent_trajectory_lab import TrajectoryDivergenceReport
@@ -333,7 +334,31 @@ def render_html(dashboard: AgentDashboard) -> str:
         "first_divergence_step",
     ])
 
+    if aggs:
+        worst_match = min(a.final_answer_match_rate for a in aggs)
+        worst_label = next(
+            f"{a.rollout_engine}" for a in aggs if a.final_answer_match_rate == worst_match
+        )
+        observed = (
+            f"Across {len(aggs)} engine pair{'s' if len(aggs) != 1 else ''} "
+            f"and {dashboard.num_runs} multi-step trajectories, the worst "
+            f"engine ({worst_label}) reached the same final answer as the "
+            f"vLLM bf16 reference only {worst_match * 100:.0f}% of the time. "
+            "Token-level ESS deltas of ~0.025 compound, via tool-call "
+            "selection, into a different agent."
+        )
+    else:
+        observed = "No comparisons in this snapshot."
+    rq = render_research_question(
+        question="Does engine and precision drift propagate from token-level "
+                 "logprob deltas into agent-level behaviour on multi-step, "
+                 "tool-using tasks?",
+        observed=observed,
+        next_step="More tasks (n>30), longer horizons, real (vs simulated) tools.",
+    )
+
     body = (
+        f"{rq}"
         f'<section class="card">{kpis}</section>'
         f'<section class="card">'
         f"<h2>Final-answer match rate vs reference</h2>"

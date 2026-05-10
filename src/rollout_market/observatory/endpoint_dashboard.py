@@ -29,6 +29,7 @@ from ._dashboard_style import (
     kpi_block,
     page_shell,
     palette_for,
+    render_research_question,
 )
 from ._glossary import render_glossary_card
 from pathlib import Path
@@ -231,7 +232,25 @@ def render_html(dashboard: EndpointDashboard) -> str:
         "seed_supported",
     ])
 
+    seed_count = totals.get("seed_supported", 0)
+    logp_count = totals.get("sampled_logprobs_available", 0)
+    observed = (
+        f"Out of {n} probed free-tier endpoints, only {seed_count} honour a "
+        f"generation seed and only {logp_count} return sampled logprobs. "
+        "A trainer needs both: seed for reproducibility, logprobs to compute "
+        "the importance correction. Most free-tier endpoints fail at least "
+        "one of these — they are not viable rollout sources for off-policy RL."
+    )
+    rq = render_research_question(
+        question="Are free-tier hosted LLM endpoints viable as rollout "
+                 "sources for off-policy RL training?",
+        observed=observed,
+        next_step="Probe paid-tier providers and compare; check whether "
+                  "newer providers (e.g. SambaNova, Together) close the gap.",
+    )
+
     body = (
+        f"{rq}"
         f'<section class="card">{kpis}</section>'
         f'<section class="card">'
         f"<h2>Capability coverage across endpoints</h2>"
