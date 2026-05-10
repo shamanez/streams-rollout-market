@@ -19,6 +19,7 @@ from .livestore import (
     UnknownGroupError,
 )
 from .opbc import compute_budget_report, decide_group
+from .trainer_client import ReplayTier, TrainerBatch, TrainerClient
 from .validators import validate_group_against_lease
 
 __all__ = [
@@ -36,6 +37,9 @@ __all__ = [
     "StoredGroup",
     "DuplicateGroupError",
     "UnknownGroupError",
+    "TrainerClient",
+    "TrainerBatch",
+    "ReplayTier",
     "compute_budget_report",
     "decide_group",
     "validate_group_against_lease",

@@ -60,6 +60,7 @@ python examples/local_worker_demo.py   # smoke test
 | `mismatch_metrics.py` | Pure-Python mismatch summary: summarize_logprob_mismatch() |
 | `registry.py` | FilePolicyRegistry: publish/latest for policy manifests |
 | `livestore.py` | InMemoryLiveStore: submit/get_batch/transition with idempotent group_id, ACCEPTED+CORRECTABLE served by default, QUARANTINED retained but opt-in |
+| `trainer_client.py` | TrainerClient.fetch(policy_version, max_staleness, precision_class, replay_tier) — read-only, firewall-clean |
 | `dispatcher.py` | choose_worker(), make_assignment() for policy-aware dispatch |
 | `verifier.py` | canonical_group_hash(), verify_group_hash() for integrity |
 | `validators.py` | validate_group_against_lease() returns typed RejectionReason decisions |
