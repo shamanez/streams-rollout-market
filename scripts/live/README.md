@@ -111,6 +111,53 @@ trainer_engine) pair — `vllm -> hf-transformers` and
 `vllm-fp8 -> hf-transformers` — and the per-pair ESS / clipped /
 worst-max-log-ratio columns make the precision drift directly visible.
 
+## sglang as a second rollout engine
+
+A separate venv (`~/sglenv`) keeps sglang's CUDA toolchain isolated
+from vLLM. sglang needs nvcc + CUDA libs; the spot host already has a
+CUDA-13 toolchain at
+`/opt/pytorch/lib/python3.13/site-packages/nvidia/cu13`, so the runner
+points `CUDA_HOME` there. sglang's CUDA-graph capture and FlashInfer
+JIT both fail without that, so the script also passes
+`disable_cuda_graph=True, attention_backend="triton"` (triton has its
+own JIT and works without nvcc as long as the linker can find cu13
+runtime libs).
+
+```bash
+ssh my-vllm-spot-instance \
+  'export CUDA_HOME=/opt/pytorch/lib/python3.13/site-packages/nvidia/cu13
+   export PATH=$CUDA_HOME/bin:$PATH
+   source ~/sglenv/bin/activate
+   export HF_HOME=/home/ubuntu/hf-cache
+   MODEL=Qwen/Qwen3-32B-FP8 \
+   ROLLOUT_LABEL=sglang-fp8 \
+   TRAINER_REFERENCE=Qwen/Qwen3-32B \
+   python ~/run_sglang_rollout.py'
+ssh my-vllm-spot-instance \
+  'source ~/rmenv/bin/activate && export HF_HOME=/home/ubuntu/hf-cache && \
+   python ~/run_hf_reference.py'
+
+scp my-vllm-spot-instance:/tmp/rollout.json /tmp/rollout_sglang_fp8.json
+scp my-vllm-spot-instance:/tmp/trainer.json /tmp/trainer_sglang_fp8.json
+# (also do bf16 in the same shape)
+python scripts/live/build_dense_input_sglang.py
+python -m rollout_market.cli.dense_mismatch_lab \
+  --input /tmp/dense_mismatch_input_sglang_bf16.json \
+  --out-root runs/live/dense_sglang_bf16
+python -m rollout_market.cli.dense_mismatch_lab \
+  --input /tmp/dense_mismatch_input_sglang_fp8.json \
+  --out-root runs/live/dense_sglang_fp8
+python -m rollout_market.cli.dense_dashboard \
+  --reports-glob 'runs/live/dense*/*/dense_mismatch_report.json' \
+  --out-dir runs/live/dense_dashboard
+```
+
+The dashboard then carries four `(rollout_engine, trainer_engine)`
+rows: `vllm`, `vllm-fp8`, `sglang`, `sglang-fp8`, all paired with
+`hf-transformers`. The per-pair ESS / mean |Δlogp| / worst max
+\|log_ratio\| columns let a reviewer see at a glance which engine ×
+precision combinations stay closest to the trainer's logprob view.
+
 ## Marketplace stack validation
 
 ```bash

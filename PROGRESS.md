@@ -50,19 +50,28 @@ router live run, runs/<ts> UUID suffix).
   - Coverage: 3/10 sampled_logprobs, 3/10 top_logprobs, 1/10 token_ids,
     1/10 seed_supported.
 
-### Dense mismatch (Qwen3-32B, 128 tokens, seed=1234)
-| metric | bf16↔bf16 | fp8↔bf16 | change |
-|---|---|---|---|
-| ESS | 0.9991 | 0.9949 | -0.4% |
-| mean Δlogp | +0.0022 | -0.0056 | sign flip, 2.5× larger |
-| mean \|Δlogp\| | 0.0121 | 0.0328 | **2.7× larger** |
-| sequence_log_ratio | +0.2797 | -0.7159 | sign flip, 2.6× larger magnitude |
-| max \|log_ratio\| | 0.1652 | 0.3774 | **2.3× larger** |
-| top_1pct_gradient_mass | 0.0092 | 0.0107 | slightly more concentrated |
-| clipped/veto | 0/0 | 0/0 | unchanged |
-Both runs route OPBC -> `train` / `within_budget` (ESS far above the 0.30
-floor). FP8 produces measurably more drift but stays trainable on a 128-
-token sample with this prompt.
+### Dense mismatch (Qwen3-32B, 128 tokens, seed=1234, four cells)
+| rollout engine | precision | ESS | mean \|Δlogp\| | max \|log_ratio\| | seq_log_ratio |
+|---|---|---:|---:|---:|---:|
+| vLLM 0.20.1 | bf16 | 0.9991 | 0.012 | 0.165 | +0.28 |
+| vLLM 0.20.1 | fp8 | 0.9949 | 0.033 | 0.377 | -0.72 |
+| sglang 0.5.11 | bf16 | 0.9898 | 0.061 | 0.550 | -5.40 |
+| sglang 0.5.11 | fp8 | 0.9641 | 0.092 | 0.941 | -5.16 |
+
+Trainer reference is HF transformers 5.8.0 bf16 with `sdpa` attention in all
+four cells. clipped_fraction = 0, veto_fraction = 0 across the board, so all
+four route OPBC -> `train` / `within_budget`.
+
+Insights this surfaces:
+- **Engine choice is at least as load-bearing as precision class.** sglang
+  bf16 (ESS 0.99) drifts more from the HF reference than vLLM bf16 *or*
+  vLLM FP8 do.
+- **sglang has a systematic over-confidence** — the rollout side scores
+  the response ~5 nats higher than HF over 128 tokens (negative
+  sequence_log_ratio of ~-5). vLLM stays within ±1 nat.
+- **FP8 adds drift on top of the engine baseline.** vLLM gains ~0.2 in
+  worst max|log_ratio| moving bf16 -> fp8; sglang gains ~0.4. Quantization
+  noise is engine-specific, not just a precision-class effect.
 
 ### Marketplace stack on real data
   - bf16 worker on bf16-pinned manifest -> validators PASS, OPBC `train`.
