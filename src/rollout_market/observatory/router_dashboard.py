@@ -28,6 +28,7 @@ from ._dashboard_style import (
     page_shell,
     palette_for,
 )
+from ._glossary import render_glossary_card
 
 from .router_mismatch_lab import RouterMismatchReport
 
@@ -279,6 +280,13 @@ def render_html(dashboard: RouterDashboard) -> str:
         },
     )
 
+    glossary = render_glossary_card([
+        "top-1 flip rate",
+        "top-k set disagreement",
+        "router_flip_rate",
+        "token_expert_disagreement_rate",
+    ])
+
     body = (
         f'<section class="card">{kpis}</section>'
         f'<section class="card">'
@@ -303,6 +311,7 @@ def render_html(dashboard: RouterDashboard) -> str:
         f"<th>layer min</th><th>layer mean</th><th>layer max</th>"
         f"</tr></thead><tbody>{run_rows}</tbody></table>"
         f"</section>"
+        f"{glossary}"
     )
 
     title = "MoE router mismatch dashboard"

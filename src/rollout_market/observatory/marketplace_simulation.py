@@ -36,6 +36,7 @@ from ._dashboard_style import (
     page_shell,
     palette_for,
 )
+from ._glossary import render_glossary_card
 from ..contracts import (
     GroupDecision,
     PolicyManifest,
@@ -484,6 +485,8 @@ def render_html(result: SimulationResult) -> str:
             f"</section>"
         )
 
+    glossary = render_glossary_card(["OPBC", "ESS", "clipped_fraction", "veto_fraction"])
+
     body += (
         f'<section class="card">'
         f"<h2>Decisions by worker profile</h2>"
@@ -501,6 +504,7 @@ def render_html(result: SimulationResult) -> str:
         f"<h2>Broker audit-event counts</h2>"
         f"{_table(['event', 'count'], [[k, v] for k, v in sorted(result.audit_event_counts.items())])}"
         f"</section>"
+        f"{glossary}"
     )
 
     title = "Marketplace simulation"

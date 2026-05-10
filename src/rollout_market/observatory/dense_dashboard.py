@@ -29,6 +29,7 @@ from ._dashboard_style import (
     palette_for,
     quality_badge_for_ess,
 )
+from ._glossary import render_glossary_card
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
@@ -315,6 +316,16 @@ def render_html(dashboard: DenseDashboard) -> str:
             "</tr>"
         )
 
+    glossary = render_glossary_card([
+        "ESS",
+        "|Δlogp|",
+        "log_ratio",
+        "sequence_log_ratio",
+        "clipped_fraction",
+        "veto_fraction",
+        "top_1pct_gradient_mass",
+    ])
+
     body = (
         f'<section class="card">{kpis}</section>'
         f'<section class="card">'
@@ -344,6 +355,7 @@ def render_html(dashboard: DenseDashboard) -> str:
         f"<th>max|log_ratio|</th><th>top1% mass</th>"
         f"</tr></thead><tbody>{run_rows}</tbody></table>"
         f"</section>"
+        f"{glossary}"
     )
 
     title = "Controlled dense mismatch dashboard"
