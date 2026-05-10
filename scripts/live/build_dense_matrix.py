@@ -62,15 +62,36 @@ def _config_hash(seed: int) -> str:
     ).hexdigest()[:16]
 
 
+TRAINER_FINGERPRINTS: dict[str, dict] = {
+    "hf-transformers": {
+        "name": "hf-transformers",
+        "version": "5.8.0",
+        "fingerprint": "sha256:hf-5.8.0-sdpa-bf16-cuda13",
+    },
+    "fsdp": {
+        "name": "fsdp",
+        "version": "torch-2.11",
+        "fingerprint": "sha256:fsdp-tp4-fullshard-bf16-cuda13",
+    },
+}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--label", required=True, choices=list(ENGINE_FINGERPRINTS))
+    parser.add_argument(
+        "--trainer-label",
+        default="hf-transformers",
+        choices=list(TRAINER_FINGERPRINTS),
+        help="which trainer-side engine produced the trainer_logprobs",
+    )
     parser.add_argument("--rollouts", required=True, help="path to rollouts.json")
     parser.add_argument("--trainers", required=True, help="path to trainers.json")
     parser.add_argument("--out-dir", required=True, help="dir to write fixtures into")
     args = parser.parse_args()
 
     fp = ENGINE_FINGERPRINTS[args.label]
+    tfp = TRAINER_FINGERPRINTS[args.trainer_label]
     rollouts = json.loads(Path(args.rollouts).read_text())
     trainers = json.loads(Path(args.trainers).read_text())
     assert len(rollouts) == len(trainers), "rollouts/trainers length mismatch"
@@ -81,7 +102,7 @@ def main() -> None:
     for r, t in zip(rollouts, trainers):
         idx = r.get("prompt_idx", 0)
         assert len(r["rollout_logprobs"]) == len(t["trainer_logprobs"])
-        run_id = f"live-qwen3-32b-{args.label}-vs-bf16-hf-p{idx:02d}"
+        run_id = f"live-qwen3-32b-{args.label}-vs-{args.trainer_label}-p{idx:02d}"
         payload = {
             "run_id": run_id,
             "model_id": r["model"],
@@ -92,11 +113,7 @@ def main() -> None:
                 "version": fp["version"],
                 "fingerprint": fp["fingerprint"],
             },
-            "trainer_engine": {
-                "name": "hf-transformers",
-                "version": "5.8.0",
-                "fingerprint": "sha256:hf-5.8.0-sdpa-bf16-cuda13",
-            },
+            "trainer_engine": tfp,
             "precision_class": fp["precision_class"],
             "quantization_class": fp["quantization_class"],
             "prompt_id": f"p-{idx:02d}",
@@ -106,12 +123,13 @@ def main() -> None:
             "notes": [
                 f"prompt: {r['prompt_text'][:120]!r}",
                 f"sampling_config_hash: {_config_hash(r['seed'])}",
+                f"trainer_engine: {args.trainer_label}",
             ],
         }
         path = out_dir / f"{run_id}.json"
         path.write_text(json.dumps(payload, indent=2))
         written.append(path)
-    print(f"wrote {len(written)} fixtures to {out_dir}")
+    print(f"wrote {len(written)} fixtures to {out_dir} (trainer={args.trainer_label})")
 
 
 if __name__ == "__main__":

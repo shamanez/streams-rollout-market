@@ -105,6 +105,30 @@ This is the trajectory-level lens for the same drift the dense and
 router labs measured at token / router level. The compounding effect
 is what makes this the load-bearing demo for the project's pitch.
 
+### FSDP as a third trainer-side reference (forward-only)
+We added a third trainer engine to the dense matrix:
+`scripts/live/run_fsdp_reference.py` runs Qwen3-32B under
+`torch.distributed.fsdp.FullyShardedDataParallel` with
+`ShardingStrategy.FULL_SHARD` across 4 GPUs and teacher-forces the
+same tokens HF transformers does.
+
+The honest result: **FSDP produces logprobs bit-identical to HF
+transformers `device_map="auto"` for forward-only inference**. ESS,
+mean |Δlogp|, max |log_ratio| all match to floating-point precision.
+The dashboard has the new `vllm → fsdp` row sitting on top of the
+existing `vllm → hf-transformers` row. Same numbers.
+
+This is *expected*: FSDP shards parameters and all-gathers them in
+the forward pass, but the actual matmuls and softmax run on the same
+kernels as the un-sharded model. FSDP's value is in the *backward*
+pass — gradient all-reduce ordering changes float accumulation, and
+that's where a divergence from HF would appear under actual training.
+
+The follow-up that *would* show new drift is **Megatron-LM**, which
+uses different attention and MLP CUDA kernels even in forward. That
+needs HF→Megatron checkpoint conversion (a multi-hour project of its
+own) and is deferred.
+
 ### MoE router (Qwen3-30B-A3B, 64 tokens × 48 layers × top_k=8)
 Rollout side: HF transformers 5.8.0 finegrained FP8.
 Trainer side: HF transformers 5.8.0 bf16, sdpa attention.
