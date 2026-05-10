@@ -74,6 +74,7 @@ python examples/local_worker_demo.py   # smoke test
 | `observatory/agent_dashboard.py` | Aggregates agent_divergence_report.json files: per-(rollout, trainer) first-div-step / tool-jaccard / answer-match aggregates |
 | `cli/agent_trajectory_lab.py` | `python -m rollout_market.cli.agent_trajectory_lab --rollout ... --trainer ...` |
 | `cli/agent_dashboard.py` | `python -m rollout_market.cli.agent_dashboard --reports-glob ... --out-dir ...` |
+| `scripts/live/serve_dashboards.py` | One-command launcher: writes runs/live/index.html linking every dashboard, then serves runs/ over http and opens the index |
 | `dispatcher.py` | choose_worker(), make_assignment() for policy-aware dispatch |
 | `verifier.py` | canonical_group_hash(), verify_group_hash() for integrity |
 | `validators.py` | validate_group_against_lease() returns typed RejectionReason decisions |

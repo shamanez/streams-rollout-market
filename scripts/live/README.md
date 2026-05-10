@@ -301,6 +301,22 @@ Two operational notes:
   so the 256-token budget is spent on tool calls + concise answers
   instead of CoT.
 
+## Run the dashboard locally
+
+After any of the runs above, you can browse all of the dashboards in
+one place:
+
+```bash
+python scripts/live/serve_dashboards.py
+# Opens http://127.0.0.1:8765/live/index.html in your browser.
+# Each dashboard card carries a one-line headline pulled from the
+# corresponding JSON, plus a link into the full HTML view.
+```
+
+Use `--port 9000` to bind a different port, `--no-browser` to skip
+auto-opening, or `--write-only` to regenerate `runs/live/index.html`
+without starting a server.
+
 ## Marketplace stack validation
 
 ```bash
