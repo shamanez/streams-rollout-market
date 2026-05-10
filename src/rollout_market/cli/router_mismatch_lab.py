@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import argparse
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 
 from ..observatory.dense_mismatch_lab import EngineFingerprint
@@ -26,10 +25,7 @@ from ..observatory.router_mismatch_lab import (
     load_input_fixture,
     write_router_mismatch,
 )
-
-
-def _utc_timestamp() -> str:
-    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+from ._runs import run_dir_name
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -73,7 +69,7 @@ def main(argv: list[str] | None = None) -> int:
 
     report = compute_router_mismatch(**fixture)
 
-    out_dir = Path(args.out_root) / _utc_timestamp()
+    out_dir = Path(args.out_root) / run_dir_name()
     paths = write_router_mismatch(report, out_dir)
     print(str(paths["json"]))
     print(str(paths["html"]))
