@@ -1,10 +1,9 @@
-from pathlib import Path
 import json
+from pathlib import Path
 
 from rollout_market.contracts import SampleGroup
 from rollout_market.livestore import InMemoryLiveStore
 from rollout_market.opbc import compute_budget_report, decide_group
-
 
 data = json.loads(Path(__file__).with_name("minimal_grpo_group.json").read_text())
 group = SampleGroup.model_validate(data)
@@ -16,11 +15,10 @@ report = compute_budget_report(group, train_logprobs)
 decision = decide_group(report)
 
 store = InMemoryLiveStore()
-if decision.recommended_action in {"train", "train_with_correction"}:
-    store.push_group(group)
-else:
-    store.quarantine_group(group)
+store.submit(group, decision)
 
 print(report.model_dump_json(indent=2))
 print(decision.model_dump_json(indent=2))
 print(f"livestore_size={len(store)}")
+print(f"servable_now={[r.group_id for r in store.get_batch(10)]}")
+print(f"by_state={ {s.value: c for s, c in store.count_by_state().items() if c} }")

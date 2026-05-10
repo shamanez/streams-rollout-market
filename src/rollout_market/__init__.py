@@ -12,6 +12,12 @@ from .contracts import (
     WorkerHeartbeat,
     WorkerManifest,
 )
+from .livestore import (
+    DuplicateGroupError,
+    InMemoryLiveStore,
+    StoredGroup,
+    UnknownGroupError,
+)
 from .opbc import compute_budget_report, decide_group
 from .validators import validate_group_against_lease
 
@@ -26,6 +32,10 @@ __all__ = [
     "GroupDecision",
     "GroupStatus",
     "RejectionReason",
+    "InMemoryLiveStore",
+    "StoredGroup",
+    "DuplicateGroupError",
+    "UnknownGroupError",
     "compute_budget_report",
     "decide_group",
     "validate_group_against_lease",
