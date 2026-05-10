@@ -31,6 +31,7 @@ python examples/local_worker_demo.py   # smoke test
 ## Infrastructure constraint: SPOT INSTANCE ONLY (MANDATORY)
 
 - The ONLY AWS resource available is a single spot instance: `ssh my-vllm-spot-instance`
+- Instance type: `g6e.12xlarge` — 4x NVIDIA L40S GPUs (24GB each = 96GB total VRAM)
 - SSH config is in `~/.ssh/config` (NEVER commit SSH keys, hostnames, or PEM paths to git)
 - **DO NOT** create, modify, terminate, or resize any AWS resources
 - **DO NOT** run `aws` CLI commands that create/modify infrastructure
@@ -39,6 +40,15 @@ python examples/local_worker_demo.py   # smoke test
 - Spot instances can be terminated by AWS at any time — never store critical data only there
 - The hostname is dynamic (changes on stop/start) — always use the SSH alias, not the IP
 - Copy experiment results back to local before the instance is reclaimed
+
+## Model selection (decided)
+
+- **Dense model**: `Qwen/Qwen3-32B` — ~64GB bf16, fits on 3 GPUs, available on Groq/Cerebras/OpenRouter
+- **MoE model**: `Qwen/Qwen3-30B-A3B` — 30.5B total / 3.3B active, 128 experts (8 active), ~61GB bf16
+- Both run in **full bf16 only** — never quantize for Observatory experiments
+- Cannot run both simultaneously (~125GB), run sequentially
+- Same Qwen3 tokenizer family — tokenizer hash consistency guaranteed
+- Use `output_router_logits=True` for MoE expert trace extraction
 
 ## Architecture (src/rollout_market/)
 
