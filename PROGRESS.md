@@ -4,37 +4,43 @@
 2026-05-10
 
 ## Current phase
-Phase 3 -- Local market loop. Tasks 3.1 and 3.2 complete; 3.3 next.
+Phase 3 -- Local market loop. **Complete.** Phase 4 next.
 
 ## Completed
-- Initial scaffold and Phase 0 docs/configs/examples
-- Phase 1.1: Expanded PolicyManifest; added WorkerManifest. Cleared two
+- Phase 0 scaffold and docs/configs/examples
+- Phase 1.1: PolicyManifest expansion + WorkerManifest. Cleared two
   pre-existing F401 unused-import lint errors.
-- Phase 1.2: RolloutJob and RolloutLease (idempotency + expiry).
-- Phase 1.3: Typed RejectionReason enum + validators.py module.
-- Phase 2.1: Endpoint identity gap probe (observatory + CLI).
-- Phase 2.2: Controlled dense mismatch lab (Pydantic schema + JSON/HTML + CLI).
+- Phase 1.2: RolloutJob + RolloutLease (idempotency + expiry).
+- Phase 1.3: Typed RejectionReason + validators.py.
+- Phase 2.1: Endpoint identity gap probe.
+- Phase 2.2: Controlled dense mismatch lab (JSON/HTML).
 - Phase 2.3: Small MoE router mismatch lab.
-- Phase 3.1: LiveStore lifecycle. submit (idempotent on group_id), transition
-  (terminal REJECTED), get_batch (ACCEPTED+CORRECTABLE default, QUARANTINED
-  opt-in), count_by_state, served_count.
-- Phase 3.2: Trainer client API. New trainer_client.py with TrainerClient,
-  TrainerBatch, ReplayTier. fetch() filters by policy_version (required),
-  max_staleness (policy_lag_steps), precision_class, and replay_tier
-  (FRESH excludes QUARANTINED, REPLAY admits it; REJECTED never served).
-  TrainerBatch.metadata() returns lightweight per-group rows with no token
-  payload — safe to log. Module is firewall-clean (no PPO/GRPO/optimizer/
-  loss code). Added examples/fake_trainer.py demonstrating FRESH vs REPLAY
-  pulls; smoke-tested.
+- Phase 3.1: LiveStore lifecycle (idempotent submit, transitions, batched
+  fetch with QUARANTINED opt-in, REJECTED never served).
+- Phase 3.2: Trainer client API (TrainerClient, TrainerBatch, ReplayTier;
+  policy_version / max_staleness / precision_class / replay_tier filters).
+- Phase 3.3: Worker SDK and broker. New worker_broker.py with thread-safe
+  LocalWorkerBroker: registration, heartbeats, capability-matched lease
+  issuance, idempotency-key dedup on submit, terminal lease states
+  (ISSUED/SUBMITTED/EXPIRED/ABANDONED/FAILED), report_failure that frees
+  the job back to the queue, reap_expired for TTL enforcement. Refactored
+  worker.py into WorkerSDK (register / heartbeat / fetch_lease /
+  submit_group / report_failure). Added examples/three_workers_demo.py:
+  three threads drain a 9-job queue, each takes 3 jobs, no races.
+  13 new tests including a 15-job concurrent drain.
 
 ## Next tasks
-- Phase 3.3: Worker SDK (registration, heartbeats, lease fetch, group submit,
-  failure reporting; three fake workers run concurrently in a local demo).
+- Phase 4.1: OPBC decision reasons (every group gets a typed decision plus
+  reasons; tests cover stale, missing-logprob, mixed-version, low-ESS,
+  high-clipped-fraction, and clean groups).
+- Phase 4.2: Trainer feedback ingestion (external trainers report ESS,
+  clipped fraction, accepted/rejected, and current-policy logprob stats
+  after consuming a group).
 
 ## Known issues
 - src/rollout_market/dispatcher.py and opbc.py fail `ruff format --check`
   (pre-existing formatting only). Not blocking `ruff check .` or pytest.
 
 ## Test status
-- Last run: 2026-05-10, 108 passed, 0 failed (pytest -q)
+- Last run: 2026-05-10, 121 passed, 0 failed (pytest -q)
 - ruff check .: clean
