@@ -17,7 +17,6 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from rollout_market.contracts import (
-    GroupStatus,
     PolicyManifest,
     RolloutLease,
     SampleGroup,

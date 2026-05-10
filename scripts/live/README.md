@@ -75,10 +75,47 @@ python -m rollout_market.cli.dense_dashboard \
   --out-dir runs/live/dense_dashboard
 ```
 
+## Cross-precision: FP8 vs bf16
+
+The same scripts drive a quantized rollout via env vars. Both
+`Qwen3-32B-FP8` and `Qwen3-30B-A3B-FP8` are pre-cached on the spot.
+
+```bash
+# 1. FP8 vLLM rollout, bf16 HF reference (the realistic case where the
+#    worker is quantized to fit on fewer GPUs but the trainer keeps full
+#    precision).
+ssh my-vllm-spot-instance \
+  'source ~/rmenv/bin/activate && export HF_HOME=/home/ubuntu/hf-cache && \
+   MODEL=Qwen/Qwen3-32B-FP8 \
+   ROLLOUT_LABEL=vllm-fp8 \
+   TRAINER_REFERENCE=Qwen/Qwen3-32B \
+   python ~/run_vllm_rollout.py'
+ssh my-vllm-spot-instance \
+  'source ~/rmenv/bin/activate && export HF_HOME=/home/ubuntu/hf-cache && \
+   python ~/run_hf_reference.py'
+
+# 2. Pull, build the FP8-flavoured fixture, and run the lab.
+scp my-vllm-spot-instance:/tmp/rollout.json /tmp/rollout_fp8.json
+scp my-vllm-spot-instance:/tmp/trainer.json /tmp/trainer_fp8.json
+python scripts/live/build_dense_input_fp8.py
+python -m rollout_market.cli.dense_mismatch_lab \
+  --input /tmp/dense_mismatch_input_fp8.json \
+  --out-root runs/live/dense
+python -m rollout_market.cli.dense_dashboard \
+  --reports-glob 'runs/live/dense/*/dense_mismatch_report.json' \
+  --out-dir runs/live/dense_dashboard
+```
+
+The dashboard then carries one row per (rollout_engine,
+trainer_engine) pair — `vllm -> hf-transformers` and
+`vllm-fp8 -> hf-transformers` — and the per-pair ESS / clipped /
+worst-max-log-ratio columns make the precision drift directly visible.
+
 ## Marketplace stack validation
 
 ```bash
-python scripts/live/marketplace_real.py
+python scripts/live/marketplace_real.py        # bf16 honest + 2 toxic
+python scripts/live/marketplace_real_fp8.py    # fp8 vs bf16 manifest + fp8 honest
 ```
 
 Builds three SampleGroups from the same real rollout (one honest, two
