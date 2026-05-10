@@ -18,6 +18,11 @@ Each iteration of this loop performs ONE task from the development plan:
 - Read `PROGRESS.md` to find the current phase and next task
 - Check for `STEER.md` -- if it exists, follow operator redirect instead of the plan
 - Check for `AGENT_STOP` -- if it exists, stop immediately after updating PROGRESS.md
+- Run `bash .claude/scripts/check-usage.sh` to log session metrics
+- If nearing session limits, switch to token-saving mode:
+  - Use `/codex-review` instead of Claude evaluator
+  - Use haiku test-runner instead of sonnet
+  - Skip adversarial reviews, do simple pass/fail checks only
 
 ### 2. Task selection
 - Open `streams_rollout_market_git_agent_plan_v2.md`

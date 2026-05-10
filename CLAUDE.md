@@ -78,6 +78,7 @@ Before changing contracts, update docs, fixtures, and tests in the same commit.
 - Use `opus` only for implementation (implementer agent)
 - Run `bash .claude/scripts/check-usage.sh` to see session metrics
 - Batch related file changes to reduce tool call count
+- For autonomous runs with budget caps: `claude -p --max-budget-usd 5 "/autonomous-loop"`
 
 ## Session continuity
 
