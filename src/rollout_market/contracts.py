@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class GroupStatus(str, Enum):
@@ -16,15 +16,84 @@ class GroupStatus(str, Enum):
 
 
 class PolicyManifest(BaseModel):
+    """Immutable description of a policy snapshot a worker must serve.
+
+    Carries every field a verifier needs to refuse a rollout that drifted from
+    the snapshot the trainer expects: tokenizer, weights, precision, quant,
+    engine contract, and patch lineage.
+    """
+
     policy_version: str
     checkpoint_digest: str
     tokenizer_hash: str
     model_config_hash: str
     precision_class: str = "bf16"
+    quantization_class: str | None = None
     engine_contract_version: str = "v0"
+    allowed_engines: list[str] = Field(default_factory=list)
     parent_version: str | None = None
     patch_digest: str | None = None
+    patch_lineage: list[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    @field_validator("policy_version", "checkpoint_digest", "tokenizer_hash", "model_config_hash")
+    @classmethod
+    def _non_empty(cls, value: str) -> str:
+        if not value or not value.strip():
+            raise ValueError("must be a non-empty string")
+        return value
+
+
+class WorkerManifest(BaseModel):
+    """Static capability declaration a worker publishes once on registration.
+
+    Distinct from WorkerHeartbeat: the manifest changes only when the worker
+    image, hardware, or supported contracts change, so dispatchers can use it
+    as a stable filter when matching policies to workers.
+    """
+
+    worker_id: str
+    engine_name: str
+    engine_version: str
+    engine_contract_version: str = "v0"
+    device_type: str
+    device_count: int = 1
+    precision_classes: list[str]
+    quantization_classes: list[str] = Field(default_factory=list)
+    supported_tokenizer_hashes: list[str] = Field(default_factory=list)
+    max_context_tokens: int
+    max_concurrent_groups: int = 1
+    returns_token_ids: bool = True
+    returns_sampled_logprobs: bool = True
+    returns_top_logprobs: bool = False
+    returns_router_logits: bool = False
+    region: str | None = None
+    price_hint_per_hour: float | None = None
+    announced_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    @field_validator("worker_id", "engine_name", "engine_version", "device_type")
+    @classmethod
+    def _non_empty(cls, value: str) -> str:
+        if not value or not value.strip():
+            raise ValueError("must be a non-empty string")
+        return value
+
+    @field_validator("precision_classes")
+    @classmethod
+    def _at_least_one_precision(cls, value: list[str]) -> list[str]:
+        if not value:
+            raise ValueError("worker must declare at least one precision_class")
+        return value
+
+    @model_validator(mode="after")
+    def _positive_limits(self) -> "WorkerManifest":
+        if self.max_context_tokens <= 0:
+            raise ValueError("max_context_tokens must be positive")
+        if self.device_count <= 0:
+            raise ValueError("device_count must be positive")
+        if self.max_concurrent_groups <= 0:
+            raise ValueError("max_concurrent_groups must be positive")
+        return self
 
 
 class WorkerHeartbeat(BaseModel):

@@ -1,0 +1,19 @@
+{
+  "worker_id": "worker-l40s-0",
+  "engine_name": "vllm",
+  "engine_version": "0.6.0",
+  "engine_contract_version": "v0",
+  "device_type": "L40S",
+  "device_count": 4,
+  "precision_classes": ["bf16"],
+  "quantization_classes": [],
+  "supported_tokenizer_hashes": ["tok-qwen3-32b", "tok-qwen3-30b-a3b"],
+  "max_context_tokens": 32768,
+  "max_concurrent_groups": 2,
+  "returns_token_ids": true,
+  "returns_sampled_logprobs": true,
+  "returns_top_logprobs": true,
+  "returns_router_logits": false,
+  "region": "local",
+  "price_hint_per_hour": 0.0
+}
