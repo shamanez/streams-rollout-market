@@ -78,6 +78,33 @@ artifact of one prompt):
   but exactly the kind of single-token spike that would blow up under
   longer generations.
 
+### Agent trajectory matrix (Qwen3-32B, 6 multi-step tool-using tasks)
+Reference: vLLM bf16. Comparison: vLLM FP8, sglang bf16, sglang FP8.
+6 tasks: math×3 with calculator, research×1 with web_search, planning×1
+with web_search, code-debug×1 with read_file + python_eval. Same prompts,
+same seed=1234, same simulated tools.
+
+| rollout engine | fully matched | mean first-div step | mean tool-jaccard | **answer match rate** |
+|---|---:|---:|---:|---:|
+| vLLM FP8 | 2/6 | 1.0 | 0.87 | **33%** |
+| sglang bf16 | 1/6 | 1.8 | 0.83 | **17%** |
+| sglang FP8 | 1/6 | 0.6 | **0.54** | **17%** |
+
+Headline reading: **engine and precision choices change what an agent
+*actually does* on multi-step tasks**, not just by how much its
+logprobs drift. vLLM FP8 changes the final answer on 4 of 6 tasks
+(67%) compared to vLLM bf16 on the same checkpoint, prompts, and seed.
+sglang variants change it on 5 of 6 (83%). sglang FP8 also picks a
+substantially different tool *set* — Jaccard 0.54 over the
+(tool_name, args_hash) pairs, vs ~0.85 for the other two pairings —
+meaning nearly half its tool invocations are not what the bf16
+reference would have made. First-divergence step averages under 2
+across the matrix; the rest of the trajectory rolls off downstream.
+
+This is the trajectory-level lens for the same drift the dense and
+router labs measured at token / router level. The compounding effect
+is what makes this the load-bearing demo for the project's pitch.
+
 ### MoE router (Qwen3-30B-A3B, 64 tokens × 48 layers × top_k=8)
 Rollout side: HF transformers 5.8.0 finegrained FP8.
 Trainer side: HF transformers 5.8.0 bf16, sdpa attention.

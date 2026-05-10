@@ -1,0 +1,31 @@
+[
+  {
+    "task_id": "math-tokens-per-day",
+    "task_text": "If a worker generates 30 tokens per second on 4 GPUs, how many days does it take to produce 1,000,000,000 tokens? Use the calculator tool, then state the final answer in days as one number rounded to one decimal place.",
+    "expected_tools": ["calculator"]
+  },
+  {
+    "task_id": "math-population-ratio",
+    "task_text": "The population of Tokyo is 13,960,000 and the population of Osaka is 2,750,000. Use the calculator to find what percent the Osaka population is of the Tokyo population, rounded to one decimal place.",
+    "expected_tools": ["calculator"]
+  },
+  {
+    "task_id": "research-vllm-version",
+    "task_text": "Use web_search to look up 'vllm latest release notes', then summarise in one short sentence what the most recent vllm release added.",
+    "expected_tools": ["web_search"]
+  },
+  {
+    "task_id": "code-fix-factorial",
+    "task_text": "There is a Python factorial function at /tmp/factorial.py. Use read_file to view it, identify the bug, and use python_eval to test that the corrected version returns 120 for factorial(5). State the corrected function as your final answer.",
+    "expected_tools": ["read_file", "python_eval"]
+  },
+  {
+    "task_id": "plan-rollout-experiment",
+    "task_text": "Plan a 3-step research project comparing vLLM and sglang on a 7B model. Use web_search once to confirm both projects exist, then list the three steps in order. The final answer should be a numbered list of 3 steps."
+  },
+  {
+    "task_id": "math-multi-step",
+    "task_text": "A model has 32 billion parameters. Each parameter is 2 bytes in bf16. Use the calculator tool to find the total size in gigabytes, then in gibibytes (divide by 1.024^3). Final answer: state both numbers, GB and GiB, rounded to two decimal places.",
+    "expected_tools": ["calculator"]
+  }
+]
