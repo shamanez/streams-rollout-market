@@ -76,7 +76,8 @@ Before changing contracts, update docs, fixtures, and tests in the same commit.
 - Prefer `/codex-review` over Claude evaluator for routine reviews
 - Use the `haiku` test-runner agent for quick test checks
 - Use `opus` only for implementation (implementer agent)
-- Run `bash .claude/scripts/check-usage.sh` to see session metrics
+- Run `/stats` or `/usage` periodically to check current usage limits
+- Run `bash .claude/scripts/check-usage.sh` to see session-level metrics
 - Batch related file changes to reduce tool call count
 - For autonomous runs with budget caps: `claude -p --max-budget-usd 5 "/autonomous-loop"`
 
