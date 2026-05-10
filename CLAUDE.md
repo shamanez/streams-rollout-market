@@ -70,6 +70,15 @@ Before changing contracts, update docs, fixtures, and tests in the same commit.
 - Run `pytest -q && ruff check .` before considering any task complete
 - Evidence of test passage is tracked in `.claude/evidence/`
 
+## Token conservation
+
+- **Sonnet is often at 100% weekly limit** — avoid Sonnet sub-agents when possible
+- Prefer `/codex-review` over Claude evaluator for routine reviews
+- Use the `haiku` test-runner agent for quick test checks
+- Use `opus` only for implementation (implementer agent)
+- Run `bash .claude/scripts/check-usage.sh` to see session metrics
+- Batch related file changes to reduce tool call count
+
 ## Session continuity
 
 - Read `PROGRESS.md` at the start of every session
