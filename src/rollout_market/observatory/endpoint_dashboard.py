@@ -22,6 +22,14 @@ import glob as _glob
 import html as _html
 import json
 from dataclasses import dataclass, field
+
+from ._dashboard_style import (
+    badge,
+    chart_block,
+    kpi_block,
+    page_shell,
+    palette_for,
+)
 from pathlib import Path
 from typing import Iterable
 
@@ -155,56 +163,92 @@ def load_reports_glob(pattern: str) -> list[EndpointContractReport]:
 
 
 def render_html(dashboard: EndpointDashboard) -> str:
-    """Render a self-contained dashboard page (no JS, no remote assets)."""
-
-    def _yes_no(flag: bool) -> str:
-        return "✓" if flag else "—"
-
-    capability_header = "".join(
-        f"<th>{_html.escape(f)}</th>" for f in CAPABILITY_FIELDS
-    )
-    rows_html = ""
-    for row in dashboard.rows:
-        cells = "".join(
-            f"<td>{_yes_no(getattr(row, f))}</td>" for f in CAPABILITY_FIELDS
-        )
-        rows_html += (
-            f"<tr><td>{_html.escape(row.provider)}</td>"
-            f"<td>{_html.escape(row.model_label)}</td>"
-            f"{cells}"
-            f"<td>{row.response_status}</td>"
-            f"<td>{row.coverage_score:.2f}</td>"
-            f"<td>{_html.escape(row.error or '')}</td></tr>"
-        )
     totals = dashboard.capability_totals()
-    total_rows = "".join(
-        f"<tr><td>{_html.escape(k)}</td><td>{v}/{dashboard.num_runs}</td></tr>"
-        for k, v in totals.items()
+    n = dashboard.num_runs
+
+    kpis = kpi_block([
+        (str(n), "endpoints probed"),
+        (f"{totals.get('sampled_logprobs_available', 0)}/{n}", "expose sampled_logprobs"),
+        (f"{totals.get('top_logprobs_available', 0)}/{n}", "expose top_logprobs"),
+        (f"{totals.get('seed_supported', 0)}/{n}", "honour seed"),
+        (f"{totals.get('token_ids_available', 0)}/{n}", "expose token_ids"),
+    ])
+
+    cap_chart = chart_block(
+        canvas_id="endpoint-coverage",
+        chart_type="bar",
+        data={
+            "labels": list(CAPABILITY_FIELDS),
+            "datasets": [{
+                "label": "Endpoints exposing this capability",
+                "data": [totals.get(f, 0) for f in CAPABILITY_FIELDS],
+                "backgroundColor": palette_for(len(CAPABILITY_FIELDS)),
+                "borderRadius": 6,
+            }],
+        },
+        options={
+            "plugins": {"legend": {"display": False},
+                        "title": {"display": True,
+                                  "text": f"Out of {n} probed endpoints"}},
+            "scales": {"y": {"min": 0, "max": max(n, 1)}},
+            "responsive": True,
+            "maintainAspectRatio": False,
+        },
     )
-    return (
-        "<!doctype html><html lang='en'><head><meta charset='utf-8'>"
-        "<title>Endpoint identity-gap dashboard</title>"
-        "<style>"
-        "body{font-family:system-ui,sans-serif;max-width:920px;margin:2rem auto;color:#111}"
-        "table{border-collapse:collapse;width:100%;margin-bottom:1rem}"
-        "th,td{border:1px solid #ddd;padding:.4rem .6rem;text-align:left}"
-        "th{background:#f5f5f5}"
-        "h1{font-size:1.2rem}h2{font-size:1rem;margin-top:1.5rem}"
-        "</style></head><body>"
-        f"<h1>Endpoint identity-gap dashboard ({dashboard.num_runs} run"
-        f"{'' if dashboard.num_runs == 1 else 's'})</h1>"
-        "<h2>Coverage by provider × model</h2>"
+
+    # Coverage matrix as a colour-coded grid.
+    grid_rows: list[str] = []
+    for row in dashboard.rows:
+        cells = []
+        for f in CAPABILITY_FIELDS:
+            present = bool(getattr(row, f))
+            cells.append(
+                f"<td style='text-align:center;background:{'#dcfce7' if present else '#fee2e2'};color:{'#16a34a' if present else '#dc2626'};font-weight:600'>"
+                f"{'✓' if present else '✗'}</td>"
+            )
+        if row.response_status == 200:
+            status_cell = badge(str(row.response_status), "good")
+        elif row.response_status in (400, 403, 404, 429):
+            status_cell = badge(str(row.response_status), "bad")
+        else:
+            status_cell = badge(str(row.response_status), "warn")
+        grid_rows.append(
+            "<tr>"
+            f"<td><strong>{_html.escape(row.provider)}</strong></td>"
+            f"<td><code>{_html.escape(row.model_label)}</code></td>"
+            f"{''.join(cells)}"
+            f"<td>{status_cell}</td>"
+            f"<td>{row.coverage_score:.2f}</td>"
+            f"<td>{_html.escape(row.error or '')}</td>"
+            "</tr>"
+        )
+
+    body = (
+        f'<section class="card">{kpis}</section>'
+        f'<section class="card">'
+        f"<h2>Capability coverage across endpoints</h2>"
+        f"<p class='sub'>How many of the {n} probed endpoints expose each contract field a trainer needs. "
+        "More green = more endpoints are usable as trainable rollout sources.</p>"
+        f"{cap_chart}"
+        f"</section>"
+        f'<section class="card">'
+        f"<h2>Coverage matrix</h2>"
+        f"<p class='sub'>One row per <code>(provider, model_label)</code> pair. Latest probe wins on duplicates.</p>"
         "<table><thead><tr>"
         "<th>provider</th><th>model_label</th>"
-        f"{capability_header}"
-        "<th>status</th><th>coverage</th><th>error</th>"
+        + "".join(f"<th>{_html.escape(f)}</th>" for f in CAPABILITY_FIELDS)
+        + "<th>status</th><th>coverage</th><th>error</th>"
         "</tr></thead>"
-        f"<tbody>{rows_html}</tbody></table>"
-        "<h2>Capability totals</h2>"
-        "<table><thead><tr><th>capability</th><th>present</th></tr></thead>"
-        f"<tbody>{total_rows}</tbody></table>"
-        "</body></html>"
+        f"<tbody>{''.join(grid_rows)}</tbody></table>"
+        f"</section>"
     )
+
+    title = "Endpoint identity-gap dashboard"
+    lede = (
+        f"{n} free-tier API probe{'' if n == 1 else 's'}. "
+        "Each endpoint is checked for the contract fields a rollout-marketplace worker would need to publish."
+    )
+    return page_shell(title, lede, body)
 
 
 def write_dashboard(dashboard: EndpointDashboard, out_dir: Path | str) -> dict[str, Path]:
