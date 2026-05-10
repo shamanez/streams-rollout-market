@@ -37,6 +37,24 @@ class RejectionReason(str, Enum):
     CONTEXT_OVERFLOW = "context_overflow"
 
 
+class DecisionReason(str, Enum):
+    """Typed reasons attached to non-rejection decisions.
+
+    Distinct from RejectionReason: those are contract violations (the
+    rollout describes the wrong policy). DecisionReasons describe budget
+    quality (the rollout is contract-clean but off-policy in some way).
+    Multiple may apply to one group (e.g. STALE_POLICY_LAG plus LOW_ESS).
+    """
+
+    WITHIN_BUDGET = "within_budget"
+    HIGH_CLIPPED_FRACTION = "high_clipped_fraction"
+    LOW_ESS = "low_ess"
+    REPLAY_TIER_LAG = "replay_tier_lag"
+    REPLAY_TIER_ESS = "replay_tier_ess"
+    STALE_POLICY_LAG = "stale_policy_lag"
+    VETO_THRESHOLD_EXCEEDED = "veto_threshold_exceeded"
+
+
 class PolicyManifest(BaseModel):
     """Immutable description of a policy snapshot a worker must serve.
 
@@ -308,8 +326,11 @@ class GroupDecision(BaseModel):
     status: GroupStatus
     reason: str
     rejection_reason: RejectionReason | None = None
+    decision_reasons: list[DecisionReason] = Field(default_factory=list)
     budget_report: BudgetReport | None = None
-    recommended_action: Literal["train", "train_with_correction", "quarantine", "reject"]
+    recommended_action: Literal[
+        "train", "train_with_correction", "replay", "quarantine", "reject"
+    ]
 
     @model_validator(mode="after")
     def _consistent_rejection(self) -> "GroupDecision":
@@ -317,4 +338,6 @@ class GroupDecision(BaseModel):
             raise ValueError("rejected decision must carry a rejection_reason")
         if self.status != GroupStatus.REJECTED and self.rejection_reason is not None:
             raise ValueError("rejection_reason is only valid when status is REJECTED")
+        if self.status == GroupStatus.REJECTED and self.decision_reasons:
+            raise ValueError("rejected decisions use rejection_reason, not decision_reasons")
         return self

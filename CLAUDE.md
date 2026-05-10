@@ -56,7 +56,7 @@ python examples/local_worker_demo.py   # smoke test
 | Module | Purpose |
 |--------|---------|
 | `contracts.py` | Pydantic schemas: PolicyManifest, WorkerManifest, RolloutJob, RolloutLease, SampleGroup, Trajectory, WorkerHeartbeat, BudgetReport, GroupDecision, GroupStatus |
-| `opbc.py` | Off-policy budget controller: compute_budget_report(), decide_group() |
+| `opbc.py` | Off-policy budget controller: compute_budget_report(), decide_group() emits typed DecisionReasons (within_budget, low_ess, high_clipped_fraction, replay_tier_*, stale_policy_lag, veto) and routes to train/train_with_correction/replay/quarantine |
 | `mismatch_metrics.py` | Pure-Python mismatch summary: summarize_logprob_mismatch() |
 | `registry.py` | FilePolicyRegistry: publish/latest for policy manifests |
 | `livestore.py` | InMemoryLiveStore: submit/get_batch/transition with idempotent group_id, ACCEPTED+CORRECTABLE served by default, QUARANTINED retained but opt-in |
