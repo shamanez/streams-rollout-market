@@ -5,6 +5,14 @@ endpoint probe in this package is read-only with respect to providers — it
 records contract coverage, not training claims.
 """
 
+from .dense_mismatch_lab import (
+    DenseMismatchReport,
+    EngineFingerprint,
+    compute_dense_mismatch,
+    load_input_fixture,
+    render_html,
+    write_dense_mismatch,
+)
 from .endpoint_probe import (
     EndpointContractReport,
     inspect_chat_completion_response,
@@ -17,4 +25,10 @@ __all__ = [
     "inspect_chat_completion_response",
     "probe_endpoint",
     "write_report",
+    "DenseMismatchReport",
+    "EngineFingerprint",
+    "compute_dense_mismatch",
+    "load_input_fixture",
+    "render_html",
+    "write_dense_mismatch",
 ]

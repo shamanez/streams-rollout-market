@@ -65,6 +65,8 @@ python examples/local_worker_demo.py   # smoke test
 | `validators.py` | validate_group_against_lease() returns typed RejectionReason decisions |
 | `observatory/endpoint_probe.py` | probe_endpoint() and EndpointContractReport: contract-coverage probe |
 | `cli/endpoint_probe.py` | `python -m rollout_market.cli.endpoint_probe` writes runs/<ts>/endpoint_contract_report.json |
+| `observatory/dense_mismatch_lab.py` | DenseMismatchReport contract + JSON/HTML renderer for one paired (rollout, trainer) logprob run |
+| `cli/dense_mismatch_lab.py` | `python -m rollout_market.cli.dense_mismatch_lab` writes runs/<ts>/dense_mismatch_report.{json,html} |
 | `worker.py` | WorkerRuntime skeleton |
 
 ## Development plan
