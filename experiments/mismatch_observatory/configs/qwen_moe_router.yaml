@@ -1,10 +1,14 @@
-# Small MoE router mismatch template
-model_id: Qwen/Qwen1.5-MoE-A2.7B
-chat_model_id: Qwen/Qwen1.5-MoE-A2.7B-Chat
+# MoE router mismatch template
+# Selected: Qwen3-30B-A3B — 30.5B total / 3.3B active, 128 experts (8 active)
+# ~61GB bf16, fits on 3x L40S GPUs (g6e.12xlarge)
+# Available on free tier: OpenRouter, Cerebras
+# Use output_router_logits=True for expert trace extraction
+model_id: Qwen/Qwen3-30B-A3B
 reference_engine: transformers
 rollout_engines:
   - name: vllm
-    precision: fp16
+    precision: bf16
+    tensor_parallel: 3
 router_trace:
   record_expert_ids: true
   compare_training_vs_rollout: true

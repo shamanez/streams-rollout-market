@@ -1,13 +1,15 @@
 # Controlled dense mismatch template
-model_id: Qwen/Qwen2.5-0.5B-Instruct
+# Selected: Qwen3-32B — ~64GB bf16, fits on 3x L40S GPUs (g6e.12xlarge)
+# Available on free tier: Groq, Cerebras, OpenRouter
+model_id: Qwen/Qwen3-32B
 reference_engine: transformers
 rollout_engines:
   - name: vllm
     precision: bf16
+    tensor_parallel: 3
   - name: vllm
     precision: fp16
-  - name: sglang
-    precision: bf16
+    tensor_parallel: 3
 prompts_file: prompts/dense_smoke.jsonl
 sampling:
   temperature: 1.0
