@@ -33,7 +33,8 @@ Each iteration of this loop performs ONE task from the development plan:
   - Run `bash .claude/scripts/verify-gate.sh` (must pass)
 
 ### 4. Evaluation
-- Use the `/evaluate` skill to invoke the evaluator agent
+- Prefer `/codex-review --effort low` for routine reviews (saves Claude tokens)
+- Use the `/evaluate` skill (Claude evaluator agent) for deep checks or when Codex is unavailable
 - If evaluation returns NEEDS_WORK or FAIL:
   - Fix the specific issues identified
   - Re-run tests
