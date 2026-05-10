@@ -63,6 +63,8 @@ python examples/local_worker_demo.py   # smoke test
 | `dispatcher.py` | choose_worker(), make_assignment() for policy-aware dispatch |
 | `verifier.py` | canonical_group_hash(), verify_group_hash() for integrity |
 | `validators.py` | validate_group_against_lease() returns typed RejectionReason decisions |
+| `observatory/endpoint_probe.py` | probe_endpoint() and EndpointContractReport: contract-coverage probe |
+| `cli/endpoint_probe.py` | `python -m rollout_market.cli.endpoint_probe` writes runs/<ts>/endpoint_contract_report.json |
 | `worker.py` | WorkerRuntime skeleton |
 
 ## Development plan
