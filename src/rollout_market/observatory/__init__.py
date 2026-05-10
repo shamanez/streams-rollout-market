@@ -13,6 +13,13 @@ from .dense_mismatch_lab import (
     render_html,
     write_dense_mismatch,
 )
+from .endpoint_dashboard import (
+    EndpointDashboard,
+    EndpointRow,
+    build_dashboard,
+    load_reports_glob,
+    write_dashboard,
+)
 from .endpoint_probe import (
     EndpointContractReport,
     inspect_chat_completion_response,
@@ -41,4 +48,9 @@ __all__ = [
     "RouterMismatchReport",
     "compute_router_mismatch",
     "write_router_mismatch",
+    "EndpointDashboard",
+    "EndpointRow",
+    "build_dashboard",
+    "load_reports_glob",
+    "write_dashboard",
 ]
