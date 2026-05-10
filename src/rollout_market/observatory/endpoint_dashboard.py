@@ -30,6 +30,7 @@ from ._dashboard_style import (
     page_shell,
     palette_for,
 )
+from ._glossary import render_glossary_card
 from pathlib import Path
 from typing import Iterable
 
@@ -223,6 +224,13 @@ def render_html(dashboard: EndpointDashboard) -> str:
             "</tr>"
         )
 
+    glossary = render_glossary_card([
+        "token_ids_available",
+        "sampled_logprobs_available",
+        "top_logprobs_available",
+        "seed_supported",
+    ])
+
     body = (
         f'<section class="card">{kpis}</section>'
         f'<section class="card">'
@@ -241,6 +249,7 @@ def render_html(dashboard: EndpointDashboard) -> str:
         "</tr></thead>"
         f"<tbody>{''.join(grid_rows)}</tbody></table>"
         f"</section>"
+        f"{glossary}"
     )
 
     title = "Endpoint identity-gap dashboard"

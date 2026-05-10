@@ -23,6 +23,7 @@ from ._dashboard_style import (
     palette_for,
     quality_badge_for_match_rate,
 )
+from ._glossary import render_glossary_card
 from .agent_trajectory_lab import TrajectoryDivergenceReport
 
 
@@ -325,6 +326,13 @@ def render_html(dashboard: AgentDashboard) -> str:
             "</tr>"
         )
 
+    glossary = render_glossary_card([
+        "answer_match_rate",
+        "tool_call_jaccard",
+        "tool_choice_disagreement_rate",
+        "first_divergence_step",
+    ])
+
     body = (
         f'<section class="card">{kpis}</section>'
         f'<section class="card">'
@@ -354,6 +362,7 @@ def render_html(dashboard: AgentDashboard) -> str:
         f"<th>tool-disagree</th><th>tool-jaccard</th><th>answer match</th>"
         f"</tr></thead><tbody>{''.join(run_rows)}</tbody></table>"
         f"</section>"
+        f"{glossary}"
     )
 
     title = "Agent trajectory dashboard"
