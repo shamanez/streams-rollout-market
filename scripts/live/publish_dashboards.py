@@ -332,6 +332,7 @@ def _render_matrix(
     detail_href: str,
     section_slug: str,
     model_substring: str | None = None,
+    blurb_html: str | None = None,
 ) -> str:
     rows = payload.get("rows") or []
     if model_substring is not None:
@@ -377,10 +378,15 @@ def _render_matrix(
             )
         grid_html.append("</div>")
     grid_html.append("</div>")
+    default_blurb = (
+        f"Model: <code>{_html.escape(model)}</code> · rows are trainer-side "
+        f"references (FSDP / Megatron), columns are <code>precision · device</code>. "
+        f"Click any tile to drill into the detail dashboard."
+    )
     return (
         f'<section class="mx-section" data-section="{section_slug}">'
         f"<h2>{_html.escape(title)}</h2>"
-        f"<p class='mx-blurb'>Model: <code>{_html.escape(model)}</code> · rows are trainer-side references (FSDP / Megatron), columns are <code>precision · device</code>. Click any tile to drill into the detail dashboard.</p>"
+        f"<div class='mx-blurb'>{blurb_html or default_blurb}</div>"
         f"{''.join(grid_html)}"
         f"</section>"
     )
@@ -390,7 +396,11 @@ _MATRIX_STYLES = """
 .mx-section{background:var(--surface);border:1px solid var(--border);border-radius:14px;
 padding:1.25rem 1.5rem;margin:1rem 0;box-shadow:0 1px 2px rgba(15,23,42,.04)}
 .mx-section h2{font-size:1.1rem;margin:0 0 .35rem 0;font-weight:600}
-.mx-blurb{color:var(--muted);margin:0 0 1rem 0;font-size:.9rem}
+.mx-blurb{color:var(--muted);margin:0 0 1rem 0;font-size:.9rem;line-height:1.55}
+.mx-blurb p{margin:0 0 .55rem 0}
+.mx-blurb p:last-child{margin-bottom:0}
+.mx-blurb strong{color:var(--text);font-weight:600}
+.mx-blurb code{background:#f1f5f9;padding:.05rem .35rem;border-radius:4px;font-size:.85em}
 .mx-grid{display:grid;gap:.5rem}
 .mx-grid-head,.mx-row{display:grid;grid-template-columns:120px repeat(auto-fit,minmax(170px,1fr));
 gap:.5rem;align-items:stretch}
@@ -427,6 +437,36 @@ def render_index(card_data: list[dict]) -> str:
     by_slug = {c.get("slug"): c for c in card_data}
     dense_payload = (by_slug.get("dense") or {}).get("payload") or {}
     router_payload = (by_slug.get("router") or {}).get("payload") or {}
+    dense_blurb = (
+        "<p><strong>What this measures.</strong> We hand a single "
+        "prompt to vLLM (the rollout side), let it generate 128 tokens, and "
+        "capture the per-token sampled-token logprob. The same "
+        "<code>(prompt + response)</code> is then teacher-forced through the "
+        "trainer-side reference (FSDP or Megatron in bf16) on the same "
+        "L40S host. Each tile reports the mean <strong>ESS</strong> over the "
+        "response — how usable that rollout would be for off-policy training. "
+        "Green (ESS &gt; 0.99) means the two engines agree token-for-token; "
+        "lower values mean the trainer would need stronger off-policy "
+        "correction or would have to drop the rollout. Columns are the "
+        "rollout-side precision · device; rows are the trainer-side reference. "
+        "Click any tile to drill into the per-run detail.</p>"
+    )
+    moe_blurb = (
+        "<p><strong>What this measures.</strong> Same recipe as the dense "
+        "matrix, but instead of comparing logprobs we compare <em>which "
+        "experts</em> each engine picked. vLLM emits the top-k MoE router "
+        "decisions per <code>(token, layer)</code> via "
+        "<code>enable_return_routed_experts=True</code>; the trainer-side "
+        "reference (FSDP or Megatron) teacher-forces the same "
+        "<code>(prompt + response)</code> with router hooks and captures its "
+        "own choices. Each tile reports the mean "
+        "<strong>router_flip_rate</strong> — fraction of "
+        "<code>(token, layer)</code> cells where the engines' top-1 expert "
+        "disagrees. Lower is better; the marketplace problem becomes visible "
+        "above ~5% (amber): at that point ~5% of the gradient signal would "
+        "land on the wrong expert without router-aware off-policy correction. "
+        "Click any tile to drill into the per-run detail.</p>"
+    )
     dense_matrix = _render_matrix(
         title="Dense (Qwen3-32B)",
         model="Qwen/Qwen3-32B",
@@ -436,6 +476,7 @@ def render_index(card_data: list[dict]) -> str:
         detail_href="dense_dashboard.html",
         section_slug="dense-matrix",
         model_substring="Qwen3-32B",
+        blurb_html=dense_blurb,
     )
     moe_matrix = _render_matrix(
         title="MoE (Qwen3-30B-A3B)",
@@ -446,6 +487,7 @@ def render_index(card_data: list[dict]) -> str:
         detail_href="router_dashboard.html",
         section_slug="moe-matrix",
         model_substring="Qwen3-30B-A3B",
+        blurb_html=moe_blurb,
     )
     cards_html = []
     for c in card_data:
