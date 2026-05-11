@@ -29,6 +29,18 @@ not new plan items.
   router, agent) with inline glossaries and modern charts.
 
 ## Completed (operational follow-ups, originally listed as "next")
+- STEER `dashboard.cto_readability_pass`: ran `codex review` non-
+  interactively against `docs/index.html` and
+  `scripts/live/publish_dashboards.py` with a structural prompt
+  covering the STEER acceptance criteria. Codex returned **PASS** with
+  five structural observations: matrices come first
+  (`data-section="dense-matrix"` then `"moe-matrix"`); above the fold
+  carries no mention of sglang / HF-as-engine / endpoint / public
+  APIs; Megatron cells render the exact placeholder
+  `TBD — pending HF→Megatron conversion` in both matrices. The
+  verdict is saved to `.claude/evidence/cto_readability_codex_verdict.txt`.
+  This is the last STEER `dashboard.*` entry — the dashboard
+  restructure is complete.
 - STEER `dashboard.megatron_placeholder`: Megatron-row tiles in both
   matrices render the literal `TBD — pending HF→Megatron conversion`
   with the dashed `mx-tile mx-tbd` style when the renderer sees no
