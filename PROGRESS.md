@@ -33,73 +33,50 @@ Operator overrides:
 - `bash .claude/scripts/steer.sh "<note>"` — redirect mid-run.
 - `rm AGENT_STOP` — resume.
 
-## In-flight (Megatron Qwen3-32B conversion — bind-mount retry running)
+## Shipped this session (2026-05-11)
 
-**Bug:** the first run's staging dir
-`~/megatron_conversion/hf_model_qwen3_32b/` held host-absolute
-symlinks into `~/hf-cache/hub/models--Qwen--Qwen3-32B/blobs/...` that
-the container could not resolve, so `tokenizer.json` was dangling and
-all 4 ranks died at tokenizer init.
-
-**Fix (this iteration, branch `research/megatron-qwen3-32b-bindmount`):**
-
-- New host-side launcher `scripts/live/megatron_qwen3_32b_launch.sh`
-  bind-mounts `~/hf-cache/hub/models--Qwen--Qwen3-32B:/root/Qwen3-32B-repo:ro`
-  (the full hub repo, read-only) instead of the broken staging dir.
-  The snapshot's `../../blobs/...` *relative* symlinks resolve inside
-  that bind-mount.
-- Existing `scripts/live/megatron_qwen3_32b_runner.sh` now reads
-  `HF_CHECKPOINT` from env (default: auto-detect the lone snapshot
-  under `/root/Qwen3-32B-repo/snapshots/`) and asserts
-  `config.json` is a real file before invoking `torchrun`.
-
-**Run launched 2026-05-11 ~12:22 UTC.** `docker run` is up; first log
-lines confirm the snapshot resolved to
-`/root/Qwen3-32B-repo/snapshots/9216db.../`, MODEL_ARGS sourced from
-the image's `qwen3-32B.sh`
-(`--num-layers 64 --hidden-size 5120 --ffn-hidden-size 25600
---num-attention-heads 64 --num-query-groups 8 --kv-channels 128
---vocab-size 151936 --qk-layernorm ...`), and
-`convert_hf_to_torch_dist.py` started without the tokenizer crash.
-A background poll on the operator side watches for
-`latest_checkpointed_iteration.txt` (success) or
-`Traceback|FAILED|RuntimeError|OutOfMemory` (fail) in the convert log.
-
-**To close out `model.megatron_convert_qwen3_32b` after success:**
-```bash
-mkdir -p .claude/evidence/model_megatron_convert_qwen3_32b
-scp my-vllm-spot-instance:\
-'~/megatron_conversion/qwen3_32b_torch_dist/latest_checkpointed_iteration.txt' \
-  .claude/evidence/model_megatron_convert_qwen3_32b/
-# then flip .claude/feature-results.json[model.megatron_convert_qwen3_32b]
-# to passes: true with that path as evidence.
-```
+- **`model.megatron_convert_qwen3_32b` — DONE.** Bind-mount fix on
+  branch `research/megatron-qwen3-32b-bindmount` got the slimerl
+  container past tokenizer init and produced the dist-ckpt in 10
+  minutes. Evidence at
+  `.claude/evidence/model_megatron_convert_qwen3_32b/`
+  (`latest_checkpointed_iteration.txt = release` + `EVIDENCE.md`
+  + `spot_state.txt`). The 62 GB checkpoint lives at
+  `~/megatron_conversion/qwen3_32b_torch_dist/release/` on the spot
+  (4 `__r_s.distcp` shards + `.metadata`).
+- **`vllm.router_trace_emit` — DONE** on sibling branch
+  `research/vllm-router-trace-emit`. Adds
+  `scripts/live/run_vllm_moe_rollout.py` (uses
+  `AsyncEngineArgs(enable_return_routed_experts=True)`) and
+  `tests/test_vllm_router_trace_shape.py` (4 tests, no vLLM import
+  required — script loaded as a module so the deferred imports stay
+  uninstantiated). Evidence at
+  `.claude/evidence/vllm_router_trace_emit/EVIDENCE.md`.
 
 ## Remaining false entries (in loop pick order)
 
-1. `model.megatron_convert_qwen3_32b` — **spot**, retry (see above).
-2. `vllm.router_trace_emit` — **spot**. Use vLLM's
-   `enable_return_routed_experts=True` on `AsyncEngineArgs`. Read
-   `CompletionOutput.routed_experts` (shape `[seq_position, moe_layer,
-   top_k]`, length `num_prompt_tokens + num_generated_tokens - 1`,
-   expert IDs in `[0, num_experts)`). Ref:
-   https://docs.vllm.ai/en/latest/examples/rl/routed_experts_e2e/ .
-   Caveat: returns selected expert IDs only, not gate logits —
-   sufficient for `router_flip_rate`.
-3. `dense.qwen3_32b.vllm_bf16_megatron` — **spot**, depends on (1).
-4. `dense.qwen3_32b.vllm_fp8_fsdp` — **spot**, independent.
-5. `dense.qwen3_32b.vllm_fp8_megatron` — **spot**, depends on (1).
-6. `moe.qwen3_30b_a3b.vllm_bf16_megatron_router` — **spot**, depends
-   on (2) + existing Megatron MoE checkpoint.
-7. `moe.qwen3_30b_a3b.vllm_bf16_fsdp_router` — **spot**, depends on (2).
-8. `moe.qwen3_30b_a3b.vllm_fp8_megatron_router` — **spot**, depends
-   on (2) + (1).
-9. `moe.qwen3_30b_a3b.vllm_fp8_fsdp_router` — **spot**, depends on (2).
-10. `dashboard.high_quality_render` — **local**, final acceptance
-    gate; depends on entries above producing real tile data.
+1. `dense.qwen3_32b.vllm_bf16_megatron` — **spot**, unblocked now
+   that `qwen3_32b_torch_dist/release/` exists.
+2. `dense.qwen3_32b.vllm_fp8_fsdp` — **spot**, independent.
+3. `dense.qwen3_32b.vllm_fp8_megatron` — **spot**, unblocked.
+4. `moe.qwen3_30b_a3b.vllm_bf16_megatron_router` — **spot**, depends
+   on existing Megatron MoE checkpoint + the new
+   `run_vllm_moe_rollout.py` (now in repo).
+5. `moe.qwen3_30b_a3b.vllm_bf16_fsdp_router` — **spot**, needs a
+   `run_fsdp_moe_reference.py` (not in repo yet) +
+   `run_vllm_moe_rollout.py`.
+6. `moe.qwen3_30b_a3b.vllm_fp8_megatron_router` — **spot**, MoE
+   Megatron-ckpt + `run_vllm_moe_rollout.py`.
+7. `moe.qwen3_30b_a3b.vllm_fp8_fsdp_router` — **spot**, needs
+   `run_fsdp_moe_reference.py`.
+8. `dashboard.high_quality_render` — **local**, final acceptance
+   gate; depends on entries above producing real tile data.
 
 ## Test status
-- pytest -q: **327 passed, 0 failed** (2026-05-11).
+- pytest -q on `research/megatron-qwen3-32b-bindmount`: **327
+  passed, 0 failed** (2026-05-11).
+- pytest -q on `research/vllm-router-trace-emit`: **331 passed**
+  (+4 from `test_vllm_router_trace_shape.py`).
 - ruff check .: clean.
 
 ## Reproducibility
