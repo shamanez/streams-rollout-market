@@ -1,5 +1,5 @@
 {
-  "num_runs": 40,
+  "num_runs": 42,
   "engine_pairs": [
     {
       "rollout_engine": "sglang",
@@ -44,6 +44,17 @@
       "mean_delta_logprob_abs": 0.014360548762361758,
       "worst_max_abs_log_ratio": 0.3615206480026245,
       "total_policy_tokens": 1024
+    },
+    {
+      "rollout_engine": "vllm",
+      "trainer_engine": "megatron-lm",
+      "count": 2,
+      "mean_ess": 0.9967298117596937,
+      "mean_clipped_fraction": 0.0,
+      "mean_sequence_log_ratio": 0.5579980945955327,
+      "mean_delta_logprob_abs": 0.01745974499173708,
+      "worst_max_abs_log_ratio": 0.28126955032348633,
+      "total_policy_tokens": 256
     },
     {
       "rollout_engine": "vllm-fp8",
@@ -817,6 +828,44 @@
       "max_abs_log_ratio": 0.21575284004211426,
       "top_1pct_gradient_mass": 0.008594110300186142,
       "created_at": "2026-05-10T11:41:43.662931+00:00"
+    },
+    {
+      "run_id": "live-qwen3-30b-a3b-bf16-vllm-vs-megatron-001",
+      "model_id": "Qwen/Qwen3-30B-A3B",
+      "rollout_engine": "vllm",
+      "trainer_engine": "megatron-lm",
+      "precision_class": "bf16",
+      "quantization_class": null,
+      "prompt_id": "p-rl-explainer-001",
+      "num_policy_tokens": 128,
+      "delta_logprob_mean": 0.0043593601140275995,
+      "delta_logprob_abs_mean": 0.01745974499173708,
+      "sequence_log_ratio": 0.5579980945955327,
+      "ess": 0.9967298117596937,
+      "clipped_fraction": 0.0,
+      "veto_fraction": 0.0,
+      "max_abs_log_ratio": 0.28126955032348633,
+      "top_1pct_gradient_mass": 0.01028970634051809,
+      "created_at": "2026-05-11T11:19:16.870761+00:00"
+    },
+    {
+      "run_id": "live-qwen3-30b-a3b-bf16-vllm-vs-megatron-001",
+      "model_id": "Qwen/Qwen3-30B-A3B",
+      "rollout_engine": "vllm",
+      "trainer_engine": "megatron-lm",
+      "precision_class": "bf16",
+      "quantization_class": null,
+      "prompt_id": "p-rl-explainer-001",
+      "num_policy_tokens": 128,
+      "delta_logprob_mean": 0.0043593601140275995,
+      "delta_logprob_abs_mean": 0.01745974499173708,
+      "sequence_log_ratio": 0.5579980945955327,
+      "ess": 0.9967298117596937,
+      "clipped_fraction": 0.0,
+      "veto_fraction": 0.0,
+      "max_abs_log_ratio": 0.28126955032348633,
+      "top_1pct_gradient_mass": 0.01028970634051809,
+      "created_at": "2026-05-11T11:29:33.965548+00:00"
     }
   ]
 }
