@@ -10,8 +10,13 @@ in the same shape as ``run_hf_reference.py`` / ``run_fsdp_reference.py``
 so ``scripts/live/build_dense_input.py --variant megatron-bf16`` can
 ingest it without further glue.
 
-The Megatron / pytorch / slime imports are deferred inside ``main()`` so
-this module is import-safe on a host without Megatron installed — the
+Uses Megatron-LM's stock ``model_provider`` + ``gpt_builder`` directly
+rather than slime's wrappers — slime adds bridge / RL-specific args
+that aren't relevant for a single teacher-force forward. The
+distributed init runs through Megatron's ``initialize_megatron``.
+
+The torch / Megatron imports are deferred inside ``main()`` so this
+module is import-safe on a host without Megatron installed — the
 shape test (``tests/test_megatron_reference_shape.py``) imports the
 module and exercises only the pure-Python helpers
 (``response_prediction_positions``, ``format_trainer_payload``,
@@ -45,8 +50,8 @@ ENGINE_FINGERPRINT = "sha256:megatron-core-r0.13-bf16-torch-dist"
 
 # Mirrors /root/slime/scripts/models/qwen3-32B.sh inside the slimerl
 # image. Duplicated here so a fresh container can run this script
-# without sourcing the shell file separately. Conversion already saved
-# the dist-ckpt with these args, so they must match exactly to load.
+# without sourcing the shell file separately. The torch-dist ckpt was
+# saved with these args; they must match exactly to load.
 QWEN3_32B_MODEL_ARGS: list[str] = [
     "--swiglu",
     "--num-layers", "64",
@@ -128,6 +133,8 @@ def _build_megatron_argv() -> list[str]:
         "--transformer-impl", "transformer_engine",
         "--bf16",
         "--micro-batch-size", micro_bs,
+        "--global-batch-size", micro_bs,
+        "--train-iters", "1",
         "--seq-length", seq_len,
         "--max-position-embeddings", seq_len,
         "--position-embedding-type", "rope",
@@ -142,40 +149,31 @@ def _build_megatron_argv() -> list[str]:
 
 def main() -> None:
     """Build the Megatron model, load the dist-ckpt, teacher-force, write JSON."""
-    import torch
-    import torch.distributed as dist
-    from megatron.core.enums import ModelType
-    from megatron.training import get_model
-    from megatron.training.arguments import parse_args, validate_args
-    from megatron.training.checkpointing import load_checkpoint
-    from slime.backends.megatron_utils.arguments import set_default_megatron_args
-    from slime.backends.megatron_utils.initialize import init as slime_init
-    from slime.backends.megatron_utils.model_provider import get_model_provider_func
+    import functools
+
+    # Megatron-LM's pretrain_gpt.py imports `model_provider` and
+    # `gpt_builders` as top-level modules (they live in /root/Megatron-LM/),
+    # so we have to add that path to sys.path before importing them.
+    sys.path.insert(0, "/root/Megatron-LM")
 
     sys.argv = _build_megatron_argv()
-    args = parse_args()
-    args = set_default_megatron_args(args)
-    args.save_interval = 1
-    args.global_batch_size = int(os.environ.get("WORLD_SIZE", "1"))
-    validate_args(args)
 
-    world_size = int(os.environ.get("WORLD_SIZE", "1"))
-    rank = int(os.environ.get("RANK", "0"))
-    local_rank = int(os.environ.get("LOCAL_RANK", "0"))
-    torch.cuda.set_device(local_rank)
-    os.environ.setdefault("MASTER_ADDR", "localhost")
-    os.environ.setdefault("MASTER_PORT", "12355")
-    dist.init_process_group(backend="nccl", world_size=world_size, rank=rank)
-    args.rank, args.world_size, args.local_rank = rank, world_size, local_rank
-    args.tensor_model_parallel_size = int(
-        os.environ.get("TENSOR_MODEL_PARALLEL_SIZE", "4")
-    )
-    args.pipeline_model_parallel_size = 1
-    args.context_parallel_size = 1
-    args.expert_model_parallel_size = 1
-    args.expert_tensor_parallel_size = 1
-    slime_init(args)
+    import torch
+    import torch.distributed as dist
+    from megatron.core import mpu
+    from megatron.core.enums import ModelType
+    from megatron.core.tensor_parallel import gather_from_tensor_model_parallel_region
+    from megatron.training import get_args, get_model
+    from megatron.training.checkpointing import load_checkpoint
+    from megatron.training.initialize import initialize_megatron
+    from gpt_builders import gpt_builder  # type: ignore[import-not-found]
+    from model_provider import model_provider  # type: ignore[import-not-found]
 
+    initialize_megatron(args_defaults={})
+    args = get_args()
+
+    world_size = mpu.get_data_parallel_world_size() * mpu.get_tensor_model_parallel_world_size()
+    rank = dist.get_rank()
     if rank == 0:
         print(
             f"[megatron-ref] world_size={world_size} "
@@ -187,9 +185,14 @@ def main() -> None:
     model_id = rollouts[0].get("trainer_reference") or rollouts[0]["model"]
 
     t0 = time.time()
-    model = get_model(get_model_provider_func(args), ModelType.encoder_or_decoder)
+    provider = functools.partial(model_provider, gpt_builder)
+    # wrap_with_ddp=False skips the DDP grad-buffer allocation
+    # (~30 GiB on Qwen3-32B); we're inference-only so no optimizer
+    # state or gradient bucket is needed. Saves ~half the L40S VRAM.
+    model = get_model(provider, ModelType.encoder_or_decoder, wrap_with_ddp=False)
     if rank == 0:
         print(f"[megatron-ref] model built in {time.time()-t0:.1f}s", flush=True)
+
     t1 = time.time()
     load_checkpoint(model, None, None, strict=False)
     if rank == 0:
@@ -198,6 +201,7 @@ def main() -> None:
     for m in model:
         m.eval()
 
+    local_rank = int(os.environ.get("LOCAL_RANK", "0"))
     trainers: list[dict] = []
     t2 = time.time()
     for entry in rollouts:
@@ -210,14 +214,17 @@ def main() -> None:
         position_ids = torch.arange(
             prompt_len + response_len, dtype=torch.long, device=ids.device
         ).unsqueeze(0)
-        # Megatron's GPTModel builds the causal mask internally when
-        # attention_mask=None, so we don't pass one explicitly.
         with torch.no_grad():
             logits = model[0](
                 input_ids=ids,
                 position_ids=position_ids,
                 attention_mask=None,
             )
+            # Default output is TP-sharded across the vocab dim (each rank
+            # holds 1/tp_size of the vocab). Gather across TP before
+            # log_softmax — the denominator must sum over the full vocab.
+            if mpu.get_tensor_model_parallel_world_size() > 1:
+                logits = gather_from_tensor_model_parallel_region(logits)
         positions = response_prediction_positions(prompt_len, response_len)
         logits_f32 = logits.float()
         trainer_logprobs: list[float] = []

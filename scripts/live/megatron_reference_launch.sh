@@ -68,11 +68,19 @@ docker run --rm \
   -e TENSOR_MODEL_PARALLEL_SIZE="$TP" \
   -e HF_HOME=/root/hf-cache \
   -e HF_TOKENIZER="${HF_TOKENIZER:-Qwen/Qwen3-32B}" \
+  -e CUDA_DEVICE_MAX_CONNECTIONS=1 \
+  -e HOST_UID="$(id -u)" \
+  -e HOST_GID="$(id -g)" \
   "$IMAGE" \
   bash -lc "cp /tmp_work/rollout.json /tmp/rollout.json && \
     PYTHONPATH=/root/Megatron-LM/:/root/slime/ \
     torchrun --nproc-per-node $TP /root/run_megatron_reference.py && \
-    cp /tmp/trainer_megatron-bf16.json /tmp_work/trainer_megatron-bf16.json"
+    cp /tmp/trainer_megatron-bf16.json /tmp_work/trainer_megatron-bf16.json && \
+    chown \"\$HOST_UID:\$HOST_GID\" /tmp_work/trainer_megatron-bf16.json"
 
+# The host-side destination may be owned by root from a previous run
+# (the container writes as root before we add chown). Remove any
+# stale file first so the host user can replace it.
+rm -f "$TRAINER_OUT_HOST" 2>/dev/null || true
 cp "$WORK_DIR/trainer_megatron-bf16.json" "$TRAINER_OUT_HOST"
 echo "[launch] wrote $TRAINER_OUT_HOST"
