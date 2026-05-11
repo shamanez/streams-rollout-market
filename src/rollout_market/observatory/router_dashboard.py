@@ -58,10 +58,25 @@ class RouterRow:
     layer_flip_rate_max: float
     created_at: str
     device_bucket: str = "L40S (g6e.12xlarge)"
+    precision_class: str = "bf16"
 
     @property
     def engine_pair_key(self) -> str:
         return f"{self.rollout_engine} -> {self.trainer_engine}"
+
+
+def _precision_from_engine(engine_name: str) -> str:
+    """Derive precision_class from a rollout engine name.
+
+    Router reports don't carry an explicit precision field — the
+    rollout side encodes it in the engine label (``vllm-fp8`` vs
+    ``vllm``/``vllm-bf16``). The /docs/index.html matrix bins tiles
+    by precision, so we surface it on each row.
+    """
+    n = (engine_name or "").lower()
+    if "fp8" in n:
+        return "fp8"
+    return "bf16"
 
 
 @dataclass
@@ -141,6 +156,8 @@ class RouterDashboard:
                     "layer_flip_rate_mean": r.layer_flip_rate_mean,
                     "layer_flip_rate_max": r.layer_flip_rate_max,
                     "created_at": r.created_at,
+                    "precision_class": r.precision_class,
+                    "device_bucket": r.device_bucket,
                 }
                 for r in self.rows
             ],
@@ -149,10 +166,11 @@ class RouterDashboard:
 
 def _row_from_report(report: RouterMismatchReport) -> RouterRow:
     layer_rates = report.layer_flip_rates or [0.0]
+    rollout_name = report.rollout_engine.name
     return RouterRow(
         run_id=report.run_id,
         model_id=report.model_id,
-        rollout_engine=report.rollout_engine.name,
+        rollout_engine=rollout_name,
         trainer_engine=report.trainer_engine.name,
         num_tokens=report.num_tokens,
         num_layers=report.num_layers,
@@ -165,6 +183,7 @@ def _row_from_report(report: RouterMismatchReport) -> RouterRow:
         layer_flip_rate_max=max(layer_rates),
         created_at=report.created_at.isoformat(),
         device_bucket=device_bucket_label(report.device),
+        precision_class=_precision_from_engine(rollout_name),
     )
 
 
