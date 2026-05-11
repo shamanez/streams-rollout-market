@@ -110,8 +110,8 @@
     "directive": "Fill the MoE (Qwen3-30B-A3B) matrix tile at (rollout=vLLM-fp8, trainer=FSDP-bf16). Same recipe as `moe.qwen3_30b_a3b.vllm_bf16_fsdp_router` but the rollout side uses `Qwen/Qwen3-30B-A3B-FP8`. Evidence: new router_mismatch_report.json with rollout fp8 + trainer fsdp. Honor STEER.md global directives."
   },
   "dashboard.high_quality_render": {
-    "passes": false,
-    "evidence": null,
+    "passes": true,
+    "evidence": ".claude/evidence/dashboard_high_quality_render/codex_verdict.txt",
     "directive": "Final acceptance gate. Re-run `python -m rollout_market.cli.dense_dashboard ...`, `python -m rollout_market.cli.router_dashboard ...`, `python -m rollout_market.cli.agent_dashboard ...`, then `python scripts/live/publish_dashboards.py`. Inspect the rendered `docs/index.html`: above the fold MUST show 8 tiles that are colour-coded green / amber / red against the per-metric thresholds (no `mx-empty` and no `mx-tbd` placeholders in the visible matrix area). Run `/codex-review --effort low` against `docs/index.html` with the prompt 'Does this 8-tile dashboard answer the question: does the rollout-vs-trainer engine choice change inference-time behaviour enough to matter for crowdsourced MoE rollouts?'. On PASS save the verdict to `.claude/evidence/dashboard_high_quality_render/codex_verdict.txt`. Evidence: that verdict file + the re-rendered `docs/index.html` snapshot. This is the LAST entry — when it flips true the autonomous loop deletes STEER.md per the stop clause and the dashboard is complete."
   }
 }
