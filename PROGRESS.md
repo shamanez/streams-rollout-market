@@ -33,65 +33,46 @@ Operator overrides:
 - `bash .claude/scripts/steer.sh "<note>"` — redirect mid-run.
 - `rm AGENT_STOP` — resume.
 
-## In-flight (Megatron Qwen3-32B conversion — FAILED, needs retry)
+## In-flight (Megatron Qwen3-32B conversion — bind-mount retry running)
 
-**Setup committed** (`fe550be feat(megatron): runner for Qwen3-32B …`):
-`scripts/live/megatron_qwen3_32b_runner.sh` sources the
-`qwen3-32B.sh` MODEL_ARGS already shipping inside the
-`slimerl/slime:latest` image. Copied to spot at
-`~/megatron_conversion/runner_qwen3_32b.sh`.
+**Bug:** the first run's staging dir
+`~/megatron_conversion/hf_model_qwen3_32b/` held host-absolute
+symlinks into `~/hf-cache/hub/models--Qwen--Qwen3-32B/blobs/...` that
+the container could not resolve, so `tokenizer.json` was dangling and
+all 4 ranks died at tokenizer init.
 
-**Run launched 2026-05-11 12:06 UTC** on `my-vllm-spot-instance`
-under a backgrounded `docker run`. Output log:
-`~/megatron_conversion/logs/qwen3_32b_convert.out`. HF model staged
-at `~/megatron_conversion/hf_model_qwen3_32b/` (symlinks into
-`~/hf-cache/hub/models--Qwen--Qwen3-32B/snapshots/9216db.../`).
-Target torch-dist checkpoint under
-`~/megatron_conversion/qwen3_32b_torch_dist/`.
+**Fix (this iteration, branch `research/megatron-qwen3-32b-bindmount`):**
 
-**Status: failed at tokenizer init.** All 4 ranks raised
-`ValueError: Couldn't instantiate the backend tokenizer ... You need
-to have sentencepiece or tiktoken installed to convert a slow
-tokenizer to a fast one.` from
-`/root/slime/slime/backends/megatron_utils/initialize.py:77`. The
-target dir is empty (no atomic save happened); safe to retry.
+- New host-side launcher `scripts/live/megatron_qwen3_32b_launch.sh`
+  bind-mounts `~/hf-cache/hub/models--Qwen--Qwen3-32B:/root/Qwen3-32B-repo:ro`
+  (the full hub repo, read-only) instead of the broken staging dir.
+  The snapshot's `../../blobs/...` *relative* symlinks resolve inside
+  that bind-mount.
+- Existing `scripts/live/megatron_qwen3_32b_runner.sh` now reads
+  `HF_CHECKPOINT` from env (default: auto-detect the lone snapshot
+  under `/root/Qwen3-32B-repo/snapshots/`) and asserts
+  `config.json` is a real file before invoking `torchrun`.
 
-Most likely cause: the symlinks staged into
-`~/megatron_conversion/hf_model_qwen3_32b/` point at host paths
-(`/home/ubuntu/hf-cache/...`) that aren't visible inside the
-container, so the readable `tokenizer.json` is dangling. The next
-iteration should try, in order:
+**Run launched 2026-05-11 ~12:22 UTC.** `docker run` is up; first log
+lines confirm the snapshot resolved to
+`/root/Qwen3-32B-repo/snapshots/9216db.../`, MODEL_ARGS sourced from
+the image's `qwen3-32B.sh`
+(`--num-layers 64 --hidden-size 5120 --ffn-hidden-size 25600
+--num-attention-heads 64 --num-query-groups 8 --kv-channels 128
+--vocab-size 151936 --qk-layernorm ...`), and
+`convert_hf_to_torch_dist.py` started without the tokenizer crash.
+A background poll on the operator side watches for
+`latest_checkpointed_iteration.txt` (success) or
+`Traceback|FAILED|RuntimeError|OutOfMemory` (fail) in the convert log.
 
-1. **Bind-mount the hf-cache snapshot directly** (cleanest):
-   ```bash
-   SNAP=$(ssh my-vllm-spot-instance \
-     'ls -d ~/hf-cache/hub/models--Qwen--Qwen3-32B/snapshots/*/' | head -1)
-   # then in the docker run, replace
-   #   -v $HOME/megatron_conversion/hf_model_qwen3_32b:/root/Qwen3-32B
-   # with
-   #   -v ${SNAP%/}:/root/Qwen3-32B:ro
-   ```
-2. **Copy (not symlink) the tokenizer files** into the staging dir
-   (`tokenizer.json`, `tokenizer_config.json`, `vocab.json`,
-   `merges.txt`) so they're real files inside the bind-mount.
-3. **Install sentencepiece inside the container** before running:
-   `docker run ... slimerl/slime:latest bash -lc "pip install -q
-   sentencepiece && /root/runner_qwen3_32b.sh"`.
-
-**To close out `model.megatron_convert_qwen3_32b` after a successful
-retry:**
+**To close out `model.megatron_convert_qwen3_32b` after success:**
 ```bash
-ssh my-vllm-spot-instance \
-  'ls ~/megatron_conversion/qwen3_32b_torch_dist/latest_checkpointed_iteration.txt && \
-   tail -3 ~/megatron_conversion/logs/qwen3_32b_convert.out'
-
 mkdir -p .claude/evidence/model_megatron_convert_qwen3_32b
 scp my-vllm-spot-instance:\
 '~/megatron_conversion/qwen3_32b_torch_dist/latest_checkpointed_iteration.txt' \
   .claude/evidence/model_megatron_convert_qwen3_32b/
-
-# Then flip .claude/feature-results.json[model.megatron_convert_qwen3_32b]
-# to passes: true with evidence pointing at the scp'd marker.
+# then flip .claude/feature-results.json[model.megatron_convert_qwen3_32b]
+# to passes: true with that path as evidence.
 ```
 
 ## Remaining false entries (in loop pick order)
