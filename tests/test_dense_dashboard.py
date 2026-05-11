@@ -159,7 +159,7 @@ def test_empty_dashboard_renders():
     dashboard = DenseDashboard()
     page = render_html(dashboard)
     assert "<!doctype html>" in page
-    assert "0 run" in page or "Per (rollout_engine" in page
+    assert "Controlled dense mismatch dashboard" in page
 
 
 def test_cli_main_writes_dashboard(tmp_path: Path):

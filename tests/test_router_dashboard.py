@@ -168,10 +168,10 @@ def test_empty_dashboard_renders():
     dashboard = RouterDashboard()
     page = render_html(dashboard)
     assert "<!doctype html>" in page
-    # New headline/appendix split: an empty dashboard still renders the
-    # research-question card and the (collapsed) appendix wrapper.
+    # Headline skeleton renders even with no rows; the appendix block
+    # has been purged from public dashboards.
     assert "data-section=\"headline-engines\"" in page
-    assert "data-section=\"all-engines\"" in page
+    assert "data-section=\"all-engines\"" not in page
 
 
 def test_cli_main_writes_dashboard(tmp_path: Path):
