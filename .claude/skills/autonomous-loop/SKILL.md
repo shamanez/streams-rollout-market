@@ -1,16 +1,40 @@
 ---
 name: autonomous-loop
-description: Self-pacing engine that drives the streams-rollout-market repo autonomously. Phase 0-6 plan is complete; the loop now picks the next research follow-up from docs/future_research.md (or the explicit "Next work" list in PROGRESS.md), implements/runs it, evaluates, commits, and moves on. Use with /loop for hands-free continuation.
+description: Standalone autonomous engine. Type `/autonomous-loop` once and it runs iteration after iteration end-to-end (pick task → implement → test → evaluate → commit → next) inside a single turn until a stop condition fires. No `/loop` wrapper required. Phase 0-6 is complete; the loop now picks tasks from .claude/feature-results.json (when STEER.md is active), PROGRESS.md "Next work", or docs/future_research.md, in that order.
 user-invocable: true
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 
 # Autonomous Development Loop
 
-Self-pacing engine for continuous, hands-free work on
-streams-rollout-market. **The original Phase 0-6 plan is complete** —
-the loop now operates in *evidence-extension* mode, picking
-research follow-ups rather than plan tasks.
+Continuous, hands-free work on streams-rollout-market. **The original
+Phase 0-6 plan is complete** — the loop now operates in
+*evidence-extension* mode, picking the next entry in
+`.claude/feature-results.json` (when STEER.md is active) or a research
+follow-up otherwise.
+
+## How invocation works
+
+This skill drives itself. **The single command `/autonomous-loop` is
+the entire user interface.** When invoked:
+
+1. Run one iteration of the Loop cycle below.
+2. At the end of the iteration, check the Stop conditions.
+3. If none fire, **immediately begin the next iteration in the same
+   turn** — do not wait for user input, do not call ScheduleWakeup, do
+   not stop the assistant turn.
+4. Only stop the turn when a Stop condition is satisfied.
+
+The assistant turn is a single long-running session that ticks through
+iterations back-to-back. Across iterations, write status lines so the
+operator watching `watch -n 5 'tail -30 PROGRESS.md'` and
+`watch -n 5 'git log --oneline -8'` sees progress.
+
+If the turn does eventually exit (manual interrupt, context
+compaction, AGENT_STOP), the operator resumes by simply typing
+`/autonomous-loop` again — state lives in `PROGRESS.md`,
+`.claude/feature-results.json`, and git, so the next invocation picks
+up exactly where this one left off.
 
 ## Loop cycle
 
@@ -91,20 +115,31 @@ and only attempt one per iteration.
 
 ### 6. Return to main and continue
 - `git checkout main && git pull origin main`.
-- If more items remain in "Next work": next iteration.
-- If "Next work" is empty: read `docs/future_research.md` and refill
-  it (re-ranking is itself a valid loop output — commit it as
-  `docs(progress): refresh research backlog`).
-- If `AGENT_STOP`: stop after PROGRESS.md handoff.
-- If `STEER.md`: follow the new direction.
+- Re-check the Stop conditions below.
+- **If no stop condition fires, go back to Step 1 (Context check) in
+  the SAME turn.** Do not pause, do not wait for input, do not call
+  ScheduleWakeup. The skill is a long-running in-turn loop.
+- Log a one-line status to stdout so the operator can see progress
+  (`[autonomous-loop] iteration N complete: <one-line summary>`).
 
 ## Stop conditions
-- `AGENT_STOP` file present.
-- `STEER.md` instructs a different mode.
-- All open questions in `docs/future_research.md` are resolved
-  (unlikely in practice — the list is meant to keep growing).
-- Two consecutive iterations produce no committable change (signal
-  that the next unit is genuinely blocked on operator input).
+
+Check after every iteration. **If any of these fire, halt the turn
+cleanly** (update PROGRESS.md, commit if needed, then end the
+assistant turn so the operator can re-invoke).
+
+- `AGENT_STOP` file present at repo root.
+- `STEER.md` is gone AND `PROGRESS.md` "Next work" is empty AND
+  `docs/future_research.md` has no open items.
+- When `STEER.md` is active: every entry in
+  `.claude/feature-results.json` has `passes: true`. Delete `STEER.md`
+  on the way out per its own stop clause; the next `/autonomous-loop`
+  invocation will resume in PROGRESS.md mode.
+- Two consecutive iterations produce no committable change — signal
+  that the next unit is genuinely blocked on operator input. Record
+  the blocker in PROGRESS.md and stop.
+- Weekly usage > 95% (from `check-usage.sh`) — stop and let the
+  operator decide whether to switch models or wait for reset.
 
 ## Error recovery
 
