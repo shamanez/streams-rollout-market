@@ -60,34 +60,105 @@ in via `3a9b074`):
   pair with multiple trainer references without a variant
   explosion.
 
-## Remaining false entries (in loop pick order)
+## Remaining false entries — concrete plan for end-to-end execution
 
-1. `dense.qwen3_32b.vllm_bf16_megatron` — **spot**, depends on a
-   new `scripts/live/run_megatron_reference.py` (does NOT exist —
-   the slimerl MoE runbook noted this script "to follow in a
-   separate PR"). The Megatron forward pass needs to run inside the
-   slimerl container, load the torch-dist checkpoint at
-   `/root/Qwen3-32B_torch_dist/release/`, teacher-force the same
-   (prompt + response) the vLLM rollout produced, extract per-token
-   logprobs, and write `/tmp/trainer_megatron-bf16.json`. The next
-   loop iteration should *first* write this script (setup PR), then
-   run it (run PR), then ingest (writeup PR).
-2. `dense.qwen3_32b.vllm_fp8_megatron` — depends on (1).
-3. `moe.qwen3_30b_a3b.vllm_bf16_megatron_router` — needs the existing
-   MoE Megatron checkpoint + the new `run_vllm_moe_rollout.py`
-   (already in repo). Also needs a `build_megatron_router_input.py`
-   that pairs vLLM router trace vs Megatron-side router trace from
-   the existing MoE script.
-4. `moe.qwen3_30b_a3b.vllm_bf16_fsdp_router` — needs a new
-   `scripts/live/run_fsdp_moe_reference.py` (extension of
-   `run_fsdp_reference.py` with `output_router_logits=True`) plus
-   `run_vllm_moe_rollout.py`.
-5. `moe.qwen3_30b_a3b.vllm_fp8_megatron_router` — same as (3) but
-   FP8 rollout.
-6. `moe.qwen3_30b_a3b.vllm_fp8_fsdp_router` — same as (4) but
-   FP8 rollout.
-7. `dashboard.high_quality_render` — final gate; depends on entries
-   above producing real tile data. Re-render + codex review.
+The next `/autonomous-loop` invocation MUST run all of these without
+halting. Each numbered block below is one loop iteration. Setup
+commits (writing new scripts) and run commits (spot runs) are both
+valid units of work; do not stop because an iteration "looks big".
+
+### Iter A — write `scripts/live/run_megatron_reference.py` (setup)
+
+- Runs inside the slimerl/slime:latest container (same image used by
+  `megatron_qwen3_32b_launch.sh`).
+- Reads `/tmp/rollout.json` (prompt_token_ids + response_token_ids
+  from the vLLM rollout side); teacher-forces (prompt + response)
+  through Megatron-LM at TP=4 with the torch-dist ckpt at
+  `/root/Qwen3-32B_torch_dist/release/` (mount the host path
+  `~/megatron_conversion/qwen3_32b_torch_dist`).
+- Reuse MODEL_ARGS from the image's `/root/slime/scripts/models/qwen3-32B.sh`
+  (dense, no MoE flags).
+- Extract per-response-token logprobs from logits via gather on
+  the response token IDs.
+- Write `/tmp/trainer_megatron-bf16.json` in the same shape as
+  `run_hf_reference.py`'s output (`{model, trainer_logprobs, engine,
+  engine_fingerprint}`).
+- Add a host-side launcher `scripts/live/megatron_reference_launch.sh`
+  (mirrors `megatron_qwen3_32b_launch.sh`). Add a smoke test in
+  `tests/test_megatron_reference_shape.py` that imports the script
+  and asserts the helper functions exist and produce well-shaped
+  stub output (no Megatron import; deferred inside the run path).
+- This iteration is SETUP — no feature-results flip. Commit prefix
+  `feat(megatron):`.
+
+### Iter B — run `dense.qwen3_32b.vllm_bf16_megatron` (live)
+
+- Spot: `MODEL=Qwen/Qwen3-32B ROLLOUT_LABEL=vllm-bf16 python ~/run_vllm_rollout.py`.
+- Inside container: invoke `run_megatron_reference.py` via the new
+  launcher.
+- scp `/tmp/rollout_vllm-bf16.json` + `/tmp/trainer_megatron-bf16.json`
+  back; `python scripts/live/build_dense_input.py --variant megatron-bf16`;
+  ingest into `runs/live/dense/`. Flip
+  `dense.qwen3_32b.vllm_bf16_megatron` to `true`. Commit prefix
+  `live(megatron):`.
+
+### Iter C — run `dense.qwen3_32b.vllm_fp8_megatron` (live)
+
+- Same as Iter B but `MODEL=Qwen/Qwen3-32B-FP8 ROLLOUT_LABEL=vllm-fp8`.
+- Reuse `--variant vllm-fp8 --trainer-label megatron-lm` (the
+  trainer-label override we shipped this session). Flip
+  `dense.qwen3_32b.vllm_fp8_megatron`. Commit prefix `live(fp8):`.
+
+### Iter D — write `scripts/live/run_fsdp_moe_reference.py` (setup)
+
+- Extension of `run_fsdp_reference.py`: same FSDP wrap pattern,
+  but pass `output_router_logits=True` to the model and collect
+  top-k expert IDs per (token, layer) for the MoE model. Write
+  `/tmp/fsdp_router.json` in the same shape as
+  `/tmp/vllm_router.json` (see `run_vllm_moe_rollout.py`).
+- Smoke test: import as a module + assert shape helpers.
+- SETUP iteration, no flip. Commit prefix `feat(fsdp):`.
+
+### Iter E — run `moe.qwen3_30b_a3b.vllm_bf16_fsdp_router` (live)
+
+- Spot: vLLM-bf16 MoE rollout via `run_vllm_moe_rollout.py`; FSDP
+  reference via the new `run_fsdp_moe_reference.py`. Build router
+  input (use `build_router_input.py` adapted for vLLM-trainer
+  pairing, or write a sibling that maps the two trace files).
+- Ingest into `runs/live/router/`. Flip. Commit prefix `live(moe-fsdp):`.
+
+### Iter F — run `moe.qwen3_30b_a3b.vllm_fp8_fsdp_router` (live)
+
+- Same as Iter E with `MODEL=Qwen/Qwen3-30B-A3B-FP8`. Flip. Commit
+  prefix `live(moe-fp8-fsdp):`.
+
+### Iter G — run `moe.qwen3_30b_a3b.vllm_bf16_megatron_router` (live)
+
+- vLLM-bf16 MoE rollout via `run_vllm_moe_rollout.py`; Megatron
+  router trace via the existing `run_moe_router.py` path (which
+  already writes the trainer-side trace). Pair into a router-
+  mismatch fixture and ingest. Flip. Commit prefix `live(moe-megatron):`.
+
+### Iter H — run `moe.qwen3_30b_a3b.vllm_fp8_megatron_router` (live)
+
+- Same as Iter G with the FP8 MoE rollout. Flip. Commit prefix
+  `live(moe-fp8-megatron):`.
+
+### Iter I — re-render + codex review `dashboard.high_quality_render`
+
+- `python -m rollout_market.cli.dense_dashboard ...` then
+  `python -m rollout_market.cli.router_dashboard ...` then
+  `python scripts/live/publish_dashboards.py`.
+- Inspect `docs/index.html`: 8 green tiles, no `mx-empty` / `mx-tbd`
+  placeholders in the visible matrix area.
+- `/codex-review --effort low` against the rendered HTML with the
+  STEER-mandated prompt. Save verdict to
+  `.claude/evidence/dashboard_high_quality_render/codex_verdict.txt`.
+  Flip the last entry. Commit prefix `docs(dashboards):`.
+
+When Iter I lands true, the autonomous loop's "all entries true"
+stop clause fires; delete `STEER.md` on the way out per its own stop
+clause.
 
 ## Test status
 - pytest -q: **333 passed, 0 failed** (2026-05-11). +6 since last

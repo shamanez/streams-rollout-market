@@ -124,6 +124,11 @@ and only attempt one per iteration.
 
 ## Stop conditions
 
+**These are the ONLY reasons to halt.** Anything else — context
+getting long, "next iteration looks like substantial new code", a
+spot run taking 20 minutes, an iteration spanning setup + run +
+writeup — is NOT a stop reason. Keep iterating.
+
 Check after every iteration. **If any of these fire, halt the turn
 cleanly** (update PROGRESS.md, commit if needed, then end the
 assistant turn so the operator can re-invoke).
@@ -140,6 +145,26 @@ assistant turn so the operator can re-invoke).
   the blocker in PROGRESS.md and stop.
 - Weekly usage > 95% (from `check-usage.sh`) — stop and let the
   operator decide whether to switch models or wait for reset.
+
+### What is NOT a stop condition (do NOT halt for these)
+
+- "The next iteration looks big" — break it into setup + run +
+  writeup commits and keep going. Each is one iteration.
+- "I've done several iterations and the conversation is long" — the
+  runtime compacts context automatically; trust it and continue.
+- "The next step needs a long spot run (10+ min)" — kick it off with
+  `run_in_background: true`, do other useful work or wait for the
+  notification, then continue.
+- "I'm not sure how to do the next step exactly" — pick a reasonable
+  approach, write a setup commit with TODOs, and iterate. The loop
+  prefers committed progress over perfect planning.
+- "It feels like a clean stopping point" — feelings are not a stop
+  condition. The user wants the dashboard to 8 green tiles, not a
+  tidy session.
+
+If you find yourself about to halt without one of the hard
+conditions above firing, **do not halt** — start the next iteration.
+The operator can always `touch AGENT_STOP` if they want to stop.
 
 ## Error recovery
 
