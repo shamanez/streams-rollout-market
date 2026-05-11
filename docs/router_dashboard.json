@@ -1,5 +1,5 @@
 {
-  "num_runs": 4,
+  "num_runs": 5,
   "engine_pairs": [
     {
       "rollout_engine": "hf-fp8",
@@ -39,6 +39,16 @@
       "mean_token_expert_disagreement_rate": 1.0,
       "worst_layer_flip_rate": 0.13253012048192772,
       "total_tokens": 83,
+      "layer_count": 48
+    },
+    {
+      "rollout_engine": "vllm-fp8",
+      "trainer_engine": "megatron-lm",
+      "count": 1,
+      "mean_router_flip_rate": 0.06315104166666667,
+      "mean_token_expert_disagreement_rate": 1.0,
+      "worst_layer_flip_rate": 0.140625,
+      "total_tokens": 64,
       "layer_count": 48
     }
   ],
@@ -106,6 +116,22 @@
       "layer_flip_rate_mean": 0.041015625,
       "layer_flip_rate_max": 0.125,
       "created_at": "2026-05-11T14:17:09.940106+00:00"
+    },
+    {
+      "run_id": "live-qwen3-30b-a3b-vllm-fp8-vs-megatron-bf16",
+      "model_id": "Qwen/Qwen3-30B-A3B-FP8",
+      "rollout_engine": "vllm-fp8",
+      "trainer_engine": "megatron-lm",
+      "num_tokens": 64,
+      "num_layers": 48,
+      "top_k": 8,
+      "num_experts": 128,
+      "router_flip_rate": 0.06315104166666667,
+      "token_expert_disagreement_rate": 1.0,
+      "layer_flip_rate_min": 0.0,
+      "layer_flip_rate_mean": 0.06315104166666667,
+      "layer_flip_rate_max": 0.140625,
+      "created_at": "2026-05-11T14:20:01.059827+00:00"
     }
   ]
 }

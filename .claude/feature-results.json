@@ -100,8 +100,8 @@
     "directive": "Fill the MoE (Qwen3-30B-A3B) matrix tile at (rollout=vLLM-bf16, trainer=FSDP-bf16) with a real router_flip_rate. Depends on `vllm.router_trace_emit`. Extend `scripts/live/run_fsdp_reference.py` (or add a sibling `scripts/live/run_fsdp_moe_reference.py`) to do the same thing FSDP does for dense but with `output_router_logits=True` on the HuggingFace MoE model AND collect the top-k per (token, layer) under FSDP-wrapped weights. The output goes to `/tmp/fsdp_router.json` in the same shape. Then build the router input pairing vLLM-bf16 rollout vs FSDP-bf16 trainer and run the mismatch lab. Evidence: new router_mismatch_report.json with `trainer_engine.name='fsdp'`. Honor STEER.md global directives."
   },
   "moe.qwen3_30b_a3b.vllm_fp8_megatron_router": {
-    "passes": false,
-    "evidence": null,
+    "passes": true,
+    "evidence": ".claude/evidence/moe_qwen3_30b_a3b_vllm_fp8_megatron_router/router_mismatch_report.json",
     "directive": "Fill the MoE (Qwen3-30B-A3B) matrix tile at (rollout=vLLM-fp8, trainer=Megatron-bf16). Same recipe as `moe.qwen3_30b_a3b.vllm_bf16_megatron_router` but the rollout side uses `Qwen/Qwen3-30B-A3B-FP8`. This is the headline cell — fp8 inference is what crowdsourced workers will actually run, and we expect router_flip_rate to be higher here than in the bf16 cell. Evidence: new router_mismatch_report.json with `rollout_engine.name` containing 'fp8' AND `trainer_engine.name='megatron'`. Honor STEER.md global directives."
   },
   "moe.qwen3_30b_a3b.vllm_fp8_fsdp_router": {
