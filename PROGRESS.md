@@ -29,6 +29,19 @@ not new plan items.
   router, agent) with inline glossaries and modern charts.
 
 ## Completed (operational follow-ups, originally listed as "next")
+- STEER `dashboard.glossary_verl_rewrite`: rewrote
+  `src/rollout_market/observatory/_glossary.py` to a frozen
+  `GlossaryEntry` dataclass carrying four required fields (what,
+  aggregation, cap, drop_behavior) per verl's train-inference
+  correction module language. Cap fields name the actual constants —
+  `BudgetPolicy.clamp = 20.0 nats`, `BudgetPolicy.veto_abs_log_ratio =
+  30.0 nats`, `BudgetPolicy.max_clipped_fraction = 0.10` — and the
+  drop behavior uses the verl vocabulary (clipped in place vs entire
+  group quarantined; "no drop — observability only" for capability
+  metrics). Renderers updated to surface a `<dl>` of (per / cap / on
+  cap) under each entry. `tests/test_glossary.py` (7 cases) asserts
+  the four-field shape, the 15 STEER-required terms, constant
+  references, and verl-style drop vocabulary. 287 passed.
 - STEER `dashboard.engine_filter`: added a render-time split on dense,
   router, and agent dashboards. The headline (`data-section=
   "headline-engines"`) shows only vLLM rollouts paired with FSDP or
@@ -170,7 +183,7 @@ effort-to-evidence ratio:
   remains).
 
 ## Test status
-- pytest -q: **280 passed, 0 failed** (2026-05-11).
+- pytest -q: **287 passed, 0 failed** (2026-05-11).
 - ruff check .: clean.
 - Real-data round-trips: `scripts/live/marketplace_real{,_fp8}.py`
   exit 0.

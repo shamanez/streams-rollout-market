@@ -10,8 +10,8 @@
     "directive": "In src/rollout_market/observatory/dense_dashboard.py, router_dashboard.py, and agent_dashboard.py, add a render-time filter so the headline displays only vLLM rollouts and FSDP/Megatron trainer-side references. Rows with sglang or HF-as-engine move to a collapsible 'All engines (full data)' appendix below the headline. Underlying ingestion does NOT change — only display. Add tests for each dashboard asserting the split. Evidence: rendered HTMLs (one per dashboard) showing the headline contains only the three target engines and the appendix contains the rest. Honor STEER.md global directives."
   },
   "dashboard.glossary_verl_rewrite": {
-    "passes": false,
-    "evidence": null,
+    "passes": true,
+    "evidence": ".claude/evidence/dashboard_glossary_verl_rewrite/glossary.html",
     "directive": "Rewrite src/rollout_market/observatory/_glossary.py entries to the four-field shape mandated in STEER.md: (1) what the metric is, (2) per-token or per-sequence, (3) cap value with the constant name from mismatch_metrics.py / opbc.py (clamp=20.0 nats, veto_abs_log_ratio=30.0 nats, high_clipped_fraction=0.1, veto_fraction=0.0), (4) drop behavior (token clipped in place vs entire group quarantined). Paraphrase verl's train-inference correction module language (https://github.com/volcengine/verl). Apply to all of: ESS, |Δlogp|, log_ratio, sequence_log_ratio, clipped_fraction, veto_fraction, top_1pct_gradient_mass, second_moment, router_flip_rate, token_expert_disagreement_rate, tool_call_jaccard, first_divergence_step, answer_match, bf16, fp8. Add tests/test_glossary.py asserting every entry has the four fields. Evidence: the new test file + a rendered /docs/glossary.html. Honor STEER.md global directives."
   },
   "dashboard.graphs_first": {
