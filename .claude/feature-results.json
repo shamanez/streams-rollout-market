@@ -20,8 +20,8 @@
     "directive": "Replace the headline tables on the dense, router (MoE), agent, and marketplace dashboards with graph-first renders. Use the chart helpers already present in the existing HTML strings — do not add a new charting library. Patterns: bar charts for per-engine-pair aggregates, traffic-light tiles (green / amber / red) for ESS / flip-rate / answer-match thresholds, sparklines for per-run trends. Raw numbers move to tooltips and a collapsible 'Raw numbers' appendix at the bottom. Add tests asserting the headline contains chart markup (e.g. <svg> / <canvas> / data-chart attributes) and that the 'Raw numbers' appendix is present and collapsible. Evidence: rendered HTMLs and at least one screenshot saved under .claude/evidence/screenshots/. Honor STEER.md global directives."
   },
   "dashboard.device_axis": {
-    "passes": false,
-    "evidence": null,
+    "passes": true,
+    "evidence": ".claude/evidence/dashboard_device_axis/dense_dashboard.html",
     "directive": "Add an optional DeviceFingerprint Pydantic model (vendor, family, cuda_compute, vram_gb, host_label) to src/rollout_market/observatory/dense_mismatch_lab.py, router_mismatch_lab.py, and agent_trajectory_lab.py. Backwards-compatible: device field defaults to None. The corresponding CLIs (src/rollout_market/cli/*) read it from env vars (DEVICE_VENDOR, DEVICE_FAMILY, DEVICE_CUDA_COMPUTE, DEVICE_VRAM_GB, DEVICE_HOST_LABEL) and inject. Dashboards pivot by device; reports with device=None bucket as 'L40S (g6e.12xlarge)' per STEER.md. Round-trip fixture tests for each lab. Document the env vars in scripts/live/README.md. Evidence: round-trip test pass + a rendered dashboard showing a device column. Honor STEER.md global directives."
   },
   "dashboard.dense_moe_split": {

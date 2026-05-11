@@ -20,6 +20,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from ..observatory._device import device_from_env
 from ..observatory.dense_mismatch_lab import (
     EngineFingerprint,
     compute_dense_mismatch,
@@ -57,6 +58,9 @@ def main(argv: list[str] | None = None) -> int:
     fixture = load_input_fixture(args.input)
     fixture["rollout_engine"] = _coerce_engine(fixture["rollout_engine"])
     fixture["trainer_engine"] = _coerce_engine(fixture["trainer_engine"])
+    # STEER dashboard.device_axis: env-var device fingerprint, opt-in.
+    if "device" not in fixture:
+        fixture["device"] = device_from_env()
 
     report = compute_dense_mismatch(**fixture)
 

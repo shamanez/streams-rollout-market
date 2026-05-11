@@ -28,6 +28,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from ._device import DeviceFingerprint
 from .dense_mismatch_lab import EngineFingerprint
 
 
@@ -161,6 +162,7 @@ class TrajectoryDivergenceReport(BaseModel):
     same_step_count: bool
     rollout_tool_signature: list[list[str]]
     trainer_tool_signature: list[list[str]]
+    device: DeviceFingerprint | None = None
     notes: list[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -180,6 +182,7 @@ def compute_trajectory_divergence(
     trainer: AgentTrajectory,
     *,
     notes: list[str] | None = None,
+    device: DeviceFingerprint | None = None,
 ) -> TrajectoryDivergenceReport:
     """Compute the divergence report between two trajectories on the same task.
 
@@ -284,6 +287,7 @@ def compute_trajectory_divergence(
         same_step_count=len(r_assist) == len(t_assist),
         rollout_tool_signature=[list(t) for t in rollout.tool_call_signature()],
         trainer_tool_signature=[list(t) for t in trainer.tool_call_signature()],
+        device=device,
         notes=list(notes or []),
     )
 

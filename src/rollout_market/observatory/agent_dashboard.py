@@ -27,6 +27,7 @@ from ._dashboard_style import (
     traffic_light_row,
     traffic_light_tile,
 )
+from ._device import device_bucket_label
 from ._engine_filter import APPENDIX_HEADER, is_headline_pair
 from ._glossary import render_glossary_card
 from .agent_trajectory_lab import TrajectoryDivergenceReport
@@ -49,6 +50,7 @@ class AgentRow:
     tool_call_jaccard: float
     final_answer_match: bool
     created_at: str
+    device_bucket: str = "L40S (g6e.12xlarge)"
 
     @property
     def engine_pair_key(self) -> str:
@@ -168,6 +170,7 @@ def _row_from_report(report: TrajectoryDivergenceReport) -> AgentRow:
         tool_call_jaccard=report.tool_call_jaccard,
         final_answer_match=report.final_answer_match,
         created_at=report.created_at.isoformat(),
+        device_bucket=device_bucket_label(report.device),
     )
 
 
@@ -310,6 +313,7 @@ def _agent_engine_view(
             f"<tr{row_class}>"
             f"<td>{_html.escape(r.task_id)}</td>"
             f"<td><code>{_html.escape(r.engine_pair_key)}</code></td>"
+            f"<td>{_html.escape(r.device_bucket)}</td>"
             f"<td>{r.rollout_steps}</td>"
             f"<td>{r.trainer_steps}</td>"
             f"<td>{_i(r.first_divergence_step)}</td>"
@@ -349,7 +353,8 @@ def _agent_engine_view(
         f'<section class="card">'
         f"<h2>Per task × engine pair</h2>"
         f"<table><thead><tr>"
-        f"<th>task</th><th>engines</th><th>rollout steps</th><th>trainer steps</th>"
+        f"<th>task</th><th>engines</th><th>device</th>"
+        f"<th>rollout steps</th><th>trainer steps</th>"
         f"<th>first-div step</th><th>div kind</th>"
         f"<th>tool-disagree</th><th>tool-jaccard</th><th>answer match</th>"
         f"</tr></thead><tbody>{''.join(run_rows)}</tbody></table>"
@@ -449,6 +454,8 @@ def render_html(dashboard: AgentDashboard) -> str:
         f"{glossary}"
     )
 
+    devices = sorted({r.device_bucket for r in dashboard.rows})
+    devices_str = ", ".join(devices) if devices else "(none)"
     title = "Agent trajectory dashboard"
     lede = (
         f"{len(headline_rows)} headline comparison"
@@ -456,7 +463,8 @@ def render_html(dashboard: AgentDashboard) -> str:
         f"{len(headline_aggs)} engine pair{'' if len(headline_aggs) == 1 else 's'}; "
         f"{len(appendix_rows)} additional comparison"
         f"{'' if len(appendix_rows) == 1 else 's'} "
-        "in the full-engine appendix. Reference is on the right of each → arrow."
+        f"in the full-engine appendix. Devices observed: {devices_str}. "
+        "Reference is on the right of each → arrow."
     )
     return page_shell(title, lede, body)
 

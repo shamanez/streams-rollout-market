@@ -21,6 +21,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from ..mismatch_metrics import summarize_logprob_mismatch
+from ._device import DeviceFingerprint
 
 
 class EngineFingerprint(BaseModel):
@@ -60,6 +61,8 @@ class DenseMismatchReport(BaseModel):
     max_abs_log_ratio: float
     top_1pct_gradient_mass: float
 
+    device: DeviceFingerprint | None = None
+
     notes: list[str] = Field(default_factory=list)
 
 
@@ -80,6 +83,7 @@ def compute_dense_mismatch(
     clamp: float = 20.0,
     veto_abs_log_ratio: float = 30.0,
     notes: list[str] | None = None,
+    device: DeviceFingerprint | None = None,
 ) -> DenseMismatchReport:
     """Compute the dense mismatch report for one prompt under two backends.
 
@@ -115,6 +119,7 @@ def compute_dense_mismatch(
         veto_fraction=summary.veto_fraction,
         max_abs_log_ratio=summary.max_abs_log_ratio,
         top_1pct_gradient_mass=summary.top_1pct_gradient_mass,
+        device=device,
         notes=list(notes or []),
     )
 

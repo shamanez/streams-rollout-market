@@ -33,6 +33,7 @@ from ._dashboard_style import (
     traffic_light_row,
     traffic_light_tile,
 )
+from ._device import device_bucket_label
 from ._engine_filter import APPENDIX_HEADER, is_headline_pair
 from ._glossary import render_glossary_card
 from dataclasses import dataclass, field
@@ -63,6 +64,7 @@ class DenseRow:
     max_abs_log_ratio: float
     top_1pct_gradient_mass: float
     created_at: str
+    device_bucket: str = "L40S (g6e.12xlarge)"
 
     @property
     def engine_pair_key(self) -> str:
@@ -175,6 +177,7 @@ def _row_from_report(report: DenseMismatchReport) -> DenseRow:
         max_abs_log_ratio=report.max_abs_log_ratio,
         top_1pct_gradient_mass=report.top_1pct_gradient_mass,
         created_at=report.created_at.isoformat(),
+        device_bucket=device_bucket_label(report.device),
     )
 
 
@@ -303,6 +306,7 @@ def _dense_engine_view(
         f"<td>{_html.escape(r.model_id)}</td>"
         f"<td>{_html.escape(r.engine_pair_key)}</td>"
         f"<td>{_html.escape(r.precision_class)}</td>"
+        f"<td>{_html.escape(r.device_bucket)}</td>"
         f"<td>{r.num_policy_tokens}</td>"
         f"<td>{_f(r.ess)}</td>"
         f"<td>{_f(r.clipped_fraction)}</td>"
@@ -340,6 +344,7 @@ def _dense_engine_view(
         f"<h2>Per run</h2>"
         f"<table><thead><tr>"
         f"<th>run_id</th><th>model</th><th>engines</th><th>precision</th>"
+        f"<th>device</th>"
         f"<th>tokens</th><th>ess</th><th>clipped</th><th>veto</th>"
         f"<th>max|log_ratio|</th><th>top1% mass</th>"
         f"</tr></thead><tbody>{run_rows}</tbody></table>"
@@ -456,13 +461,16 @@ def render_html(dashboard: DenseDashboard) -> str:
         f"{glossary}"
     )
 
+    devices = sorted({r.device_bucket for r in dashboard.rows})
+    devices_str = ", ".join(devices) if devices else "(none)"
     title = "Controlled dense mismatch dashboard"
     lede = (
         f"{len(headline_rows)} headline run{'s' if len(headline_rows) != 1 else ''} "
         f"({len(headline_aggs)} engine pair{'' if len(headline_aggs) == 1 else 's'}); "
         f"{len(appendix_rows)} additional run{'s' if len(appendix_rows) != 1 else ''} "
-        "in the full-engine appendix. Numbers are token-level logprob mismatch "
-        "on the same checkpoint served by two engines."
+        f"in the full-engine appendix. Devices observed: {devices_str}. "
+        "Numbers are token-level logprob mismatch on the same checkpoint "
+        "served by two engines."
     )
     return page_shell(title, lede, body)
 

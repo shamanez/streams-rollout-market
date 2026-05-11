@@ -344,3 +344,32 @@ group is rejected with `missing_logprobs`.
   Qwen3-30B-A3B (plus FP8 variants) are present.
 - Spot instances are reclaimable. Treat `/tmp/*.json` artefacts as
   ephemeral; copy them off the host as soon as a run completes.
+
+
+## Device fingerprint env vars (STEER `dashboard.device_axis`)
+
+The mismatch-lab CLIs (`dense_mismatch_lab`, `router_mismatch_lab`,
+`agent_trajectory_lab`) pick up an optional `DeviceFingerprint` from
+the environment so every report carries the GPU + host it ran on.
+Backwards-compatible: with none of these set, the field is `None` and
+dashboards bucket the run as `L40S (g6e.12xlarge)` (the legacy spot
+instance).
+
+| Env var | Field | Example |
+| --- | --- | --- |
+| `DEVICE_VENDOR` | `vendor` | `NVIDIA` |
+| `DEVICE_FAMILY` | `family` | `L40S`, `H100`, `H200`, `MI300X` |
+| `DEVICE_CUDA_COMPUTE` | `cuda_compute` | `8.9`, `9.0` |
+| `DEVICE_VRAM_GB` | `vram_gb` | `24`, `80` |
+| `DEVICE_HOST_LABEL` | `host_label` | `g6e.12xlarge`, `p5.48xlarge` |
+
+Example::
+
+    DEVICE_VENDOR=NVIDIA \
+    DEVICE_FAMILY=H100 \
+    DEVICE_CUDA_COMPUTE=9.0 \
+    DEVICE_VRAM_GB=80 \
+    DEVICE_HOST_LABEL=p5.48xlarge \
+    python -m rollout_market.cli.dense_mismatch_lab \
+        --input /tmp/rollout.json \
+        --out-root runs/live/dense

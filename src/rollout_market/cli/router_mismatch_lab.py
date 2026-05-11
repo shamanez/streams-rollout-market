@@ -18,6 +18,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from ..observatory._device import device_from_env
 from ..observatory.dense_mismatch_lab import EngineFingerprint
 from ..observatory.router_mismatch_lab import (
     RouterTrace,
@@ -66,6 +67,8 @@ def main(argv: list[str] | None = None) -> int:
     fixture["trainer_engine"] = _coerce_engine(fixture["trainer_engine"])
     fixture["rollout_trace"] = _coerce_trace(fixture["rollout_trace"])
     fixture["trainer_trace"] = _coerce_trace(fixture["trainer_trace"])
+    if "device" not in fixture:
+        fixture["device"] = device_from_env()
 
     report = compute_router_mismatch(**fixture)
 

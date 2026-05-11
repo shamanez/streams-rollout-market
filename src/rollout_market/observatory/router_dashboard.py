@@ -32,6 +32,7 @@ from ._dashboard_style import (
     traffic_light_row,
     traffic_light_tile,
 )
+from ._device import device_bucket_label
 from ._engine_filter import APPENDIX_HEADER, is_headline_pair
 from ._glossary import render_glossary_card
 
@@ -56,6 +57,7 @@ class RouterRow:
     layer_flip_rate_mean: float
     layer_flip_rate_max: float
     created_at: str
+    device_bucket: str = "L40S (g6e.12xlarge)"
 
     @property
     def engine_pair_key(self) -> str:
@@ -162,6 +164,7 @@ def _row_from_report(report: RouterMismatchReport) -> RouterRow:
         layer_flip_rate_mean=sum(layer_rates) / len(layer_rates),
         layer_flip_rate_max=max(layer_rates),
         created_at=report.created_at.isoformat(),
+        device_bucket=device_bucket_label(report.device),
     )
 
 
@@ -267,6 +270,7 @@ def _router_engine_view(
         f"<td>{_html.escape(r.run_id)}</td>"
         f"<td>{_html.escape(r.model_id)}</td>"
         f"<td>{_html.escape(r.engine_pair_key)}</td>"
+        f"<td>{_html.escape(r.device_bucket)}</td>"
         f"<td>{r.num_tokens}</td>"
         f"<td>{r.num_layers}</td>"
         f"<td>{r.top_k}</td>"
@@ -309,6 +313,7 @@ def _router_engine_view(
         f"<h2>Per run</h2>"
         f"<table><thead><tr>"
         f"<th>run_id</th><th>model</th><th>engines</th>"
+        f"<th>device</th>"
         f"<th>tokens</th><th>layers</th><th>top_k</th><th>experts</th>"
         f"<th>flip rate</th><th>token disagreement</th>"
         f"<th>layer min</th><th>layer mean</th><th>layer max</th>"
@@ -406,13 +411,16 @@ def render_html(dashboard: RouterDashboard) -> str:
         f"{glossary}"
     )
 
+    devices = sorted({r.device_bucket for r in dashboard.rows})
+    devices_str = ", ".join(devices) if devices else "(none)"
     title = "MoE router mismatch dashboard"
     lede = (
         f"{len(headline_rows)} headline run{'s' if len(headline_rows) != 1 else ''} "
         f"({len(headline_aggs)} engine pair{'' if len(headline_aggs) == 1 else 's'}); "
         f"{len(appendix_rows)} additional run{'s' if len(appendix_rows) != 1 else ''} "
-        "in the full-engine appendix. Each cell measures how often the MoE "
-        "router's top-k experts disagree between two checkpoints / engines."
+        f"in the full-engine appendix. Devices observed: {devices_str}. "
+        "Each cell measures how often the MoE router's top-k experts disagree "
+        "between two checkpoints / engines."
     )
     return page_shell(title, lede, body)
 

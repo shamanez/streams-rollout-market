@@ -29,6 +29,22 @@ not new plan items.
   router, agent) with inline glossaries and modern charts.
 
 ## Completed (operational follow-ups, originally listed as "next")
+- STEER `dashboard.device_axis`: added
+  `src/rollout_market/observatory/_device.py` with a
+  `DeviceFingerprint` Pydantic model (vendor / family / cuda_compute /
+  vram_gb / host_label), a `device_from_env` env-var helper, and a
+  `DEFAULT_DEVICE_BUCKET = "L40S (g6e.12xlarge)"` bucket for legacy
+  reports. `DenseMismatchReport`, `RouterMismatchReport`, and
+  `TrajectoryDivergenceReport` each gained an optional `device` field
+  defaulting to `None` (backwards-compatible — old JSON still
+  validates). The three lab CLIs pick up the env vars
+  (`DEVICE_VENDOR`, `DEVICE_FAMILY`, `DEVICE_CUDA_COMPUTE`,
+  `DEVICE_VRAM_GB`, `DEVICE_HOST_LABEL`) so live runs can stamp the
+  device with no flag changes. Dense / router / agent dashboards add
+  a device column to the per-run table and a "Devices observed" line
+  to the lede. `scripts/live/README.md` documents the env vars.
+  `tests/test_device_axis.py` (15 cases) round-trips all three reports
+  with and without the field. 307 passed.
 - STEER `dashboard.graphs_first`: added `traffic_light_tile`,
   `traffic_light_row`, and `raw_numbers_block` helpers to
   `_dashboard_style.py`. Dense, router, and agent dashboards now open
@@ -195,7 +211,7 @@ effort-to-evidence ratio:
   remains).
 
 ## Test status
-- pytest -q: **292 passed, 0 failed** (2026-05-11).
+- pytest -q: **307 passed, 0 failed** (2026-05-11).
 - ruff check .: clean.
 - Real-data round-trips: `scripts/live/marketplace_real{,_fp8}.py`
   exit 0.

@@ -14,6 +14,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from ..observatory._device import device_from_env
 from ..observatory.agent_trajectory_lab import (
     compute_trajectory_divergence,
     load_trajectory,
@@ -43,7 +44,7 @@ def main(argv: list[str] | None = None) -> int:
 
     rollout = load_trajectory(args.rollout)
     trainer = load_trajectory(args.trainer)
-    report = compute_trajectory_divergence(rollout, trainer)
+    report = compute_trajectory_divergence(rollout, trainer, device=device_from_env())
     out_dir = Path(args.out_root) / run_dir_name()
     paths = write_trajectory_diff(report, rollout, trainer, out_dir)
     print(str(paths["json"]))

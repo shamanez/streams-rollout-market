@@ -25,6 +25,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from ._device import DeviceFingerprint
 from .dense_mismatch_lab import EngineFingerprint
 
 
@@ -95,6 +96,8 @@ class RouterMismatchReport(BaseModel):
     token_expert_disagreement_rate: float
     layer_flip_rates: list[float]
 
+    device: DeviceFingerprint | None = None
+
     notes: list[str] = Field(default_factory=list)
 
 
@@ -107,6 +110,7 @@ def compute_router_mismatch(
     rollout_trace: RouterTrace,
     trainer_trace: RouterTrace,
     notes: list[str] | None = None,
+    device: DeviceFingerprint | None = None,
 ) -> RouterMismatchReport:
     """Compute router-mismatch metrics from two aligned traces.
 
@@ -161,6 +165,7 @@ def compute_router_mismatch(
         router_flip_rate=router_flip_rate,
         token_expert_disagreement_rate=token_expert_disagreement_rate,
         layer_flip_rates=layer_flip_rates,
+        device=device,
         notes=list(notes or []),
     )
 
