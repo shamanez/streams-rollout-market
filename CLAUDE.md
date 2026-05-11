@@ -89,7 +89,7 @@ python examples/local_worker_demo.py   # smoke test
 
 ## Development plan
 
-See `streams_rollout_market_git_agent_plan_v2.md` for the Phase 0-6 roadmap.
+See `docs/git_plan_v2.md` for the Phase 0-6 roadmap (now complete).
 Track progress in `PROGRESS.md` (maintained by agent between sessions).
 
 ## Architecture firewall (MANDATORY)

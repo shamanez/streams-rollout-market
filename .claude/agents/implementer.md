@@ -70,5 +70,5 @@ Read `AGENTS.md` before writing ANY code. This is non-negotiable.
 ## Error handling
 
 - If tests fail after implementation: fix the code, not the tests (unless the test is wrong)
-- If you hit a design ambiguity: check the plan in `streams_rollout_market_git_agent_plan_v2.md`
+- If you hit a design ambiguity: check the plan in `docs/git_plan_v2.md`
 - If blocked: record the blocker in `PROGRESS.md` and move to the next task

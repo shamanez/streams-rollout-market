@@ -1,16 +1,18 @@
 # PROGRESS.md -- Agent Handoff State
 
 ## Last updated
-2026-05-10
+2026-05-11
 
 ## Current phase
-Phase 0-6 plan complete. **Live validation across bf16 and FP8 done.**
-Operational follow-ups remain (sglang as a second rollout engine, MoE
-router live run, runs/<ts> UUID suffix).
+**Phase 0-6 plan COMPLETE.** All originally-planned operational
+follow-ups (sglang second rollout engine, MoE router live run, runs
+UUID suffix) have shipped. The repo is in evidence-extension mode:
+the open work is research-grade follow-ups in `docs/future_research.md`,
+not new plan items.
 
-## Completed
-- Phase 0 scaffold and docs/configs/examples
-- Phase 1.1: PolicyManifest + WorkerManifest. F401 cleanup.
+## Completed (Phase 0-6 plan)
+- Phase 0: scaffold, docs, configs, examples.
+- Phase 1.1: PolicyManifest + WorkerManifest.
 - Phase 1.2: RolloutJob + RolloutLease.
 - Phase 1.3: Typed RejectionReason + validators.py.
 - Phase 2.1: Endpoint identity gap probe.
@@ -23,169 +25,134 @@ router live run, runs/<ts> UUID suffix).
 - Phase 4.2: Trainer feedback ingestion.
 - Phase 5.1: Heartbeat / lease timeout / audit trail.
 - Phase 5.2: k-of-n reload quorum.
-- Phase 6: marketplace simulation, endpoint dashboard, dense dashboard,
-  router dashboard.
-- Live validation:
-  - 5 free-tier endpoint probes (Cloudflare 1010 fix shipped in PR #20).
-  - Real Qwen3-32B bf16 dense mismatch (vLLM 0.20.1 vs HF 5.8.0).
-  - Real Qwen3-32B FP8 dense mismatch (vLLM-FP8 vs HF bf16) —
-    cross-precision drift demonstrated end-to-end.
-  - Marketplace stack validated against both runs (validators correctly
-    refuse fp8 worker on bf16-pinned manifest with `precision_mismatch`;
-    correctly accept fp8 worker on fp8-pinned manifest).
+- Phase 6: marketplace simulation + 4 dashboards (endpoint, dense,
+  router, agent) with inline glossaries and modern charts.
 
-## Live findings (2026-05-10)
+## Completed (operational follow-ups, originally listed as "next")
+- sglang as a second rollout engine on the spot instance
+  (PR #23, #25): four-cell dense matrix vLLM/sglang × bf16/fp8.
+- MoE router live run with Qwen3-30B-A3B FP8 vs bf16 (PR #26).
+- `runs/<UTC-ts>-<uuid4>` suffix to stop second-of collisions
+  (PR #24, see `src/rollout_market/cli/_runs.py`).
+- Agent trajectory matrix on the four-engine cell (PR #28).
+- FSDP as a third trainer-side reference (PR #33).
+- One-shot dashboard host on the spot instance (PR #34).
+- Dashboards consolidated under `/docs` with research-question
+  framing (PR #35).
+- `publish_dashboards.py` snapshot for the public dashboards repo
+  (PR #30).
+
+## Live findings (carried forward from 2026-05-10)
 
 ### Endpoint probes (10 runs, 5 providers)
-  - urllib's default User-Agent is Cloudflare-blocked (error 1010) by
-    Cerebras and Groq. Fixed in PR #20.
-  - Groq llama-3.1-8b-instant returns 400 on logprobs=true with
-    "logprobs is not supported with this model".
-  - NVIDIA NIM is heterogeneous: `meta/llama-3.1-8b-instruct` is plain
-    OpenAI-shape; `qwen/qwen3-next-80b-a3b-instruct` exposes vLLM
-    internals (`prompt_token_ids`, `prompt_logprobs`, `kv_transfer_params`).
-  - Cerebras llama3.1-8b is the only free-tier endpoint that returns
-    sampled_logprobs + top_logprobs + system_fingerprint together.
-  - OpenRouter `:free` tier is upstream-rate-limited.
-  - Coverage: 3/10 sampled_logprobs, 3/10 top_logprobs, 1/10 token_ids,
-    1/10 seed_supported.
+- urllib's default User-Agent is Cloudflare-blocked (error 1010) by
+  Cerebras and Groq. Fixed in PR #20.
+- Groq llama-3.1-8b-instant returns 400 on logprobs=true with
+  "logprobs is not supported with this model".
+- NVIDIA NIM is heterogeneous: `meta/llama-3.1-8b-instruct` is plain
+  OpenAI-shape; `qwen/qwen3-next-80b-a3b-instruct` exposes vLLM
+  internals (`prompt_token_ids`, `prompt_logprobs`, `kv_transfer_params`).
+- Cerebras llama3.1-8b is the only free-tier endpoint that returns
+  sampled_logprobs + top_logprobs + system_fingerprint together.
+- OpenRouter `:free` tier is upstream-rate-limited.
+- Coverage: 3/10 sampled_logprobs, 3/10 top_logprobs, 1/10 token_ids,
+  1/10 seed_supported.
 
-### Dense mismatch (Qwen3-32B, 8 prompts × 128 tokens = 1024 tokens per cell, seed=1234)
-| rollout engine | precision | mean ESS (n=8) | mean \|Δlogp\| | worst max\|log_ratio\| | mean seq_log_ratio |
+### Dense mismatch (Qwen3-32B, 8 prompts × 128 tokens, seed=1234)
+
+| rollout engine | precision | mean ESS | mean \|Δlogp\| | worst max\|log_ratio\| | mean seq_log_ratio |
 |---|---|---:|---:|---:|---:|
 | vLLM 0.20.1 | bf16 | **0.9987** | 0.014 | 0.362 | +0.13 |
 | vLLM 0.20.1 | fp8 | 0.9920 | 0.033 | 0.756 | -0.34 |
 | sglang 0.5.11 | bf16 | 0.9845 | 0.066 | 0.711 | -4.67 |
 | sglang 0.5.11 | fp8 | **0.9733** | 0.076 | **1.140** | -4.81 |
 
-Trainer reference is HF transformers 5.8.0 bf16 with `sdpa` attention in all
-four cells. `clipped_fraction = 0`, `veto_fraction = 0` across all 32 runs,
-so OPBC routes every cell to `train` / `within_budget`.
-
-The 8-prompt run confirms the single-prompt observations as robust (not an
-artifact of one prompt):
-- **Engine choice dominates precision class.** sglang bf16 (mean ESS 0.985)
-  drifts more from the HF reference than vLLM bf16 *or* vLLM FP8 do.
-- **sglang carries a systematic ~-4.7 nat sequence-log-ratio bias** that
-  vLLM does not. Same prompts, same seed, same trainer reference. Both
-  sglang variants over-score by 4-5 nats per 128 tokens; vLLM stays within
-  ±0.4 nats.
-- **FP8 adds drift on top of the engine baseline, engine-specifically.**
-  vLLM bf16 -> fp8 doubles the worst max\|log_ratio\| (0.36 -> 0.76);
-  sglang bf16 -> fp8 inflates it 1.6× (0.71 -> 1.14). The worst single-
-  token disagreement of the whole matrix is sglang FP8 at 1.14 nats — an
-  importance weight ratio of e^1.14 ≈ 3.13×. Still well below clamp=20,
-  but exactly the kind of single-token spike that would blow up under
-  longer generations.
+Trainer reference: HF transformers 5.8.0 bf16 with `sdpa` attention.
+`clipped_fraction = 0` and `veto_fraction = 0` across all 32 runs, so
+OPBC routes every cell to `train` / `within_budget`. Engine choice
+dominates precision class; sglang carries a ~-4.7 nat systematic
+sequence-log-ratio bias vLLM does not.
 
 ### Agent trajectory matrix (Qwen3-32B, 6 multi-step tool-using tasks)
-Reference: vLLM bf16. Comparison: vLLM FP8, sglang bf16, sglang FP8.
-6 tasks: math×3 with calculator, research×1 with web_search, planning×1
-with web_search, code-debug×1 with read_file + python_eval. Same prompts,
-same seed=1234, same simulated tools.
 
-| rollout engine | fully matched | mean first-div step | mean tool-jaccard | **answer match rate** |
+| rollout engine | fully matched | first-div step | tool-jaccard | answer match rate |
 |---|---:|---:|---:|---:|
 | vLLM FP8 | 2/6 | 1.0 | 0.87 | **33%** |
 | sglang bf16 | 1/6 | 1.8 | 0.83 | **17%** |
 | sglang FP8 | 1/6 | 0.6 | **0.54** | **17%** |
 
-Headline reading: **engine and precision choices change what an agent
-*actually does* on multi-step tasks**, not just by how much its
-logprobs drift. vLLM FP8 changes the final answer on 4 of 6 tasks
-(67%) compared to vLLM bf16 on the same checkpoint, prompts, and seed.
-sglang variants change it on 5 of 6 (83%). sglang FP8 also picks a
-substantially different tool *set* — Jaccard 0.54 over the
-(tool_name, args_hash) pairs, vs ~0.85 for the other two pairings —
-meaning nearly half its tool invocations are not what the bf16
-reference would have made. First-divergence step averages under 2
-across the matrix; the rest of the trajectory rolls off downstream.
-
-This is the trajectory-level lens for the same drift the dense and
-router labs measured at token / router level. The compounding effect
-is what makes this the load-bearing demo for the project's pitch.
+Engine and precision change what an agent actually does end-to-end,
+not just by how much its logprobs drift. vLLM FP8 flips the final
+answer on 4/6 tasks; sglang variants flip 5/6.
 
 ### FSDP as a third trainer-side reference (forward-only)
-We added a third trainer engine to the dense matrix:
-`scripts/live/run_fsdp_reference.py` runs Qwen3-32B under
-`torch.distributed.fsdp.FullyShardedDataParallel` with
-`ShardingStrategy.FULL_SHARD` across 4 GPUs and teacher-forces the
-same tokens HF transformers does.
-
-The honest result: **FSDP produces logprobs bit-identical to HF
-transformers `device_map="auto"` for forward-only inference**. ESS,
-mean |Δlogp|, max |log_ratio| all match to floating-point precision.
-The dashboard has the new `vllm → fsdp` row sitting on top of the
-existing `vllm → hf-transformers` row. Same numbers.
-
-This is *expected*: FSDP shards parameters and all-gathers them in
-the forward pass, but the actual matmuls and softmax run on the same
-kernels as the un-sharded model. FSDP's value is in the *backward*
-pass — gradient all-reduce ordering changes float accumulation, and
-that's where a divergence from HF would appear under actual training.
-
-The follow-up that *would* show new drift is **Megatron-LM**, which
-uses different attention and MLP CUDA kernels even in forward. That
-needs HF→Megatron checkpoint conversion (a multi-hour project of its
-own) and is deferred.
+FSDP produces logprobs bit-identical to HF transformers
+`device_map="auto"` for forward-only inference. Expected — FSDP
+shards parameters and all-gathers them in the forward pass, but the
+matmuls and softmax run on the same kernels. The divergence would
+appear in the backward pass (gradient all-reduce ordering), which is
+out of scope for this repo. **Megatron-LM** is the next trainer
+engine that *would* move forward-pass numbers (deferred — needs
+HF→Megatron checkpoint conversion).
 
 ### MoE router (Qwen3-30B-A3B, 64 tokens × 48 layers × top_k=8)
-Rollout side: HF transformers 5.8.0 finegrained FP8.
-Trainer side: HF transformers 5.8.0 bf16, sdpa attention.
-Both via `output_router_logits=True` on the same teacher-forced tokens.
 
 | metric | value | reading |
 |---|---:|---|
-| router_flip_rate | 5.14% | 1 in 20 (token, layer) pairs has a different top-1 expert |
-| token_expert_disagreement_rate | **98.44%** | almost every token has at least one layer where the top-k *set* differs |
-| worst layer flip rate | 12.50% | worst MoE layer flipped top-1 on 1 in 8 tokens |
-| mean per-layer flip rate | 5.14% | matches the global rate; no concentration in early or late layers |
+| router_flip_rate | 5.14% | 1 in 20 (token, layer) pairs flips top-1 expert |
+| token_expert_disagreement_rate | **98.44%** | almost every token has ≥1 layer with set disagreement |
+| worst layer flip rate | 12.50% | one layer flipped top-1 on 1 in 8 tokens |
+| mean per-layer flip rate | 5.14% | no concentration in early/late layers |
 
-The headline reading: **FP8 quantization barely shifts top-1 routing
-(top-1 flips on ~5% of (token, layer) pairs) but reorders the lower-
-rank top-k experts almost everywhere (98% of tokens have set
-disagreement on at least one layer)**. This is exactly the regime the
-router-mismatch lab was designed to surface — quantization noise that's
-small enough to leave the dominant expert intact but large enough to
-shuffle the rest of the top-k. Under multi-step training where the
-gradient passes through the router gate, this set-level drift would
-accumulate into materially different parameter updates even when
-top-1 routing looks "stable."
+FP8 barely shifts top-1 routing but reorders the lower-rank top-k
+experts almost everywhere — the regime the router lab was designed
+to surface.
 
 ### Marketplace stack on real data
-  - bf16 worker on bf16-pinned manifest -> validators PASS, OPBC `train`.
-  - fp8 worker on bf16-pinned manifest -> validators REJECT
-    (`precision_mismatch`).
-  - fp8 worker on fp8-pinned manifest -> validators PASS, OPBC `train`.
-  - Toxic tokenizer / missing-logprobs groups -> validators REJECT with
-    the matching RejectionReason.
-  - LiveStore lifecycle, TrainerClient(precision_class) filter, and
-    FeedbackAggregator per-engine roll-up all work end-to-end on real
-    data.
+- bf16 worker on bf16-pinned manifest → validators PASS, OPBC `train`.
+- fp8 worker on bf16-pinned manifest → validators REJECT
+  (`precision_mismatch`).
+- fp8 worker on fp8-pinned manifest → validators PASS, OPBC `train`.
+- Toxic tokenizer / missing-logprobs groups → validators REJECT with
+  the matching RejectionReason.
+- LiveStore lifecycle, TrainerClient(precision_class) filter, and
+  FeedbackAggregator per-engine roll-up all work end-to-end on real
+  data.
 
 ### Reproducibility
-`scripts/live/{run_vllm_rollout.py,run_hf_reference.py,
-build_dense_input.py,build_dense_input_fp8.py,
-marketplace_real.py,marketplace_real_fp8.py}` plus
-`scripts/live/README.md` runbook. Rollout/HF scripts are env-driven
-(`MODEL`, `VLLM_DTYPE`, `ROLLOUT_LABEL`, `TRAINER_REFERENCE`) so
-quantized variants reuse the same code path.
+`scripts/live/` holds the env-driven runbook (`MODEL`, `VLLM_DTYPE`,
+`ROLLOUT_LABEL`, `TRAINER_REFERENCE`); see `scripts/live/README.md`.
 
-## Next tasks (operational)
-- **sglang as a second rollout engine** for the same Qwen3 models on
-  the spot instance — would populate the dense dashboard with a
-  `sglang -> hf-transformers` engine pair and let us compare engines
-  cleanly.
-- **MoE router lab live run** with Qwen3-30B-A3B (or its FP8) using
-  `output_router_logits=True`, plus the corresponding HF reference.
-- **`runs/<UTC-ts>/` UUID suffix** so concurrent CLI invocations in
-  the same wall-clock second don't collide.
+## Next work (research follow-ups, not plan tasks)
+
+The Phase 0-6 plan is done. Open empirical questions are tracked in
+`docs/future_research.md`. The high-leverage items, ranked roughly by
+effort-to-evidence ratio:
+
+1. **n ≥ 30 statistical pass** over the existing dense + agent matrix
+   — single biggest credibility win, ~3h of spot work.
+2. **Sequence-length scaling** (128 / 512 / 2048 token responses) —
+   shows where ESS clipping kicks in.
+3. **Megatron-LM as the fourth trainer-side reference** — the only
+   engine that would actually move forward-pass numbers vs HF/FSDP.
+   ~1 day; blocked on HF→Megatron checkpoint conversion.
+4. **MoE router at multi-prompt / longer horizon** — extend the 64-
+   token n=1 result.
+5. **Cross-hardware** (H100/H200 FP8 native, MI300X) — flips or
+   strengthens the FP8 finding.
+6. **Real (vs stub) tools in the agent matrix** — isolates engine
+   drift from tool-noise.
+7. **GRPO/PPO single-step downstream** — show engine drift becomes a
+   different parameter delta. Out of project scope (firewall), but
+   *consumable from* this repo's contracts.
 
 ## Known issues
-- src/rollout_market/dispatcher.py and opbc.py still fail
-  `ruff format --check` (pre-existing whitespace).
+- `src/rollout_market/dispatcher.py` still fails `ruff format --check`
+  (pre-existing whitespace; `opbc.py` was cleaned up, `dispatcher.py`
+  remains).
 
 ## Test status
-- Last run: 2026-05-10, 232 passed, 0 failed (pytest -q)
-- ruff check .: clean
-- Real-data round-trips: scripts/live/marketplace_real{,_fp8}.py exit 0
+- pytest -q: **272 passed, 0 failed** (2026-05-11).
+- ruff check .: clean.
+- Real-data round-trips: `scripts/live/marketplace_real{,_fp8}.py`
+  exit 0.

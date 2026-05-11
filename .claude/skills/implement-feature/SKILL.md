@@ -1,13 +1,15 @@
 ---
 name: implement-feature
-description: Implement a feature from the Phase 0-6 development plan. Pass a task ID (e.g., "1.1") or description as argument. Follows contract-first workflow with AGENTS.md compliance.
+description: Implement a feature for streams-rollout-market. Pass a task ID from the (now-complete) Phase 0-6 plan in docs/git_plan_v2.md, or a description of a research follow-up from PROGRESS.md / docs/future_research.md. Follows contract-first workflow with AGENTS.md compliance.
 user-invocable: true
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 
 # Implement Feature
 
-Implement a feature task from the development plan.
+Implement a feature task. The Phase 0-6 plan in `docs/git_plan_v2.md`
+is complete, so new work usually comes from PROGRESS.md's "Next work"
+list or `docs/future_research.md`.
 
 ## Input
 
@@ -21,7 +23,7 @@ Implement a feature task from the development plan.
    git checkout main && git pull origin main
    git checkout -b feature/phase-X.Y-<short-description>
    ```
-3. **Look up the task** in `streams_rollout_market_git_agent_plan_v2.md`
+3. **Look up the task** in `docs/git_plan_v2.md`
    - Find the task matching `$ARGUMENTS`
    - Note: Context, Goal, Non-goals, Required changes, Acceptance criteria
 4. **Read relevant source files** listed in the task's context
