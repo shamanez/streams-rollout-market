@@ -53,6 +53,43 @@ class Variant:
     notes_prefix: str
 
 
+@dataclass(frozen=True)
+class TrainerOverride:
+    """Optional per-call trainer-engine metadata override.
+
+    The static ``Variant`` table pins a (rollout, trainer) pair, but for
+    cross-trainer matrix tiles (e.g. ``vllm-fp8`` rollout paired with an
+    ``fsdp`` trainer-side reference instead of the default
+    ``hf-transformers``) we want to keep one rollout variant and swap
+    the trainer metadata at build time. Pass ``--trainer-label`` to opt
+    in; the dashboard ingestion routes the resulting report by
+    ``trainer_engine.name``.
+    """
+
+    name: str
+    version: str
+    fingerprint: str
+
+
+TRAINER_OVERRIDES: dict[str, TrainerOverride] = {
+    "hf-transformers": TrainerOverride(
+        name="hf-transformers",
+        version="5.8.0",
+        fingerprint="sha256:hf-5.8.0-sdpa-bf16-cuda13",
+    ),
+    "fsdp": TrainerOverride(
+        name="fsdp",
+        version="torch-2.11",
+        fingerprint="sha256:fsdp-tp4-fullshard-bf16-cuda13",
+    ),
+    "megatron-lm": TrainerOverride(
+        name="megatron-lm",
+        version="core-r0.13",
+        fingerprint="sha256:megatron-core-r0.13-bf16-torch-dist",
+    ),
+}
+
+
 VARIANTS: dict[str, Variant] = {
     "vllm-bf16": Variant(
         label="vllm-bf16",
@@ -161,8 +198,20 @@ def _resolve_input_paths(variant: Variant) -> tuple[Path, Path]:
     return rollout, trainer
 
 
-def build_payload(variant: Variant, rollout: dict, trainer: dict) -> dict:
-    """Build the dense-mismatch-input payload for one variant."""
+def build_payload(
+    variant: Variant,
+    rollout: dict,
+    trainer: dict,
+    trainer_override: TrainerOverride | None = None,
+) -> dict:
+    """Build the dense-mismatch-input payload for one variant.
+
+    If ``trainer_override`` is supplied, its name/version/fingerprint
+    replace the variant's static trainer-engine metadata. The run_id
+    gets a ``-vs-<override.name>`` suffix so the dashboard does not
+    collide identifiers when the same rollout is paired with multiple
+    trainer references.
+    """
     if len(rollout["rollout_logprobs"]) != len(trainer["trainer_logprobs"]):
         raise ValueError(
             f"length mismatch: rollout has {len(rollout['rollout_logprobs'])} "
@@ -180,13 +229,27 @@ def build_payload(variant: Variant, rollout: dict, trainer: dict) -> dict:
         ).encode()
     ).hexdigest()[:16]
     trainer_ref = rollout.get("trainer_reference", rollout.get("model", ""))
+    trainer_name = trainer_override.name if trainer_override else variant.trainer_engine_name
+    trainer_version = (
+        trainer_override.version if trainer_override else variant.trainer_engine_version
+    )
+    trainer_fingerprint = (
+        trainer_override.fingerprint
+        if trainer_override
+        else variant.trainer_engine_fingerprint
+    )
+    run_id = variant.run_id
+    if trainer_override and trainer_override.name != variant.trainer_engine_name:
+        run_id = f"{run_id}-vs-{trainer_override.name}"
     notes = [
         f"{variant.notes_prefix}, seed={rollout.get('seed')}",
         f"Trainer reference: {trainer_ref} bf16 (full precision)",
         f"sampling_config_hash: {config_hash}",
     ]
+    if trainer_override and trainer_override.name != variant.trainer_engine_name:
+        notes.append(f"Trainer-side override: {trainer_override.name}")
     return {
-        "run_id": variant.run_id,
+        "run_id": run_id,
         "model_id": rollout["model"],
         "checkpoint_digest": variant.checkpoint_digest,
         "tokenizer_hash": "tok-qwen3",
@@ -196,9 +259,9 @@ def build_payload(variant: Variant, rollout: dict, trainer: dict) -> dict:
             "fingerprint": variant.rollout_engine_fingerprint,
         },
         "trainer_engine": {
-            "name": variant.trainer_engine_name,
-            "version": variant.trainer_engine_version,
-            "fingerprint": variant.trainer_engine_fingerprint,
+            "name": trainer_name,
+            "version": trainer_version,
+            "fingerprint": trainer_fingerprint,
         },
         "precision_class": variant.precision_class,
         "quantization_class": variant.quantization_class,
@@ -229,6 +292,15 @@ def main(argv: list[str] | None = None) -> int:
         "--out",
         help="override output path (default: /tmp/dense_mismatch_input_<variant>.json)",
     )
+    parser.add_argument(
+        "--trainer-label",
+        choices=sorted(TRAINER_OVERRIDES.keys()),
+        help=(
+            "override the variant's static trainer-engine metadata "
+            "(e.g. --trainer-label fsdp pairs a vllm-fp8 rollout with "
+            "an FSDP-bf16 trainer reference)"
+        ),
+    )
     args = parser.parse_args(argv)
 
     variant = VARIANTS[args.variant]
@@ -241,7 +313,10 @@ def main(argv: list[str] | None = None) -> int:
 
     rollout = json.loads(rollout_path.read_text())
     trainer = json.loads(trainer_path.read_text())
-    payload = build_payload(variant, rollout, trainer)
+    trainer_override = (
+        TRAINER_OVERRIDES[args.trainer_label] if args.trainer_label else None
+    )
+    payload = build_payload(variant, rollout, trainer, trainer_override=trainer_override)
 
     out_path.write_text(json.dumps(payload, indent=2))
     print(f"wrote {out_path} ({out_path.stat().st_size} bytes)")

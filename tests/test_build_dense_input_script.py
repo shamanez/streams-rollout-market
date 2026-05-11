@@ -184,3 +184,52 @@ def test_vllm_bf16_falls_back_to_legacy_input_paths(monkeypatch, tmp_path):
     assert rc == 0
     assert legacy_seen["rollout"] is True
     assert legacy_seen["trainer"] is True
+
+
+def test_trainer_label_override_swaps_trainer_engine_metadata():
+    """The new --trainer-label flag lets a rollout variant be paired with
+    a different trainer-side reference without spawning a new variant."""
+    variant = build_dense_input.VARIANTS["vllm-fp8"]
+    rollout = _stub_rollout_payload()
+    trainer = _stub_trainer_payload()
+
+    # Default: trainer engine is the variant's static hf-transformers.
+    default_payload = build_dense_input.build_payload(variant, rollout, trainer)
+    assert default_payload["trainer_engine"]["name"] == "hf-transformers"
+
+    # Override: switch to fsdp.
+    fsdp_override = build_dense_input.TRAINER_OVERRIDES["fsdp"]
+    overridden = build_dense_input.build_payload(
+        variant, rollout, trainer, trainer_override=fsdp_override
+    )
+    assert overridden["trainer_engine"]["name"] == "fsdp"
+    assert overridden["trainer_engine"]["version"] == "torch-2.11"
+    assert overridden["trainer_engine"]["fingerprint"] == (
+        "sha256:fsdp-tp4-fullshard-bf16-cuda13"
+    )
+    # Run-id is suffixed so dashboards don't collide with the
+    # hf-transformers version of the same rollout variant.
+    assert overridden["run_id"].endswith("-vs-fsdp")
+    assert overridden["run_id"] != default_payload["run_id"]
+    # Rollout side is unchanged.
+    assert overridden["rollout_engine"]["name"] == "vllm-fp8"
+    assert overridden["precision_class"] == "fp8"
+
+    # And the override note is recorded so downstream readers can grep
+    # the report's notes for the trainer-side substitution.
+    assert any("Trainer-side override: fsdp" in n for n in overridden["notes"])
+
+
+def test_trainer_label_no_op_when_matches_variant_default():
+    """Passing --trainer-label that matches the variant's static
+    trainer name is a no-op (no run-id suffix, no override note)."""
+    variant = build_dense_input.VARIANTS["vllm-fp8"]
+    # vllm-fp8's default trainer is hf-transformers.
+    hf_override = build_dense_input.TRAINER_OVERRIDES["hf-transformers"]
+    payload = build_dense_input.build_payload(
+        variant, _stub_rollout_payload(), _stub_trainer_payload(),
+        trainer_override=hf_override,
+    )
+    assert payload["run_id"] == variant.run_id
+    assert payload["trainer_engine"]["name"] == "hf-transformers"
+    assert all("override" not in n.lower() for n in payload["notes"])
