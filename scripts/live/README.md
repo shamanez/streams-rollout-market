@@ -321,8 +321,8 @@ without starting a server.
 ## Marketplace stack validation
 
 ```bash
-python scripts/live/marketplace_real.py        # bf16 honest + 2 toxic
-python scripts/live/marketplace_real_fp8.py    # fp8 vs bf16 manifest + fp8 honest
+python scripts/live/marketplace_real.py --variant bf16   # honest + 2 toxic
+python scripts/live/marketplace_real.py --variant fp8    # fp8 vs bf16 manifest + fp8 honest
 ```
 
 Builds three SampleGroups from the same real rollout (one honest, two

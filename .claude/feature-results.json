@@ -50,8 +50,8 @@
     "directive": "Consolidate scripts/live/build_dense_input.py, build_dense_input_fp8.py, and build_dense_input_sglang.py into a single env-driven script scripts/live/build_dense_input.py that accepts --variant {vllm-bf16,vllm-fp8,sglang-bf16,sglang-fp8,megatron-bf16} (default vllm-bf16) and reads its inputs from /tmp/rollout_<variant>.json + /tmp/trainer_<variant>.json (with vllm-bf16 falling back to /tmp/rollout.json + /tmp/trainer.json for back-compat). Delete the two _fp8 / _sglang variants and update scripts/live/README.md to document the new --variant flag. Add tests/test_build_dense_input_script.py that imports the script as a module and asserts: (a) every variant produces a valid DenseMismatchReport-shaped JSON when given a minimal stub payload via monkeypatch'd Path.read_text, (b) the rollout_engine.fingerprint / precision_class / quantization_class match the variant. Evidence: the new test file. Honor STEER.md global directives (one entry per commit)."
   },
   "cleanup.consolidate_marketplace_real": {
-    "passes": false,
-    "evidence": null,
+    "passes": true,
+    "evidence": ".claude/evidence/cleanup_consolidate_marketplace_real/test_marketplace_real_script.py",
     "directive": "Consolidate scripts/live/marketplace_real.py and marketplace_real_fp8.py into a single env-driven script scripts/live/marketplace_real.py that accepts --variant {bf16,fp8} (default bf16) and reads /tmp/rollout_<variant>.json + /tmp/trainer_<variant>.json (bf16 falls back to /tmp/rollout.json + /tmp/trainer.json). The bf16 variant builds the honest + toxic_tokenizer + toxic_no_logprobs trio; the fp8 variant builds the realistic precision-mismatch case that validators must reject. Delete marketplace_real_fp8.py and update scripts/live/README.md. Add tests/test_marketplace_real_script.py asserting both variants construct valid SampleGroups for their honest case and that the fp8 variant's group is rejected by validate_group_against_lease when the policy manifest pins bf16. Evidence: the new test file. Honor STEER.md global directives (one entry per commit)."
   },
   "megatron.qwen3_moe_conversion_runbook": {

@@ -29,6 +29,20 @@ not new plan items.
   router, agent) with inline glossaries and modern charts.
 
 ## Completed (operational follow-ups, originally listed as "next")
+- STEER `cleanup.consolidate_marketplace_real`: consolidated
+  `scripts/live/marketplace_real.py` and `marketplace_real_fp8.py`
+  into a single env-driven script with `--variant {bf16, fp8}`
+  (default `bf16`). The `bf16` variant builds the honest +
+  toxic_tokenizer + toxic_no_logprobs trio; the `fp8` variant builds
+  the realistic precision-mismatch case (fp8 worker against a bf16-
+  pinned manifest must be rejected) plus the matching fp8-pinned
+  honest case. `bf16` falls back to legacy `/tmp/rollout.json` +
+  `/tmp/trainer.json`. Module exposes `build_manifest`,
+  `build_lease`, `build_honest_group` for the test suite.
+  `marketplace_real_fp8.py` deleted. README updated. New
+  `tests/test_marketplace_real_script.py` (7 cases) asserts every
+  branch including the validator rejection on precision mismatch.
+  326 passed.
 - STEER `cleanup.consolidate_build_dense_input`: consolidated
   `scripts/live/build_dense_input.py`, `build_dense_input_fp8.py`,
   and `build_dense_input_sglang.py` into a single env-driven script
@@ -274,7 +288,7 @@ effort-to-evidence ratio:
   remains).
 
 ## Test status
-- pytest -q: **319 passed, 0 failed** (2026-05-11).
+- pytest -q: **326 passed, 0 failed** (2026-05-11).
 - ruff check .: clean.
 - Real-data round-trips: `scripts/live/marketplace_real{,_fp8}.py`
   exit 0.
