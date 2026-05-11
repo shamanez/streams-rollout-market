@@ -204,11 +204,24 @@ def _is_vllm_rollout(rollout_engine: str) -> bool:
     return "vllm" in (rollout_engine or "").lower()
 
 
+def _short_device(bucket: str) -> str:
+    """Drop the parenthesised host label from a device bucket string.
+
+    "L40S (g6e.12xlarge)" → "L40S". Keeps the column header compact in
+    the tile grid; the full bucket is still in the tooltip / appendix.
+    """
+    if not bucket:
+        return "L40S"
+    if " (" in bucket:
+        return bucket.split(" (", 1)[0]
+    return bucket
+
+
 def _matrix_cells_from_rows(rows: list[dict], metric_key: str) -> dict[tuple[str, str], dict]:
     """Group rows by (trainer_ref_label, precision_x_device) for the matrix.
 
     Returns map: (trainer_label, column_label) -> {value, count, samples}.
-    The column label is `"<precision> · <device_bucket>"`.
+    The column label is `"<precision> / <device>"` (short device name).
 
     Per the inference-only canonical architecture, only `vllm` rollouts
     paired with `fsdp` or `megatron` trainers populate the matrix.
@@ -222,8 +235,8 @@ def _matrix_cells_from_rows(rows: list[dict], metric_key: str) -> dict[tuple[str
         if not _is_vllm_rollout(row.get("rollout_engine", "")):
             continue
         precision = row.get("precision_class") or row.get("precision", "—")
-        device = row.get("device_bucket") or "L40S (g6e.12xlarge)"
-        col = f"{precision} · {device}"
+        device = _short_device(row.get("device_bucket") or "")
+        col = f"{precision} / {device}"
         key = (trainer, col)
         bucket = cells.setdefault(key, {"sum": 0.0, "count": 0, "samples": []})
         value = row.get(metric_key)
@@ -312,12 +325,12 @@ def _render_matrix(
     # empty cells (e.g. vLLM-fp8 not run yet) show as visible placeholders
     # rather than disappearing.
     known_devices = sorted(
-        {row.get("device_bucket") or "L40S (g6e.12xlarge)" for row in rows}
-    ) or ["L40S (g6e.12xlarge)"]
+        {_short_device(row.get("device_bucket") or "") for row in rows}
+    ) or ["L40S"]
     columns: list[str] = []
     for precision in ("bf16", "fp8"):
         for device in known_devices:
-            columns.append(f"{precision} · {device}")
+            columns.append(f"{precision} / {device}")
     for (_, col) in cells.keys():
         if col not in columns:
             columns.append(col)
