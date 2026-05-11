@@ -4,11 +4,88 @@
 2026-05-11
 
 ## Current phase
-**Phase 0-6 plan COMPLETE.** All originally-planned operational
-follow-ups (sglang second rollout engine, MoE router live run, runs
-UUID suffix) have shipped. The repo is in evidence-extension mode:
-the open work is research-grade follow-ups in `docs/future_research.md`,
-not new plan items.
+**STEER is armed — drive the dashboard to 8 green tiles.** STEER.md
+re-armed `.claude/feature-results.json` with 11 acceptance criteria.
+13 entries are now `passes: true` (incl. `dashboard.matrix_per_model`,
+shipped this iteration); 10 remain `false`. The autonomous loop
+(`/autonomous-loop`) picks the first false entry, runs
+`/implement-feature` against its `directive` field, captures evidence
+under `.claude/evidence/`, and continues until every entry is true
+(then deletes STEER.md per its stop clause).
+
+The load-bearing claim being filled in: for MoE models, the rollout
+engine's per-(token, layer) expert selection diverges from the
+trainer's. If a worker's vLLM activates experts `{A, B, C}` for token
+X but the trainer's gradient flows to `{A, B, D}`, the update lands
+on the wrong parameters. Measuring `router_flip_rate` between vLLM
+and Megatron/FSDP is the central MoE marketplace metric.
+
+## Resume in a new session
+**Single command:** `/autonomous-loop`
+
+The loop picks up state from `STEER.md` + `.claude/feature-results.json`
++ this file. The next false entry it will pick is
+`model.megatron_convert_qwen3_32b` — see "In-flight" below for the
+already-running conversion; the loop should poll for the marker and
+scp it back, not re-launch the docker run.
+
+Prereqs the loop checks itself: `AGENT_STOP` absent, `STEER.md`
+present, weekly usage under 95%. Operator overrides:
+`touch AGENT_STOP` halts; `bash .claude/scripts/steer.sh "<note>"`
+redirects mid-run.
+
+## In-flight (Megatron Qwen3-32B conversion)
+**Setup committed** (`fe550be feat(megatron): runner for Qwen3-32B …`):
+`scripts/live/megatron_qwen3_32b_runner.sh` sources the
+`qwen3-32B.sh` MODEL_ARGS already shipping inside the
+`slimerl/slime:latest` image. Copied to spot at
+`~/megatron_conversion/runner_qwen3_32b.sh`.
+
+**Run launched 2026-05-11 12:06 UTC** on `my-vllm-spot-instance`
+under a backgrounded `docker run` (pid 81179 at launch). Output log:
+`~/megatron_conversion/logs/qwen3_32b_convert.out`. HF model staged at
+`~/megatron_conversion/hf_model_qwen3_32b/` (symlinks into
+`~/hf-cache/hub/models--Qwen--Qwen3-32B/snapshots/9216db.../`).
+Target torch-dist checkpoint under
+`~/megatron_conversion/qwen3_32b_torch_dist/` (~20 min runtime
+expected).
+
+**Next session — to close out `model.megatron_convert_qwen3_32b`:**
+```bash
+# Poll until conversion finishes.
+ssh my-vllm-spot-instance \
+  'ls ~/megatron_conversion/qwen3_32b_torch_dist/latest_checkpointed_iteration.txt && \
+   tail -3 ~/megatron_conversion/logs/qwen3_32b_convert.out'
+
+# scp the marker back as evidence.
+mkdir -p .claude/evidence/model_megatron_convert_qwen3_32b
+scp my-vllm-spot-instance:\
+'~/megatron_conversion/qwen3_32b_torch_dist/latest_checkpointed_iteration.txt' \
+  .claude/evidence/model_megatron_convert_qwen3_32b/
+# Then flip .claude/feature-results.json[model.megatron_convert_qwen3_32b]
+# to passes: true with evidence pointing at the scp'd marker.
+```
+
+## Remaining false entries (in loop pick order)
+1. `model.megatron_convert_qwen3_32b` — **spot**, in-flight (above).
+2. `vllm.router_trace_emit` — **spot**, vLLM offline API +
+   `enable_return_routed_experts=True` on `AsyncEngineArgs`. Returns
+   `routed_experts` ndarray per `CompletionOutput`; see directive
+   text for the reference link. (Caveat: returns selected expert IDs
+   only, not gate logits — sufficient for `router_flip_rate`.)
+3. `dense.qwen3_32b.vllm_bf16_megatron` — **spot**, depends on (1).
+4. `dense.qwen3_32b.vllm_fp8_fsdp` — **spot**, independent.
+5. `dense.qwen3_32b.vllm_fp8_megatron` — **spot**, depends on (1).
+6. `moe.qwen3_30b_a3b.vllm_bf16_megatron_router` — **spot**, depends
+   on (2) + existing Megatron MoE checkpoint.
+7. `moe.qwen3_30b_a3b.vllm_bf16_fsdp_router` — **spot**, depends on (2).
+8. `moe.qwen3_30b_a3b.vllm_fp8_megatron_router` — **spot**, depends
+   on (2) + (1).
+9. `moe.qwen3_30b_a3b.vllm_fp8_fsdp_router` — **spot**, depends on (2).
+10. `dashboard.high_quality_render` — **local**, final gate; depends
+    on entries above.
+
+Operator control: type `/autonomous-loop` once. It runs to completion.
 
 ## Completed (Phase 0-6 plan)
 - Phase 0: scaffold, docs, configs, examples.
