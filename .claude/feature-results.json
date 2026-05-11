@@ -40,8 +40,8 @@
     "directive": "Structural review of /docs/index.html: above the fold answers the question 'Does engine + precision + device change rollout/training equivalence enough to matter for RL?' using ONLY the two matrices, with NO mention of public APIs, sglang, or HF-as-engine in the headline. Run /codex-review --effort low against the rendered HTML and the dashboard module diffs. On PASS, save the codex verdict to .claude/evidence/cto_readability_codex_verdict.txt. Evidence: that verdict file. Honor STEER.md global directives. This is the LAST dashboard entry — when this is true the dashboard restructure is complete."
   },
   "loop.cwc_default_fail_contract": {
-    "passes": false,
-    "evidence": null,
+    "passes": true,
+    "evidence": ".claude/evidence/verify_result_write_positive.txt",
     "directive": "Confirm the cwc-long-running-agents default-FAIL contract is correctly wired: (1) .claude/feature-results.json exists with all-false initial entries (this very file), (2) .claude/scripts/verify-result-write.sh is registered as a PreToolUse Write|Edit hook in .claude/settings.json and denies false→true flips without evidence, (3) .claude/README.md maps each of the four cwc primitives (default-FAIL contract, fresh-context evaluator, agent-maintained handoff, operator controls) to a concrete file in this repo. Run a negative test: attempt to write feature-results.json with an entry flipped true and evidence null; assert the hook exits non-zero. Run a positive test: same with evidence set to an existing file referenced from evidence_log.jsonl; assert the hook exits zero. Save both test outputs as .claude/evidence/verify_result_write_negative.txt and .claude/evidence/verify_result_write_positive.txt. Evidence: the positive test output. Honor STEER.md global directives."
   },
   "cleanup.consolidate_build_dense_input": {

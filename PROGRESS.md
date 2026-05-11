@@ -29,6 +29,20 @@ not new plan items.
   router, agent) with inline glossaries and modern charts.
 
 ## Completed (operational follow-ups, originally listed as "next")
+- STEER `loop.cwc_default_fail_contract`: verified the cwc-long-
+  running-agents default-FAIL contract end-to-end. (1)
+  `.claude/feature-results.json` exists with the rolling list of
+  entries; (2) `.claude/scripts/verify-result-write.sh` is registered
+  as a PreToolUse `Write|Edit` hook in `.claude/settings.json`
+  (lines 62–79); (3) `.claude/README.md` maps each of the four cwc
+  primitives (default-FAIL contract, fresh-context evaluator, agent-
+  maintained handoff, operator controls) to a concrete file. Ran a
+  negative test (fake Edit payload with `passes:true` + `evidence:null`
+  → hook exit 2, "evidence path required") and a positive test
+  (same payload pointing at an existing file referenced from
+  `evidence_log.jsonl` → hook exit 0). Outputs saved to
+  `.claude/evidence/verify_result_write_negative.txt` and
+  `.claude/evidence/verify_result_write_positive.txt`.
 - STEER `dashboard.cto_readability_pass`: ran `codex review` non-
   interactively against `docs/index.html` and
   `scripts/live/publish_dashboards.py` with a structural prompt
