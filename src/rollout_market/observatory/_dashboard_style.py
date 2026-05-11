@@ -185,6 +185,119 @@ def quality_badge_for_match_rate(rate: float) -> str:
     return badge(pct, "bad")
 
 
+def _kind_for_value(
+    value: float,
+    *,
+    good_at_or_above: float | None = None,
+    bad_at_or_above: float | None = None,
+    good_at_or_below: float | None = None,
+    bad_at_or_below: float | None = None,
+) -> str:
+    """Classify a value into 'good' / 'warn' / 'bad' for traffic-light tiles."""
+    if good_at_or_above is not None and bad_at_or_above is not None:
+        if value >= good_at_or_above:
+            return "good"
+        if value >= bad_at_or_above:
+            return "warn"
+        return "bad"
+    if good_at_or_below is not None and bad_at_or_below is not None:
+        if value <= good_at_or_below:
+            return "good"
+        if value <= bad_at_or_below:
+            return "warn"
+        return "bad"
+    return "muted"
+
+
+def traffic_light_tile(
+    label: str,
+    value: float,
+    *,
+    display: str,
+    sublabel: str = "",
+    good_at_or_above: float | None = None,
+    bad_at_or_above: float | None = None,
+    good_at_or_below: float | None = None,
+    bad_at_or_below: float | None = None,
+) -> str:
+    """One traffic-light tile carrying a value, a colour, and an optional sublabel.
+
+    Pass either (good_at_or_above, bad_at_or_above) for higher-is-better
+    metrics (ESS, answer-match), or (good_at_or_below, bad_at_or_below)
+    for lower-is-better metrics (flip rate, |Δlogp|).
+    """
+    kind = _kind_for_value(
+        value,
+        good_at_or_above=good_at_or_above,
+        bad_at_or_above=bad_at_or_above,
+        good_at_or_below=good_at_or_below,
+        bad_at_or_below=bad_at_or_below,
+    )
+    sub_html = (
+        f"<div class='tl-sub'>{_html.escape(sublabel)}</div>" if sublabel else ""
+    )
+    return (
+        f'<div class="tl-tile tl-{kind}" data-chart="traffic-light" '
+        f'title="{_html.escape(label)}: {_html.escape(display)}">'
+        f"<div class='tl-label'>{_html.escape(label)}</div>"
+        f"<div class='tl-value'>{_html.escape(display)}</div>"
+        f"{sub_html}"
+        f"</div>"
+    )
+
+
+def traffic_light_row(tiles: list[str]) -> str:
+    """Render a row of traffic-light tiles inside a styled grid."""
+    return (
+        '<div class="tl-row" data-chart="traffic-light-row">'
+        "<style>"
+        ".tl-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));"
+        "gap:.75rem;margin:.5rem 0 1rem}"
+        ".tl-tile{border-radius:10px;padding:.85rem 1rem;border:1px solid var(--border);"
+        "background:var(--surface)}"
+        ".tl-tile.tl-good{background:var(--good-soft);border-color:#86efac}"
+        ".tl-tile.tl-warn{background:var(--warn-soft);border-color:#fde68a}"
+        ".tl-tile.tl-bad{background:var(--bad-soft);border-color:#fca5a5}"
+        ".tl-tile.tl-muted{background:#f1f5f9;border-color:var(--border)}"
+        ".tl-label{font-size:.75rem;text-transform:uppercase;letter-spacing:.04em;"
+        "color:var(--muted);font-weight:600}"
+        ".tl-tile.tl-good .tl-label{color:var(--good)}"
+        ".tl-tile.tl-warn .tl-label{color:var(--warn)}"
+        ".tl-tile.tl-bad .tl-label{color:var(--bad)}"
+        ".tl-value{font-size:1.35rem;font-weight:700;font-variant-numeric:tabular-nums;"
+        "margin-top:.2rem;color:var(--text)}"
+        ".tl-sub{font-size:.78rem;color:var(--muted);margin-top:.2rem}"
+        "</style>"
+        f"{''.join(tiles)}"
+        "</div>"
+    )
+
+
+def raw_numbers_block(content: str, *, label: str = "Raw numbers") -> str:
+    """Wrap tabular content in a collapsible <details data-section='raw-numbers'>.
+
+    Per STEER ``dashboard.graphs_first``: tables move off the headline
+    into this collapsible block.
+    """
+    return (
+        f'<details class="raw-numbers" data-section="raw-numbers">'
+        f"<summary><strong>{_html.escape(label)}</strong> — "
+        "tables for the headline charts (click to expand)</summary>"
+        "<style>"
+        "details.raw-numbers{margin:1rem 0;background:var(--surface);"
+        "border:1px solid var(--border);border-radius:12px;padding:1rem 1.25rem}"
+        "details.raw-numbers > summary{cursor:pointer;color:var(--muted);"
+        "font-size:.9rem;list-style:none}"
+        "details.raw-numbers > summary::-webkit-details-marker{display:none}"
+        "details.raw-numbers[open] > summary{margin-bottom:.75rem;color:var(--text)}"
+        "details.raw-numbers section.card{margin:.5rem 0;box-shadow:none;"
+        "border:1px solid var(--border)}"
+        "</style>"
+        f"{content}"
+        "</details>"
+    )
+
+
 def render_research_question(
     question: str,
     observed: str,

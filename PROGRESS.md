@@ -29,6 +29,18 @@ not new plan items.
   router, agent) with inline glossaries and modern charts.
 
 ## Completed (operational follow-ups, originally listed as "next")
+- STEER `dashboard.graphs_first`: added `traffic_light_tile`,
+  `traffic_light_row`, and `raw_numbers_block` helpers to
+  `_dashboard_style.py`. Dense, router, and agent dashboards now open
+  with a traffic-light tile row (green / amber / red against the
+  threshold each cares about — ESS ≥ 0.99, top-1 flip ≤ 5%,
+  answer-match ≥ 66%) followed by the existing Chart.js bar canvases.
+  The per-pair and per-run tables move into a collapsible
+  `<details data-section="raw-numbers">` block. Marketplace simulation
+  's four legacy tables (decisions by profile / by worker /
+  decision reasons / audit-event counts) drop into the same raw-numbers
+  block. New `tests/test_graphs_first.py` (5 cases) enforces the split.
+  292 passed.
 - STEER `dashboard.glossary_verl_rewrite`: rewrote
   `src/rollout_market/observatory/_glossary.py` to a frozen
   `GlossaryEntry` dataclass carrying four required fields (what,
@@ -183,7 +195,7 @@ effort-to-evidence ratio:
   remains).
 
 ## Test status
-- pytest -q: **287 passed, 0 failed** (2026-05-11).
+- pytest -q: **292 passed, 0 failed** (2026-05-11).
 - ruff check .: clean.
 - Real-data round-trips: `scripts/live/marketplace_real{,_fp8}.py`
   exit 0.

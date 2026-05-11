@@ -35,6 +35,7 @@ from ._dashboard_style import (
     kpi_block,
     page_shell,
     palette_for,
+    raw_numbers_block,
     render_research_question,
 )
 from ._glossary import render_glossary_card
@@ -507,7 +508,7 @@ def render_html(result: SimulationResult) -> str:
 
     glossary = render_glossary_card(["OPBC", "ESS", "clipped_fraction", "veto_fraction"])
 
-    body += (
+    raw_tables = (
         f'<section class="card">'
         f"<h2>Decisions by worker profile</h2>"
         f"{_table(['profile', 'action', 'count'], [list(r) for r in profile_action_rows])}"
@@ -524,8 +525,9 @@ def render_html(result: SimulationResult) -> str:
         f"<h2>Broker audit-event counts</h2>"
         f"{_table(['event', 'count'], [[k, v] for k, v in sorted(result.audit_event_counts.items())])}"
         f"</section>"
-        f"{glossary}"
     )
+    body += raw_numbers_block(raw_tables)
+    body += glossary
 
     title = "Marketplace simulation"
     lede = (

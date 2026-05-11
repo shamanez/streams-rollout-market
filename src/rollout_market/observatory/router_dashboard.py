@@ -27,7 +27,10 @@ from ._dashboard_style import (
     kpi_block,
     page_shell,
     palette_for,
+    raw_numbers_block,
     render_research_question,
+    traffic_light_row,
+    traffic_light_tile,
 )
 from ._engine_filter import APPENDIX_HEADER, is_headline_pair
 from ._glossary import render_glossary_card
@@ -277,12 +280,23 @@ def _router_engine_view(
         for r in rows
     )
 
-    return (
-        f'<section class="card">'
-        f"<h2>Top-1 flip vs top-k set disagreement</h2>"
-        f"<p class='sub'>Left: how often the dominant routed expert changes between rollout and trainer. Right: how often <em>any</em> of the top-k experts changes on at least one layer. The gap between the two is the headline finding — quantization noise barely shifts the top-1 but reorders the rest of the top-k.</p>"
-        f"<div class='chart-row'>{flip_chart}{set_chart}</div>"
-        f"</section>"
+    tl_tiles = [
+        traffic_light_tile(
+            label=f"{agg.rollout_engine} → {agg.trainer_engine}",
+            value=agg.mean_router_flip_rate,
+            display=f"{agg.mean_router_flip_rate * 100:.1f}%",
+            sublabel=(
+                f"mean top-1 flip rate over {agg.count} run"
+                f"{'' if agg.count == 1 else 's'}"
+            ),
+            good_at_or_below=0.05,
+            bad_at_or_below=0.15,
+        )
+        for agg in aggs
+    ]
+    tl_row = traffic_light_row(tl_tiles)
+
+    raw_tables = (
         f'<section class="card">'
         f"<h2>Per (rollout_engine -> trainer_engine) pair</h2>"
         f"<table><thead><tr>"
@@ -300,6 +314,20 @@ def _router_engine_view(
         f"<th>layer min</th><th>layer mean</th><th>layer max</th>"
         f"</tr></thead><tbody>{run_rows}</tbody></table>"
         f"</section>"
+    )
+
+    return (
+        f'<section class="card">'
+        f"<h2>Top-1 flip-rate traffic-light by engine pair</h2>"
+        f"<p class='sub'>Green: ≤ 5% (top-1 router stable). Amber: 5–15%. Red: &gt; 15% (the dominant expert often changes between engines).</p>"
+        f"{tl_row}"
+        f"</section>"
+        f'<section class="card">'
+        f"<h2>Top-1 flip vs top-k set disagreement</h2>"
+        f"<p class='sub'>Left: how often the dominant routed expert changes between rollout and trainer. Right: how often <em>any</em> of the top-k experts changes on at least one layer. The gap between the two is the headline finding — quantization noise barely shifts the top-1 but reorders the rest of the top-k.</p>"
+        f"<div class='chart-row'>{flip_chart}{set_chart}</div>"
+        f"</section>"
+        f"{raw_numbers_block(raw_tables)}"
     )
 
 

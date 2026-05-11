@@ -22,7 +22,10 @@ from ._dashboard_style import (
     page_shell,
     palette_for,
     quality_badge_for_match_rate,
+    raw_numbers_block,
     render_research_question,
+    traffic_light_row,
+    traffic_light_tile,
 )
 from ._engine_filter import APPENDIX_HEADER, is_headline_pair
 from ._glossary import render_glossary_card
@@ -317,17 +320,23 @@ def _agent_engine_view(
             "</tr>"
         )
 
-    return (
-        f'<section class="card">'
-        f"<h2>Final-answer match rate vs reference</h2>"
-        f"<p class='sub'>What fraction of tasks the rollout engine ended at the same final answer as the reference engine. Higher = closer to the reference. The headline number for the agentic story.</p>"
-        f"{answer_match_chart}"
-        f"</section>"
-        f'<section class="card">'
-        f"<h2>Tool-call Jaccard &amp; first-divergence step</h2>"
-        f"<p class='sub'>Left: how similar the set of (tool, arguments) invocations is across engines. Right: at which step the trajectory first diverged from the reference.</p>"
-        f"<div class='chart-row'>{jaccard_chart}{first_div_chart}</div>"
-        f"</section>"
+    tl_tiles = [
+        traffic_light_tile(
+            label=f"{agg.rollout_engine} → {agg.trainer_engine}",
+            value=agg.final_answer_match_rate,
+            display=f"{agg.final_answer_match_rate * 100:.0f}%",
+            sublabel=(
+                f"final-answer match rate over {agg.count} task"
+                f"{'' if agg.count == 1 else 's'}"
+            ),
+            good_at_or_above=0.66,
+            bad_at_or_above=0.33,
+        )
+        for agg in aggs
+    ]
+    tl_row = traffic_light_row(tl_tiles)
+
+    raw_tables = (
         f'<section class="card">'
         f"<h2>Per (rollout_engine -> trainer_engine) pair</h2>"
         f"<table><thead><tr>"
@@ -345,6 +354,25 @@ def _agent_engine_view(
         f"<th>tool-disagree</th><th>tool-jaccard</th><th>answer match</th>"
         f"</tr></thead><tbody>{''.join(run_rows)}</tbody></table>"
         f"</section>"
+    )
+
+    return (
+        f'<section class="card">'
+        f"<h2>Answer-match traffic-light by engine pair</h2>"
+        f"<p class='sub'>Green: ≥ 66% of tasks ended at the same final answer as the reference. Amber: 33–66%. Red: &lt; 33% (engine drift flipped most answers).</p>"
+        f"{tl_row}"
+        f"</section>"
+        f'<section class="card">'
+        f"<h2>Final-answer match rate vs reference</h2>"
+        f"<p class='sub'>What fraction of tasks the rollout engine ended at the same final answer as the reference engine. Higher = closer to the reference. The headline number for the agentic story.</p>"
+        f"{answer_match_chart}"
+        f"</section>"
+        f'<section class="card">'
+        f"<h2>Tool-call Jaccard &amp; first-divergence step</h2>"
+        f"<p class='sub'>Left: how similar the set of (tool, arguments) invocations is across engines. Right: at which step the trajectory first diverged from the reference.</p>"
+        f"<div class='chart-row'>{jaccard_chart}{first_div_chart}</div>"
+        f"</section>"
+        f"{raw_numbers_block(raw_tables)}"
     )
 
 

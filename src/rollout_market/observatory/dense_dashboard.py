@@ -28,7 +28,10 @@ from ._dashboard_style import (
     page_shell,
     palette_for,
     quality_badge_for_ess,
+    raw_numbers_block,
     render_research_question,
+    traffic_light_row,
+    traffic_light_tile,
 )
 from ._engine_filter import APPENDIX_HEADER, is_headline_pair
 from ._glossary import render_glossary_card
@@ -310,17 +313,20 @@ def _dense_engine_view(
         for r in rows
     )
 
-    return (
-        f'<section class="card">'
-        f"<h2>ESS by engine pair</h2>"
-        f"<p class='sub'>Mean effective sample size, averaged across all runs in each engine pair. The closer to 1, the more the rollout engine's logprobs agree with the trainer reference.</p>"
-        f"{ess_chart}"
-        f"</section>"
-        f'<section class="card">'
-        f"<h2>Per-token drift</h2>"
-        f"<p class='sub'>Left: mean absolute delta logprob — typical disagreement size. Right: worst single-token |log_ratio| in nats — the worst spike that survived inside the engine pair.</p>"
-        f"<div class='chart-row'>{delta_chart}{max_chart}</div>"
-        f"</section>"
+    tl_tiles = [
+        traffic_light_tile(
+            label=f"{agg.rollout_engine} → {agg.trainer_engine}",
+            value=agg.mean_ess,
+            display=f"{agg.mean_ess:.4f}",
+            sublabel=f"mean ESS over {agg.count} run{'' if agg.count == 1 else 's'}",
+            good_at_or_above=0.99,
+            bad_at_or_above=0.95,
+        )
+        for agg in aggs
+    ]
+    tl_row = traffic_light_row(tl_tiles)
+
+    raw_tables = (
         f'<section class="card">'
         f"<h2>Per (rollout_engine -> trainer_engine) pair</h2>"
         f"<table><thead><tr>"
@@ -338,6 +344,25 @@ def _dense_engine_view(
         f"<th>max|log_ratio|</th><th>top1% mass</th>"
         f"</tr></thead><tbody>{run_rows}</tbody></table>"
         f"</section>"
+    )
+
+    return (
+        f'<section class="card">'
+        f"<h2>ESS traffic-light by engine pair</h2>"
+        f"<p class='sub'>Green: mean ESS ≥ 0.99 (effectively on-policy). Amber: 0.95–0.99. Red: &lt;0.95 (off-policy enough that OPBC may divert).</p>"
+        f"{tl_row}"
+        f"</section>"
+        f'<section class="card">'
+        f"<h2>ESS by engine pair</h2>"
+        f"<p class='sub'>Mean effective sample size, averaged across all runs in each engine pair. The closer to 1, the more the rollout engine's logprobs agree with the trainer reference.</p>"
+        f"{ess_chart}"
+        f"</section>"
+        f'<section class="card">'
+        f"<h2>Per-token drift</h2>"
+        f"<p class='sub'>Left: mean absolute delta logprob — typical disagreement size. Right: worst single-token |log_ratio| in nats — the worst spike that survived inside the engine pair.</p>"
+        f"<div class='chart-row'>{delta_chart}{max_chart}</div>"
+        f"</section>"
+        f"{raw_numbers_block(raw_tables)}"
     )
 
 
