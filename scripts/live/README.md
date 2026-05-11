@@ -407,3 +407,31 @@ env var (plus `MEGATRON_CKPT_DIR`) and feed it into
 `router_mismatch_lab` / `dense_mismatch_lab` without code changes.
 This is the path that fills the MEGATRON row on the two
 `/docs/index.html` matrices.
+
+### Dense Qwen3-32B variant (same image, dense MODEL_ARGS)
+
+`scripts/live/megatron_qwen3_32b_launch.sh` + `…_runner.sh` is the
+sibling runbook for the dense model. The launcher bind-mounts the
+existing `~/hf-cache/hub/models--Qwen--Qwen3-32B` repo (read-only) at
+`/root/Qwen3-32B-repo` and the runner picks the snapshot dir from
+inside the bind-mount so the snapshot's `../../blobs/...` relative
+symlinks resolve — the previous staging layout used host-absolute
+symlinks that the container could not follow and the tokenizer init
+crashed before any conversion could happen. Drop both files on the
+spot host under `~/megatron_conversion/` and invoke the launcher:
+
+```bash
+scp scripts/live/megatron_qwen3_32b_launch.sh \
+    my-vllm-spot-instance:~/megatron_conversion/launch_qwen3_32b.sh
+scp scripts/live/megatron_qwen3_32b_runner.sh \
+    my-vllm-spot-instance:~/megatron_conversion/runner_qwen3_32b.sh
+ssh my-vllm-spot-instance \
+  'chmod +x ~/megatron_conversion/{launch,runner}_qwen3_32b.sh && \
+   ~/megatron_conversion/launch_qwen3_32b.sh'
+```
+
+The launcher writes the docker stdout/stderr to
+`~/megatron_conversion/logs/qwen3_32b_convert.out` and the dist
+checkpoint lands under `~/megatron_conversion/qwen3_32b_torch_dist/`.
+Scp the `latest_checkpointed_iteration.txt` marker back as the
+evidence artefact.
