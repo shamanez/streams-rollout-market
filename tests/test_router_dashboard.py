@@ -168,7 +168,10 @@ def test_empty_dashboard_renders():
     dashboard = RouterDashboard()
     page = render_html(dashboard)
     assert "<!doctype html>" in page
-    assert "Per (rollout_engine" in page
+    # New headline/appendix split: an empty dashboard still renders the
+    # research-question card and the (collapsed) appendix wrapper.
+    assert "data-section=\"headline-engines\"" in page
+    assert "data-section=\"all-engines\"" in page
 
 
 def test_cli_main_writes_dashboard(tmp_path: Path):

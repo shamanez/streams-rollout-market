@@ -29,6 +29,7 @@ from ._dashboard_style import (
     palette_for,
     render_research_question,
 )
+from ._engine_filter import APPENDIX_HEADER, is_headline_pair
 from ._glossary import render_glossary_card
 
 from .router_mismatch_lab import RouterMismatchReport
@@ -183,62 +184,27 @@ def load_reports_glob(pattern: str) -> list[RouterMismatchReport]:
     return load_reports_from_paths(sorted(_glob.glob(pattern, recursive=True)))
 
 
-def render_html(dashboard: RouterDashboard) -> str:
-    """Render a self-contained dashboard page (no JS, no remote assets)."""
+def _router_engine_view(
+    aggs: list[RouterEnginePairAggregate],
+    rows: list[RouterRow],
+    canvas_prefix: str,
+) -> str:
+    """Render the chart+tables view for one engine partition (headline or appendix)."""
 
     def _f(value: float) -> str:
         return f"{value:.4f}"
 
-    pair_rows = "".join(
-        f"<tr>"
-        f"<td>{_html.escape(agg.rollout_engine)}</td>"
-        f"<td>{_html.escape(agg.trainer_engine)}</td>"
-        f"<td>{agg.count}</td>"
-        f"<td>{_f(agg.mean_router_flip_rate)}</td>"
-        f"<td>{_f(agg.mean_token_expert_disagreement_rate)}</td>"
-        f"<td>{_f(agg.worst_layer_flip_rate)}</td>"
-        f"<td>{agg.layer_count}</td>"
-        f"<td>{agg.total_tokens}</td>"
-        f"</tr>"
-        for agg in dashboard.engine_pair_aggregates()
-    )
-    run_rows = "".join(
-        f"<tr>"
-        f"<td>{_html.escape(r.run_id)}</td>"
-        f"<td>{_html.escape(r.model_id)}</td>"
-        f"<td>{_html.escape(r.engine_pair_key)}</td>"
-        f"<td>{r.num_tokens}</td>"
-        f"<td>{r.num_layers}</td>"
-        f"<td>{r.top_k}</td>"
-        f"<td>{r.num_experts}</td>"
-        f"<td>{_f(r.router_flip_rate)}</td>"
-        f"<td>{_f(r.token_expert_disagreement_rate)}</td>"
-        f"<td>{_f(r.layer_flip_rate_min)}</td>"
-        f"<td>{_f(r.layer_flip_rate_mean)}</td>"
-        f"<td>{_f(r.layer_flip_rate_max)}</td>"
-        f"</tr>"
-        for r in dashboard.rows
-    )
-    aggs = dashboard.engine_pair_aggregates()
-
-    if aggs:
-        worst_set_disagree = max(a.mean_token_expert_disagreement_rate for a in aggs)
-        worst_flip = max(a.mean_router_flip_rate for a in aggs)
-    else:
-        worst_set_disagree = worst_flip = 0.0
-
-    kpis = kpi_block([
-        (str(dashboard.num_runs), "runs"),
-        (str(len(aggs)), "engine pairs"),
-        (f"{worst_flip * 100:.1f}%", "worst top-1 flip rate"),
-        (f"{worst_set_disagree * 100:.1f}%", "worst top-k set disagreement"),
-    ])
+    if not aggs:
+        return (
+            "<section class='card'><p class='sub'>"
+            "No engine pairs in this partition.</p></section>"
+        )
 
     pair_labels = [f"{a.rollout_engine} → {a.trainer_engine}" for a in aggs]
     colors = palette_for(len(pair_labels))
 
     flip_chart = chart_block(
-        canvas_id="router-flip",
+        canvas_id=f"router-flip-{canvas_prefix}",
         chart_type="bar",
         data={
             "labels": pair_labels,
@@ -258,9 +224,8 @@ def render_html(dashboard: RouterDashboard) -> str:
             "maintainAspectRatio": False,
         },
     )
-
     set_chart = chart_block(
-        canvas_id="router-set",
+        canvas_id=f"router-set-{canvas_prefix}",
         chart_type="bar",
         data={
             "labels": pair_labels,
@@ -281,38 +246,38 @@ def render_html(dashboard: RouterDashboard) -> str:
         },
     )
 
-    glossary = render_glossary_card([
-        "top-1 flip rate",
-        "top-k set disagreement",
-        "router_flip_rate",
-        "token_expert_disagreement_rate",
-    ])
-
-    if aggs:
-        observed = (
-            f"FP8 quantization barely shifts the dominant routed expert "
-            f"(top-1 flip rate {worst_flip * 100:.1f}% — about 1 in "
-            f"{int(round(1 / max(worst_flip, 1e-9)))} (token, layer) pairs) "
-            f"but reorders the rest of the top-k almost everywhere "
-            f"({worst_set_disagree * 100:.1f}% of tokens have set-level "
-            "disagreement on at least one MoE layer). The top-1 looks robust; "
-            "the top-k set is noise."
-        )
-    else:
-        observed = "No runs in this snapshot."
-    rq = render_research_question(
-        question="Does FP8 quantization preserve the routing decisions of a "
-                 "Mixture-of-Experts model? If gradients flow through the "
-                 "router gate, set-level routing changes show up as "
-                 "different parameter updates even when top-1 is stable.",
-        observed=observed,
-        next_step="Multi-prompt run (this is n=1 currently); per-layer "
-                  "stratified analysis to see if early/late layers differ.",
+    pair_rows = "".join(
+        f"<tr>"
+        f"<td>{_html.escape(agg.rollout_engine)}</td>"
+        f"<td>{_html.escape(agg.trainer_engine)}</td>"
+        f"<td>{agg.count}</td>"
+        f"<td>{_f(agg.mean_router_flip_rate)}</td>"
+        f"<td>{_f(agg.mean_token_expert_disagreement_rate)}</td>"
+        f"<td>{_f(agg.worst_layer_flip_rate)}</td>"
+        f"<td>{agg.layer_count}</td>"
+        f"<td>{agg.total_tokens}</td>"
+        f"</tr>"
+        for agg in aggs
+    )
+    run_rows = "".join(
+        f"<tr>"
+        f"<td>{_html.escape(r.run_id)}</td>"
+        f"<td>{_html.escape(r.model_id)}</td>"
+        f"<td>{_html.escape(r.engine_pair_key)}</td>"
+        f"<td>{r.num_tokens}</td>"
+        f"<td>{r.num_layers}</td>"
+        f"<td>{r.top_k}</td>"
+        f"<td>{r.num_experts}</td>"
+        f"<td>{_f(r.router_flip_rate)}</td>"
+        f"<td>{_f(r.token_expert_disagreement_rate)}</td>"
+        f"<td>{_f(r.layer_flip_rate_min)}</td>"
+        f"<td>{_f(r.layer_flip_rate_mean)}</td>"
+        f"<td>{_f(r.layer_flip_rate_max)}</td>"
+        f"</tr>"
+        for r in rows
     )
 
-    body = (
-        f"{rq}"
-        f'<section class="card">{kpis}</section>'
+    return (
         f'<section class="card">'
         f"<h2>Top-1 flip vs top-k set disagreement</h2>"
         f"<p class='sub'>Left: how often the dominant routed expert changes between rollout and trainer. Right: how often <em>any</em> of the top-k experts changes on at least one layer. The gap between the two is the headline finding — quantization noise barely shifts the top-1 but reorders the rest of the top-k.</p>"
@@ -335,14 +300,91 @@ def render_html(dashboard: RouterDashboard) -> str:
         f"<th>layer min</th><th>layer mean</th><th>layer max</th>"
         f"</tr></thead><tbody>{run_rows}</tbody></table>"
         f"</section>"
+    )
+
+
+def render_html(dashboard: RouterDashboard) -> str:
+    """Render a self-contained dashboard page (no JS, no remote assets)."""
+
+    aggs = dashboard.engine_pair_aggregates()
+    headline_aggs = [a for a in aggs if is_headline_pair(a.rollout_engine, a.trainer_engine)]
+    appendix_aggs = [a for a in aggs if not is_headline_pair(a.rollout_engine, a.trainer_engine)]
+    headline_rows = [r for r in dashboard.rows if is_headline_pair(r.rollout_engine, r.trainer_engine)]
+    appendix_rows = [r for r in dashboard.rows if not is_headline_pair(r.rollout_engine, r.trainer_engine)]
+
+    pool = headline_aggs or aggs
+    if pool:
+        worst_set_disagree = max(a.mean_token_expert_disagreement_rate for a in pool)
+        worst_flip = max(a.mean_router_flip_rate for a in pool)
+    else:
+        worst_set_disagree = worst_flip = 0.0
+
+    kpis = kpi_block([
+        (str(len(headline_rows)), "headline runs"),
+        (str(len(headline_aggs)), "headline engine pairs"),
+        (f"{worst_flip * 100:.1f}%", "worst top-1 flip rate"),
+        (f"{worst_set_disagree * 100:.1f}%", "worst top-k set disagreement"),
+    ])
+
+    headline_view = _router_engine_view(headline_aggs, headline_rows, "headline")
+    appendix_view = _router_engine_view(appendix_aggs, appendix_rows, "appendix")
+    appendix_block = (
+        f'<details class="appendix" data-section="all-engines">'
+        f"<summary><strong>{_html.escape(APPENDIX_HEADER)}</strong> — "
+        f"{len(appendix_aggs)} engine pair"
+        f"{'' if len(appendix_aggs) == 1 else 's'} "
+        f"({len(appendix_rows)} run{'' if len(appendix_rows) == 1 else 's'})"
+        f"</summary>"
+        f"{appendix_view}"
+        f"</details>"
+    )
+
+    glossary = render_glossary_card([
+        "top-1 flip rate",
+        "top-k set disagreement",
+        "router_flip_rate",
+        "token_expert_disagreement_rate",
+    ])
+
+    if pool:
+        prefix = "Headline: " if headline_aggs else "Full-engine fallback: "
+        observed = (
+            f"{prefix}FP8 quantization barely shifts the dominant routed expert "
+            f"(top-1 flip rate {worst_flip * 100:.1f}% — about 1 in "
+            f"{int(round(1 / max(worst_flip, 1e-9)))} (token, layer) pairs) "
+            f"but reorders the rest of the top-k almost everywhere "
+            f"({worst_set_disagree * 100:.1f}% of tokens have set-level "
+            "disagreement on at least one MoE layer). The top-1 looks robust; "
+            "the top-k set is noise. The full-engine data is in the appendix "
+            "below."
+        )
+    else:
+        observed = "No runs in this snapshot."
+    rq = render_research_question(
+        question="Does FP8 quantization preserve the routing decisions of a "
+                 "Mixture-of-Experts model? If gradients flow through the "
+                 "router gate, set-level routing changes show up as "
+                 "different parameter updates even when top-1 is stable.",
+        observed=observed,
+        next_step="Multi-prompt run (this is n=1 currently); per-layer "
+                  "stratified analysis to see if early/late layers differ.",
+    )
+
+    body = (
+        f"{rq}"
+        f'<section class="card" data-section="headline">{kpis}</section>'
+        f'<div data-section="headline-engines">{headline_view}</div>'
+        f"{appendix_block}"
         f"{glossary}"
     )
 
     title = "MoE router mismatch dashboard"
     lede = (
-        f"{dashboard.num_runs} run{'s' if dashboard.num_runs != 1 else ''} across "
-        f"{len(aggs)} (rollout, trainer) engine pair{'' if len(aggs) == 1 else 's'}. "
-        "Each cell measures how often the MoE router's top-k experts disagree between two checkpoints / engines."
+        f"{len(headline_rows)} headline run{'s' if len(headline_rows) != 1 else ''} "
+        f"({len(headline_aggs)} engine pair{'' if len(headline_aggs) == 1 else 's'}); "
+        f"{len(appendix_rows)} additional run{'s' if len(appendix_rows) != 1 else ''} "
+        "in the full-engine appendix. Each cell measures how often the MoE "
+        "router's top-k experts disagree between two checkpoints / engines."
     )
     return page_shell(title, lede, body)
 

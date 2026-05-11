@@ -5,8 +5,8 @@
     "directive": "Retire the endpoint-coverage dashboard from the public surface. Remove the endpoint card from /docs/index.html (scripts/live/publish_dashboards.py) and from the runtime live index (scripts/live/serve_dashboards.py). Keep src/rollout_market/observatory/endpoint_dashboard.py and its tests; the contract probe still has internal value. Add a test that asserts the rendered /docs/index.html contains no 'endpoint_dashboard' string in its headline section. Evidence: path to the rendered /docs/index.html plus the new test file. Remember the global directives in STEER.md (graphs over tables, engine filter, device axis, verl glossary, one entry per commit)."
   },
   "dashboard.engine_filter": {
-    "passes": false,
-    "evidence": null,
+    "passes": true,
+    "evidence": ".claude/evidence/dashboard_engine_filter/dense_dashboard.html",
     "directive": "In src/rollout_market/observatory/dense_dashboard.py, router_dashboard.py, and agent_dashboard.py, add a render-time filter so the headline displays only vLLM rollouts and FSDP/Megatron trainer-side references. Rows with sglang or HF-as-engine move to a collapsible 'All engines (full data)' appendix below the headline. Underlying ingestion does NOT change — only display. Add tests for each dashboard asserting the split. Evidence: rendered HTMLs (one per dashboard) showing the headline contains only the three target engines and the appendix contains the rest. Honor STEER.md global directives."
   },
   "dashboard.glossary_verl_rewrite": {

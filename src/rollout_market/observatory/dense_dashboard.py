@@ -30,6 +30,7 @@ from ._dashboard_style import (
     quality_badge_for_ess,
     render_research_question,
 )
+from ._engine_filter import APPENDIX_HEADER, is_headline_pair
 from ._glossary import render_glossary_card
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -196,49 +197,27 @@ def load_reports_glob(pattern: str) -> list[DenseMismatchReport]:
     return load_reports_from_paths(sorted(_glob.glob(pattern, recursive=True)))
 
 
-def render_html(dashboard: DenseDashboard) -> str:
-    """Render a self-contained dashboard page (no JS, no remote assets)."""
+def _dense_engine_view(
+    aggs: list[EnginePairAggregate],
+    rows: list[DenseRow],
+    canvas_prefix: str,
+) -> str:
+    """Render the chart+tables view for one engine partition (headline or appendix)."""
 
     def _f(value: float) -> str:
         return f"{value:.4f}"
 
-    run_rows = "".join(
-        f"<tr>"
-        f"<td>{_html.escape(r.run_id)}</td>"
-        f"<td>{_html.escape(r.model_id)}</td>"
-        f"<td>{_html.escape(r.engine_pair_key)}</td>"
-        f"<td>{_html.escape(r.precision_class)}</td>"
-        f"<td>{r.num_policy_tokens}</td>"
-        f"<td>{_f(r.ess)}</td>"
-        f"<td>{_f(r.clipped_fraction)}</td>"
-        f"<td>{_f(r.veto_fraction)}</td>"
-        f"<td>{_f(r.max_abs_log_ratio)}</td>"
-        f"<td>{_f(r.top_1pct_gradient_mass)}</td>"
-        f"</tr>"
-        for r in dashboard.rows
-    )
-    aggs = dashboard.engine_pair_aggregates()
-
-    if aggs:
-        best_ess = max(a.mean_ess for a in aggs)
-        worst_ess = min(a.mean_ess for a in aggs)
-        worst_max = max(a.worst_max_abs_log_ratio for a in aggs)
-    else:
-        best_ess = worst_ess = worst_max = 0.0
-
-    kpis = kpi_block([
-        (str(dashboard.num_runs), "runs"),
-        (str(len(aggs)), "engine pairs"),
-        (f"{best_ess:.4f}", "best ESS"),
-        (f"{worst_ess:.4f}", "worst ESS"),
-        (f"{worst_max:.3f}", "worst max|log_ratio|"),
-    ])
+    if not aggs:
+        return (
+            "<section class='card'><p class='sub'>"
+            "No engine pairs in this partition.</p></section>"
+        )
 
     pair_labels = [f"{a.rollout_engine} → {a.trainer_engine}" for a in aggs]
     colors = palette_for(len(pair_labels))
 
     ess_chart = chart_block(
-        canvas_id="dense-ess",
+        canvas_id=f"dense-ess-{canvas_prefix}",
         chart_type="bar",
         data={
             "labels": pair_labels,
@@ -258,9 +237,8 @@ def render_html(dashboard: DenseDashboard) -> str:
             "maintainAspectRatio": False,
         },
     )
-
     delta_chart = chart_block(
-        canvas_id="dense-delta",
+        canvas_id=f"dense-delta-{canvas_prefix}",
         chart_type="bar",
         data={
             "labels": pair_labels,
@@ -279,9 +257,8 @@ def render_html(dashboard: DenseDashboard) -> str:
             "maintainAspectRatio": False,
         },
     )
-
     max_chart = chart_block(
-        canvas_id="dense-max",
+        canvas_id=f"dense-max-{canvas_prefix}",
         chart_type="bar",
         data={
             "labels": pair_labels,
@@ -317,40 +294,23 @@ def render_html(dashboard: DenseDashboard) -> str:
             "</tr>"
         )
 
-    glossary = render_glossary_card([
-        "ESS",
-        "|Δlogp|",
-        "log_ratio",
-        "sequence_log_ratio",
-        "clipped_fraction",
-        "veto_fraction",
-        "top_1pct_gradient_mass",
-    ])
-
-    if aggs:
-        observed = (
-            f"Across {len(aggs)} (rollout, trainer) engine pair"
-            f"{'s' if len(aggs) != 1 else ''}, mean ESS ranges from "
-            f"{best_ess:.4f} (best) to {worst_ess:.4f} (worst). The drift "
-            "between engines at the same precision is comparable to the "
-            "drift introduced by FP8 quantization. clipped_fraction = 0 "
-            "everywhere, so OPBC routes all four to `train` despite the "
-            "measurable disagreement."
-        )
-    else:
-        observed = "No runs in this snapshot."
-    rq = render_research_question(
-        question="On the same checkpoint and same prompts, how much do "
-                 "different inference engines (vLLM, sglang) and precision "
-                 "classes (bf16, FP8) disagree on per-token logprobs?",
-        observed=observed,
-        next_step="Same matrix at sequence lengths 128 / 512 / 2048 to see "
-                  "whether the drift accumulates linearly or super-linearly.",
+    run_rows = "".join(
+        f"<tr>"
+        f"<td>{_html.escape(r.run_id)}</td>"
+        f"<td>{_html.escape(r.model_id)}</td>"
+        f"<td>{_html.escape(r.engine_pair_key)}</td>"
+        f"<td>{_html.escape(r.precision_class)}</td>"
+        f"<td>{r.num_policy_tokens}</td>"
+        f"<td>{_f(r.ess)}</td>"
+        f"<td>{_f(r.clipped_fraction)}</td>"
+        f"<td>{_f(r.veto_fraction)}</td>"
+        f"<td>{_f(r.max_abs_log_ratio)}</td>"
+        f"<td>{_f(r.top_1pct_gradient_mass)}</td>"
+        f"</tr>"
+        for r in rows
     )
 
-    body = (
-        f"{rq}"
-        f'<section class="card">{kpis}</section>'
+    return (
         f'<section class="card">'
         f"<h2>ESS by engine pair</h2>"
         f"<p class='sub'>Mean effective sample size, averaged across all runs in each engine pair. The closer to 1, the more the rollout engine's logprobs agree with the trainer reference.</p>"
@@ -378,14 +338,106 @@ def render_html(dashboard: DenseDashboard) -> str:
         f"<th>max|log_ratio|</th><th>top1% mass</th>"
         f"</tr></thead><tbody>{run_rows}</tbody></table>"
         f"</section>"
+    )
+
+
+def render_html(dashboard: DenseDashboard) -> str:
+    """Render a self-contained dashboard page (no JS, no remote assets)."""
+
+    aggs = dashboard.engine_pair_aggregates()
+    headline_aggs = [a for a in aggs if is_headline_pair(a.rollout_engine, a.trainer_engine)]
+    appendix_aggs = [a for a in aggs if not is_headline_pair(a.rollout_engine, a.trainer_engine)]
+    headline_rows = [r for r in dashboard.rows if is_headline_pair(r.rollout_engine, r.trainer_engine)]
+    appendix_rows = [r for r in dashboard.rows if not is_headline_pair(r.rollout_engine, r.trainer_engine)]
+
+    if headline_aggs:
+        best_ess = max(a.mean_ess for a in headline_aggs)
+        worst_ess = min(a.mean_ess for a in headline_aggs)
+        worst_max = max(a.worst_max_abs_log_ratio for a in headline_aggs)
+    elif aggs:
+        # No headline rows yet — fall back to global aggregates so the
+        # KPI block still surfaces something meaningful while Megatron
+        # / FSDP reports trickle in.
+        best_ess = max(a.mean_ess for a in aggs)
+        worst_ess = min(a.mean_ess for a in aggs)
+        worst_max = max(a.worst_max_abs_log_ratio for a in aggs)
+    else:
+        best_ess = worst_ess = worst_max = 0.0
+
+    kpis = kpi_block([
+        (str(len(headline_rows)), "headline runs"),
+        (str(len(headline_aggs)), "headline engine pairs"),
+        (f"{best_ess:.4f}", "best ESS"),
+        (f"{worst_ess:.4f}", "worst ESS"),
+        (f"{worst_max:.3f}", "worst max|log_ratio|"),
+    ])
+
+    headline_view = _dense_engine_view(headline_aggs, headline_rows, "headline")
+    appendix_view = _dense_engine_view(appendix_aggs, appendix_rows, "appendix")
+    appendix_block = (
+        f'<details class="appendix" data-section="all-engines">'
+        f"<summary><strong>{_html.escape(APPENDIX_HEADER)}</strong> — "
+        f"{len(appendix_aggs)} engine pair"
+        f"{'' if len(appendix_aggs) == 1 else 's'} "
+        f"({len(appendix_rows)} run{'' if len(appendix_rows) == 1 else 's'})"
+        f"</summary>"
+        f"{appendix_view}"
+        f"</details>"
+    )
+
+    glossary = render_glossary_card([
+        "ESS",
+        "|Δlogp|",
+        "log_ratio",
+        "sequence_log_ratio",
+        "clipped_fraction",
+        "veto_fraction",
+        "top_1pct_gradient_mass",
+    ])
+
+    if headline_aggs:
+        observed = (
+            f"Across {len(headline_aggs)} headline engine pair"
+            f"{'s' if len(headline_aggs) != 1 else ''}, "
+            f"mean ESS ranges from {best_ess:.4f} (best) to {worst_ess:.4f} "
+            "(worst). The drift between engines at the same precision is "
+            "comparable to the drift introduced by FP8 quantization. "
+            "clipped_fraction = 0 everywhere, so OPBC routes all cells to "
+            "`train` despite the measurable disagreement. The full-engine "
+            "data is in the appendix below."
+        )
+    elif aggs:
+        observed = (
+            "No headline runs yet. "
+            f"The appendix below contains {len(aggs)} non-headline engine "
+            f"pair{'s' if len(aggs) != 1 else ''}."
+        )
+    else:
+        observed = "No runs in this snapshot."
+    rq = render_research_question(
+        question="On the same checkpoint and same prompts, how much do "
+                 "different inference engines and precision classes "
+                 "(bf16, FP8) disagree on per-token logprobs?",
+        observed=observed,
+        next_step="Same matrix at sequence lengths 128 / 512 / 2048 to see "
+                  "whether the drift accumulates linearly or super-linearly.",
+    )
+
+    body = (
+        f"{rq}"
+        f'<section class="card" data-section="headline">{kpis}</section>'
+        f'<div data-section="headline-engines">{headline_view}</div>'
+        f"{appendix_block}"
         f"{glossary}"
     )
 
     title = "Controlled dense mismatch dashboard"
     lede = (
-        f"{dashboard.num_runs} run{'s' if dashboard.num_runs != 1 else ''} across "
-        f"{len(aggs)} (rollout, trainer) engine pair{'' if len(aggs) == 1 else 's'}. "
-        "Numbers are token-level logprob mismatch on the same checkpoint served by two engines."
+        f"{len(headline_rows)} headline run{'s' if len(headline_rows) != 1 else ''} "
+        f"({len(headline_aggs)} engine pair{'' if len(headline_aggs) == 1 else 's'}); "
+        f"{len(appendix_rows)} additional run{'s' if len(appendix_rows) != 1 else ''} "
+        "in the full-engine appendix. Numbers are token-level logprob mismatch "
+        "on the same checkpoint served by two engines."
     )
     return page_shell(title, lede, body)
 

@@ -24,6 +24,7 @@ from ._dashboard_style import (
     quality_badge_for_match_rate,
     render_research_question,
 )
+from ._engine_filter import APPENDIX_HEADER, is_headline_pair
 from ._glossary import render_glossary_card
 from .agent_trajectory_lab import TrajectoryDivergenceReport
 
@@ -188,34 +189,29 @@ def load_reports_glob(pattern: str) -> list[TrajectoryDivergenceReport]:
     return load_reports_from_paths(sorted(_glob.glob(pattern, recursive=True)))
 
 
-def render_html(dashboard: AgentDashboard) -> str:
+def _agent_engine_view(
+    aggs: list[AgentEnginePairAggregate],
+    rows: list[AgentRow],
+    canvas_prefix: str,
+) -> str:
+    """Render the chart+tables view for one engine partition (headline or appendix)."""
+
     def _f(value: float | None) -> str:
         return "—" if value is None else f"{value:.3f}"
 
     def _i(value: int | None) -> str:
         return "—" if value is None else str(value)
 
-    aggs = dashboard.engine_pair_aggregates()
+    if not aggs:
+        return (
+            "<section class='card'><p class='sub'>"
+            "No engine pairs in this partition.</p></section>"
+        )
 
-    if aggs:
-        all_match_rates = [a.final_answer_match_rate for a in aggs]
-        worst_match = min(all_match_rates)
-        best_match = max(all_match_rates)
-    else:
-        worst_match = best_match = 0.0
-
-    kpis = kpi_block([
-        (str(dashboard.num_runs), "comparisons"),
-        (str(len(aggs)), "engine pairs"),
-        (f"{best_match * 100:.0f}%", "best answer-match rate"),
-        (f"{worst_match * 100:.0f}%", "worst answer-match rate"),
-    ])
-
-    # ---- chart 1: answer match rate per engine pair (the wow chart) -------
     pair_labels = [f"{a.rollout_engine} → {a.trainer_engine}" for a in aggs]
     colors = palette_for(len(pair_labels))
     answer_match_chart = chart_block(
-        canvas_id="agent-answer-match",
+        canvas_id=f"agent-answer-match-{canvas_prefix}",
         chart_type="bar",
         data={
             "labels": pair_labels,
@@ -238,10 +234,8 @@ def render_html(dashboard: AgentDashboard) -> str:
             "maintainAspectRatio": False,
         },
     ).replace('"__pct__"', "function(v){return (v*100).toFixed(0) + '%';}")
-
-    # ---- chart 2: tool-call jaccard per engine pair -----------------------
     jaccard_chart = chart_block(
-        canvas_id="agent-jaccard",
+        canvas_id=f"agent-jaccard-{canvas_prefix}",
         chart_type="bar",
         data={
             "labels": pair_labels,
@@ -261,10 +255,8 @@ def render_html(dashboard: AgentDashboard) -> str:
             "maintainAspectRatio": False,
         },
     )
-
-    # ---- chart 3: mean first-divergence step ------------------------------
     first_div_chart = chart_block(
-        canvas_id="agent-first-div",
+        canvas_id=f"agent-first-div-{canvas_prefix}",
         chart_type="bar",
         data={
             "labels": pair_labels,
@@ -284,7 +276,6 @@ def render_html(dashboard: AgentDashboard) -> str:
         },
     )
 
-    # ---- summary card -----------------------------------------------------
     pair_rows = []
     for agg in aggs:
         pair_rows.append(
@@ -302,9 +293,8 @@ def render_html(dashboard: AgentDashboard) -> str:
             "</tr>"
         )
 
-    # ---- detail card ------------------------------------------------------
     run_rows = []
-    for r in dashboard.rows:
+    for r in rows:
         is_div = r.first_divergence_step is not None
         match_cell = (
             "<span class='match-yes'>✓ match</span>"
@@ -327,39 +317,7 @@ def render_html(dashboard: AgentDashboard) -> str:
             "</tr>"
         )
 
-    glossary = render_glossary_card([
-        "answer_match_rate",
-        "tool_call_jaccard",
-        "tool_choice_disagreement_rate",
-        "first_divergence_step",
-    ])
-
-    if aggs:
-        worst_match = min(a.final_answer_match_rate for a in aggs)
-        worst_label = next(
-            f"{a.rollout_engine}" for a in aggs if a.final_answer_match_rate == worst_match
-        )
-        observed = (
-            f"Across {len(aggs)} engine pair{'s' if len(aggs) != 1 else ''} "
-            f"and {dashboard.num_runs} multi-step trajectories, the worst "
-            f"engine ({worst_label}) reached the same final answer as the "
-            f"vLLM bf16 reference only {worst_match * 100:.0f}% of the time. "
-            "Token-level ESS deltas of ~0.025 compound, via tool-call "
-            "selection, into a different agent."
-        )
-    else:
-        observed = "No comparisons in this snapshot."
-    rq = render_research_question(
-        question="Does engine and precision drift propagate from token-level "
-                 "logprob deltas into agent-level behaviour on multi-step, "
-                 "tool-using tasks?",
-        observed=observed,
-        next_step="More tasks (n>30), longer horizons, real (vs simulated) tools.",
-    )
-
-    body = (
-        f"{rq}"
-        f'<section class="card">{kpis}</section>'
+    return (
         f'<section class="card">'
         f"<h2>Final-answer match rate vs reference</h2>"
         f"<p class='sub'>What fraction of tasks the rollout engine ended at the same final answer as the reference engine. Higher = closer to the reference. The headline number for the agentic story.</p>"
@@ -387,14 +345,90 @@ def render_html(dashboard: AgentDashboard) -> str:
         f"<th>tool-disagree</th><th>tool-jaccard</th><th>answer match</th>"
         f"</tr></thead><tbody>{''.join(run_rows)}</tbody></table>"
         f"</section>"
+    )
+
+
+def render_html(dashboard: AgentDashboard) -> str:
+    aggs = dashboard.engine_pair_aggregates()
+    headline_aggs = [a for a in aggs if is_headline_pair(a.rollout_engine, a.trainer_engine)]
+    appendix_aggs = [a for a in aggs if not is_headline_pair(a.rollout_engine, a.trainer_engine)]
+    headline_rows = [r for r in dashboard.rows if is_headline_pair(r.rollout_engine, r.trainer_engine)]
+    appendix_rows = [r for r in dashboard.rows if not is_headline_pair(r.rollout_engine, r.trainer_engine)]
+
+    pool = headline_aggs or aggs
+    if pool:
+        all_match_rates = [a.final_answer_match_rate for a in pool]
+        worst_match = min(all_match_rates)
+        best_match = max(all_match_rates)
+    else:
+        worst_match = best_match = 0.0
+
+    kpis = kpi_block([
+        (str(len(headline_rows)), "headline comparisons"),
+        (str(len(headline_aggs)), "headline engine pairs"),
+        (f"{best_match * 100:.0f}%", "best answer-match rate"),
+        (f"{worst_match * 100:.0f}%", "worst answer-match rate"),
+    ])
+
+    headline_view = _agent_engine_view(headline_aggs, headline_rows, "headline")
+    appendix_view = _agent_engine_view(appendix_aggs, appendix_rows, "appendix")
+    appendix_block = (
+        f'<details class="appendix" data-section="all-engines">'
+        f"<summary><strong>{_html.escape(APPENDIX_HEADER)}</strong> — "
+        f"{len(appendix_aggs)} engine pair"
+        f"{'' if len(appendix_aggs) == 1 else 's'} "
+        f"({len(appendix_rows)} comparison"
+        f"{'' if len(appendix_rows) == 1 else 's'})"
+        f"</summary>"
+        f"{appendix_view}"
+        f"</details>"
+    )
+
+    glossary = render_glossary_card([
+        "answer_match_rate",
+        "tool_call_jaccard",
+        "tool_choice_disagreement_rate",
+        "first_divergence_step",
+    ])
+
+    if pool:
+        pool_worst = min(a.final_answer_match_rate for a in pool)
+        scope = "headline" if headline_aggs else "full-engine fallback"
+        observed = (
+            f"Across the {scope} set ({len(pool)} engine pair"
+            f"{'s' if len(pool) != 1 else ''}, "
+            f"{sum(a.count for a in pool)} multi-step trajectories), the worst "
+            f"engine pair reached the same final answer as the reference only "
+            f"{pool_worst * 100:.0f}% of the time. Token-level ESS deltas of "
+            "~0.025 compound, via tool-call selection, into a different agent. "
+            "The full-engine data is in the appendix below."
+        )
+    else:
+        observed = "No comparisons in this snapshot."
+    rq = render_research_question(
+        question="Does engine and precision drift propagate from token-level "
+                 "logprob deltas into agent-level behaviour on multi-step, "
+                 "tool-using tasks?",
+        observed=observed,
+        next_step="More tasks (n>30), longer horizons, real (vs simulated) tools.",
+    )
+
+    body = (
+        f"{rq}"
+        f'<section class="card" data-section="headline">{kpis}</section>'
+        f'<div data-section="headline-engines">{headline_view}</div>'
+        f"{appendix_block}"
         f"{glossary}"
     )
 
     title = "Agent trajectory dashboard"
     lede = (
-        f"{dashboard.num_runs} multi-step tool-using comparisons across "
-        f"{len(aggs)} engine pair{'' if len(aggs) == 1 else 's'}. "
-        "Reference is on the right of each → arrow."
+        f"{len(headline_rows)} headline comparison"
+        f"{'s' if len(headline_rows) != 1 else ''} across "
+        f"{len(headline_aggs)} engine pair{'' if len(headline_aggs) == 1 else 's'}; "
+        f"{len(appendix_rows)} additional comparison"
+        f"{'' if len(appendix_rows) == 1 else 's'} "
+        "in the full-engine appendix. Reference is on the right of each → arrow."
     )
     return page_shell(title, lede, body)
 

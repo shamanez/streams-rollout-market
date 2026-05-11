@@ -29,6 +29,17 @@ not new plan items.
   router, agent) with inline glossaries and modern charts.
 
 ## Completed (operational follow-ups, originally listed as "next")
+- STEER `dashboard.engine_filter`: added a render-time split on dense,
+  router, and agent dashboards. The headline (`data-section=
+  "headline-engines"`) shows only vLLM rollouts paired with FSDP or
+  Megatron trainer-refs; the collapsible `<details data-section=
+  "all-engines">` appendix carries sglang and HF-as-engine. Ingestion
+  is unchanged — `as_dict()` and the JSON sidecar still contain every
+  row. New `src/rollout_market/observatory/_engine_filter.py` carries
+  the classifier; new `tests/test_engine_filter.py` (5 cases) asserts
+  the split. Dense headline populated with 8 real `vllm→fsdp` runs;
+  router/agent headlines correctly empty until FSDP/Megatron data is
+  collected for them. 280 passed.
 - STEER `dashboard.endpoint_retired`: removed the endpoint card from
   the public `/docs/index.html` (publish_dashboards.py) and the runtime
   live index (serve_dashboards.py); deleted `docs/endpoint_dashboard.{html,json}`
@@ -159,7 +170,7 @@ effort-to-evidence ratio:
   remains).
 
 ## Test status
-- pytest -q: **275 passed, 0 failed** (2026-05-11).
+- pytest -q: **280 passed, 0 failed** (2026-05-11).
 - ruff check .: clean.
 - Real-data round-trips: `scripts/live/marketplace_real{,_fp8}.py`
   exit 0.
