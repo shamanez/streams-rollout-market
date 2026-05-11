@@ -80,8 +80,8 @@
     "directive": "Fill the Dense (Qwen3-32B) matrix tile at (rollout=vLLM-bf16, trainer=Megatron-bf16). Depends on `model.megatron_convert_qwen3_32b`. On the spot: (1) run `MODEL=Qwen/Qwen3-32B ROLLOUT_LABEL=vllm-bf16 TRAINER_REFERENCE=Qwen/Qwen3-32B python ~/run_vllm_rollout.py` to produce `/tmp/rollout.json` with 128-token response + per-token logprobs; (2) run `scripts/live/run_megatron_reference.py` inside the slimerl/slime docker container pointed at the Qwen3-32B torch-dist checkpoint to produce `/tmp/trainer_megatron-bf16.json`; (3) scp both back locally; (4) `python scripts/live/build_dense_input.py --variant megatron-bf16` (the variant already exists from PR #45); (5) `python -m rollout_market.cli.dense_mismatch_lab --input /tmp/dense_mismatch_input_megatron-bf16.json --out-root runs/live/dense`; (6) re-render dashboards. Evidence: the new report JSON under `runs/live/dense/*/dense_mismatch_report.json` matching `(model_id contains 'Qwen3-32B') AND (trainer_engine.name == 'megatron-lm')`, plus the re-rendered `docs/dense_dashboard.html`. Honor STEER.md global directives."
   },
   "dense.qwen3_32b.vllm_fp8_fsdp": {
-    "passes": false,
-    "evidence": null,
+    "passes": true,
+    "evidence": ".claude/evidence/dense_qwen3_32b_vllm_fp8_fsdp/dense_mismatch_report.json",
     "directive": "Fill the Dense (Qwen3-32B) matrix tile at (rollout=vLLM-fp8, trainer=FSDP-bf16). On the spot: (1) `MODEL=Qwen/Qwen3-32B-FP8 ROLLOUT_LABEL=vllm-fp8 TRAINER_REFERENCE=Qwen/Qwen3-32B python ~/run_vllm_rollout.py` (vLLM serves the FP8-quantized weights from `~/hf-cache`); (2) `torchrun --nproc-per-node=4 ~/run_fsdp_reference.py` to teacher-force the same (prompt + response) through FSDP-wrapped Qwen3-32B in bf16; (3) scp back; (4) build the dense input fixture with `--variant vllm-fp8`; (5) ingest into `runs/live/dense`; (6) re-render. The interesting metric is whether FP8 inference still has clipped_fraction = 0 against a bf16 trainer reference. Evidence: the new dense_mismatch_report.json with `precision_class='fp8'` AND `trainer_engine.name='fsdp'`. Honor STEER.md global directives."
   },
   "dense.qwen3_32b.vllm_fp8_megatron": {
