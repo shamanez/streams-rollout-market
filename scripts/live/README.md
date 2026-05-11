@@ -95,11 +95,11 @@ ssh my-vllm-spot-instance \
    python ~/run_hf_reference.py'
 
 # 2. Pull, build the FP8-flavoured fixture, and run the lab.
-scp my-vllm-spot-instance:/tmp/rollout.json /tmp/rollout_fp8.json
-scp my-vllm-spot-instance:/tmp/trainer.json /tmp/trainer_fp8.json
-python scripts/live/build_dense_input_fp8.py
+scp my-vllm-spot-instance:/tmp/rollout.json /tmp/rollout_vllm-fp8.json
+scp my-vllm-spot-instance:/tmp/trainer.json /tmp/trainer_vllm-fp8.json
+python scripts/live/build_dense_input.py --variant vllm-fp8
 python -m rollout_market.cli.dense_mismatch_lab \
-  --input /tmp/dense_mismatch_input_fp8.json \
+  --input /tmp/dense_mismatch_input_vllm-fp8.json \
   --out-root runs/live/dense
 python -m rollout_market.cli.dense_dashboard \
   --reports-glob 'runs/live/dense/*/dense_mismatch_report.json' \
@@ -137,15 +137,16 @@ ssh my-vllm-spot-instance \
   'source ~/rmenv/bin/activate && export HF_HOME=/home/ubuntu/hf-cache && \
    python ~/run_hf_reference.py'
 
-scp my-vllm-spot-instance:/tmp/rollout.json /tmp/rollout_sglang_fp8.json
-scp my-vllm-spot-instance:/tmp/trainer.json /tmp/trainer_sglang_fp8.json
-# (also do bf16 in the same shape)
-python scripts/live/build_dense_input_sglang.py
+scp my-vllm-spot-instance:/tmp/rollout.json /tmp/rollout_sglang-fp8.json
+scp my-vllm-spot-instance:/tmp/trainer.json /tmp/trainer_sglang-fp8.json
+# (also do bf16 in the same shape: /tmp/rollout_sglang-bf16.json, …)
+python scripts/live/build_dense_input.py --variant sglang-bf16
+python scripts/live/build_dense_input.py --variant sglang-fp8
 python -m rollout_market.cli.dense_mismatch_lab \
-  --input /tmp/dense_mismatch_input_sglang_bf16.json \
+  --input /tmp/dense_mismatch_input_sglang-bf16.json \
   --out-root runs/live/dense_sglang_bf16
 python -m rollout_market.cli.dense_mismatch_lab \
-  --input /tmp/dense_mismatch_input_sglang_fp8.json \
+  --input /tmp/dense_mismatch_input_sglang-fp8.json \
   --out-root runs/live/dense_sglang_fp8
 python -m rollout_market.cli.dense_dashboard \
   --reports-glob 'runs/live/dense*/*/dense_mismatch_report.json' \
@@ -373,3 +374,24 @@ Example::
     python -m rollout_market.cli.dense_mismatch_lab \
         --input /tmp/rollout.json \
         --out-root runs/live/dense
+
+## `build_dense_input.py` consolidation (STEER `cleanup.consolidate_build_dense_input`)
+
+The three pre-cleanup scripts (`build_dense_input.py`,
+`build_dense_input_fp8.py`, `build_dense_input_sglang.py`) collapse
+into a single env-driven entry point: `scripts/live/build_dense_input.py`.
+
+Pick a variant with `--variant`:
+
+| variant         | reads                                                            | writes                                              |
+| --------------- | ---------------------------------------------------------------- | --------------------------------------------------- |
+| `vllm-bf16`     | `/tmp/rollout_vllm-bf16.json` + `/tmp/trainer_vllm-bf16.json` (falls back to `/tmp/rollout.json` + `/tmp/trainer.json` for back-compat) | `/tmp/dense_mismatch_input_vllm-bf16.json` plus the legacy mirror `/tmp/dense_mismatch_input.json` |
+| `vllm-fp8`      | `/tmp/rollout_vllm-fp8.json` + `/tmp/trainer_vllm-fp8.json`     | `/tmp/dense_mismatch_input_vllm-fp8.json`           |
+| `sglang-bf16`   | `/tmp/rollout_sglang-bf16.json` + `/tmp/trainer_sglang-bf16.json` | `/tmp/dense_mismatch_input_sglang-bf16.json`        |
+| `sglang-fp8`    | `/tmp/rollout_sglang-fp8.json` + `/tmp/trainer_sglang-fp8.json` | `/tmp/dense_mismatch_input_sglang-fp8.json`         |
+| `megatron-bf16` | `/tmp/rollout_megatron-bf16.json` + `/tmp/trainer_megatron-bf16.json` | `/tmp/dense_mismatch_input_megatron-bf16.json`      |
+
+The variant picks the right `rollout_engine`, `trainer_engine`,
+`precision_class`, and `quantization_class` for the
+`DenseMismatchReport` shape. Default is `vllm-bf16` (zero-argument
+invocation behaves like the original script).

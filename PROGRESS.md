@@ -29,6 +29,22 @@ not new plan items.
   router, agent) with inline glossaries and modern charts.
 
 ## Completed (operational follow-ups, originally listed as "next")
+- STEER `cleanup.consolidate_build_dense_input`: consolidated
+  `scripts/live/build_dense_input.py`, `build_dense_input_fp8.py`,
+  and `build_dense_input_sglang.py` into a single env-driven script
+  `scripts/live/build_dense_input.py` accepting
+  `--variant {vllm-bf16, vllm-fp8, sglang-bf16, sglang-fp8,
+  megatron-bf16}` (default `vllm-bf16`). Variant table emits the
+  right `rollout_engine`, `trainer_engine`, `precision_class`, and
+  `quantization_class` for each report. `vllm-bf16` falls back to
+  the legacy `/tmp/rollout.json` + `/tmp/trainer.json` paths for
+  back-compat. Two `_fp8` / `_sglang` scripts deleted.
+  `scripts/live/README.md` updated with the new flag table.
+  `tests/test_build_dense_input_script.py` (9 cases) imports the
+  script as a module, exercises every variant, and asserts each
+  produces a valid DenseMismatchReport-shaped payload with the
+  correct rollout_engine.fingerprint / precision_class /
+  quantization_class. 319 passed.
 - STEER `loop.cwc_default_fail_contract`: verified the cwc-long-
   running-agents default-FAIL contract end-to-end. (1)
   `.claude/feature-results.json` exists with the rolling list of
@@ -258,7 +274,7 @@ effort-to-evidence ratio:
   remains).
 
 ## Test status
-- pytest -q: **310 passed, 0 failed** (2026-05-11).
+- pytest -q: **319 passed, 0 failed** (2026-05-11).
 - ruff check .: clean.
 - Real-data round-trips: `scripts/live/marketplace_real{,_fp8}.py`
   exit 0.
