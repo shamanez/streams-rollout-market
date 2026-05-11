@@ -1,5 +1,5 @@
 {
-  "num_runs": 1,
+  "num_runs": 2,
   "engine_pairs": [
     {
       "rollout_engine": "hf-fp8",
@@ -9,6 +9,16 @@
       "mean_token_expert_disagreement_rate": 0.984375,
       "worst_layer_flip_rate": 0.125,
       "total_tokens": 64,
+      "layer_count": 48
+    },
+    {
+      "rollout_engine": "vllm",
+      "trainer_engine": "fsdp",
+      "count": 1,
+      "mean_router_flip_rate": 0.04317269076305221,
+      "mean_token_expert_disagreement_rate": 0.963855421686747,
+      "worst_layer_flip_rate": 0.0963855421686747,
+      "total_tokens": 83,
       "layer_count": 48
     }
   ],
@@ -28,6 +38,22 @@
       "layer_flip_rate_mean": 0.051432291666666664,
       "layer_flip_rate_max": 0.125,
       "created_at": "2026-05-10T08:30:38.171816+00:00"
+    },
+    {
+      "run_id": "live-qwen3-30b-a3b-vllm-bf16-vs-fsdp-bf16",
+      "model_id": "Qwen/Qwen3-30B-A3B",
+      "rollout_engine": "vllm",
+      "trainer_engine": "fsdp",
+      "num_tokens": 83,
+      "num_layers": 48,
+      "top_k": 8,
+      "num_experts": 128,
+      "router_flip_rate": 0.04317269076305221,
+      "token_expert_disagreement_rate": 0.963855421686747,
+      "layer_flip_rate_min": 0.0,
+      "layer_flip_rate_mean": 0.04317269076305222,
+      "layer_flip_rate_max": 0.0963855421686747,
+      "created_at": "2026-05-11T13:50:08.798679+00:00"
     }
   ]
 }
