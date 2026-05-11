@@ -25,7 +25,7 @@ def _report(
     run_id: str = "r0",
     model_id: str = "Qwen/Qwen3-32B",
     rollout: str = "vllm",
-    trainer: str = "transformers",
+    trainer: str = "fsdp",
     precision: str = "bf16",
     ess: float = 0.95,
     clipped: float = 0.01,
@@ -76,8 +76,8 @@ def test_rows_sorted_by_created_at():
 
 def test_engine_pair_aggregate_means():
     reports = [
-        _report(run_id="a", rollout="vllm", trainer="transformers", ess=0.9, clipped=0.0),
-        _report(run_id="b", rollout="vllm", trainer="transformers", ess=0.7, clipped=0.2),
+        _report(run_id="a", rollout="vllm", trainer="fsdp", ess=0.9, clipped=0.0),
+        _report(run_id="b", rollout="vllm", trainer="fsdp", ess=0.7, clipped=0.2),
     ]
     dashboard = build_dashboard(reports)
     aggs = dashboard.engine_pair_aggregates()
@@ -89,15 +89,18 @@ def test_engine_pair_aggregate_means():
 
 
 def test_engine_pair_separates_distinct_pairs():
+    """Ingestion keeps every distinct (rollout, trainer) — including
+    blocked ones — even though the rendered HTML only shows vLLM ×
+    {FSDP, Megatron}."""
     dashboard = build_dashboard(
         [
-            _report(run_id="a", rollout="vllm", trainer="transformers"),
-            _report(run_id="b", rollout="sglang", trainer="transformers"),
+            _report(run_id="a", rollout="vllm", trainer="fsdp"),
+            _report(run_id="b", rollout="vllm", trainer="megatron"),
         ]
     )
     aggs = {(a.rollout_engine, a.trainer_engine): a for a in dashboard.engine_pair_aggregates()}
-    assert ("vllm", "transformers") in aggs
-    assert ("sglang", "transformers") in aggs
+    assert ("vllm", "fsdp") in aggs
+    assert ("vllm", "megatron") in aggs
 
 
 def test_engine_pair_worst_max_abs_log_ratio():
@@ -123,8 +126,10 @@ def test_render_html_includes_pair_and_run_tables():
 
 
 def test_render_html_escapes_user_input():
+    # Use a vllm rollout name so the row reaches the rendered HTML; the
+    # XSS surface we test is the run_id + model_id fields.
     dashboard = build_dashboard(
-        [_report(run_id="<svg/onload=alert(1)>", model_id="<x>", rollout="<y>")]
+        [_report(run_id="<svg/onload=alert(1)>", model_id="<x>", rollout="vllm-<y>")]
     )
     page = render_html(dashboard)
     assert "<svg/onload" not in page

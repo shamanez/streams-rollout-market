@@ -33,7 +33,7 @@ from ._dashboard_style import (
     traffic_light_tile,
 )
 from ._device import device_bucket_label
-from ._engine_filter import APPENDIX_HEADER, is_headline_pair
+from ._engine_filter import is_headline_pair
 from ._glossary import render_glossary_card
 
 from .router_mismatch_lab import RouterMismatchReport
@@ -360,17 +360,9 @@ def render_html(dashboard: RouterDashboard) -> str:
     ])
 
     headline_view = _router_engine_view(headline_aggs, headline_rows, "headline")
-    appendix_view = _router_engine_view(appendix_aggs, appendix_rows, "appendix")
-    appendix_block = (
-        f'<details class="appendix" data-section="all-engines">'
-        f"<summary><strong>{_html.escape(APPENDIX_HEADER)}</strong> — "
-        f"{len(appendix_aggs)} engine pair"
-        f"{'' if len(appendix_aggs) == 1 else 's'} "
-        f"({len(appendix_rows)} run{'' if len(appendix_rows) == 1 else 's'})"
-        f"</summary>"
-        f"{appendix_view}"
-        f"</details>"
-    )
+    # Inference-only redirect: drop the appendix block from rendered HTML.
+    appendix_block = ""
+    _ = appendix_aggs, appendix_rows
 
     glossary = render_glossary_card([
         "top-1 flip rate",

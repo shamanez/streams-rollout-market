@@ -27,7 +27,7 @@ def _report(
     run_id: str = "r0",
     model_id: str = "Qwen/Qwen3-30B-A3B",
     rollout: str = "vllm",
-    trainer: str = "transformers",
+    trainer: str = "fsdp",
     num_tokens: int = 4,
     num_layers: int = 3,
     top_k: int = 2,
@@ -98,12 +98,12 @@ def test_engine_pair_aggregate_means():
 def test_engine_pair_separates_distinct_pairs():
     dashboard = build_dashboard(
         [
-            _report(run_id="a", rollout="vllm", trainer="transformers"),
-            _report(run_id="b", rollout="sglang", trainer="transformers"),
+            _report(run_id="a", rollout="vllm", trainer="fsdp"),
+            _report(run_id="b", rollout="vllm", trainer="megatron"),
         ]
     )
     keys = {(a.rollout_engine, a.trainer_engine) for a in dashboard.engine_pair_aggregates()}
-    assert keys == {("vllm", "transformers"), ("sglang", "transformers")}
+    assert keys == {("vllm", "fsdp"), ("vllm", "megatron")}
 
 
 def test_engine_pair_worst_layer_flip_rate():
@@ -137,7 +137,7 @@ def test_render_html_includes_pair_and_run_tables():
 
 def test_render_html_escapes_user_input():
     dashboard = build_dashboard(
-        [_report(run_id="<svg/onload=alert(1)>", model_id="<x>", rollout="<y>")]
+        [_report(run_id="<svg/onload=alert(1)>", model_id="<x>", rollout="vllm-<y>")]
     )
     page = render_html(dashboard)
     assert "<svg/onload" not in page

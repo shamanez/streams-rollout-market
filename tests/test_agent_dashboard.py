@@ -29,7 +29,7 @@ def _report(
     run_id: str = "r1",
     task_id: str = "t-1",
     rollout: str = "vllm-fp8",
-    trainer: str = "vllm-bf16",
+    trainer: str = "fsdp",
     rollout_steps: int = 5,
     trainer_steps: int = 5,
     first_div: int | None = 3,
@@ -85,13 +85,13 @@ def test_engine_pair_aggregate_means_first_div_step_only_over_diverged():
 
 def test_engine_pair_aggregate_separates_pairs():
     reports = [
-        _report(rollout="vllm-fp8", trainer="vllm-bf16", run_id="a"),
-        _report(rollout="sglang-fp8", trainer="vllm-bf16", run_id="b"),
+        _report(rollout="vllm-fp8", trainer="fsdp", run_id="a"),
+        _report(rollout="vllm-bf16", trainer="megatron", run_id="b"),
     ]
     d = build_dashboard(reports)
     keys = {(a.rollout_engine, a.trainer_engine) for a in d.engine_pair_aggregates()}
-    assert ("vllm-fp8", "vllm-bf16") in keys
-    assert ("sglang-fp8", "vllm-bf16") in keys
+    assert ("vllm-fp8", "fsdp") in keys
+    assert ("vllm-bf16", "megatron") in keys
 
 
 def test_engine_pair_answer_match_rate():
@@ -114,7 +114,7 @@ def test_render_html_self_contained():
 
 
 def test_render_html_escapes_user_input():
-    d = build_dashboard([_report(rollout="<svg/onload=alert(1)>", task_id="<x>")])
+    d = build_dashboard([_report(rollout="vllm-<svg/onload=alert(1)>", task_id="<x>")])
     page = render_html(d)
     # Chart.js inserts legitimate <script> tags; we instead check that the
     # user-controlled HTML payload itself is escaped.
@@ -147,7 +147,9 @@ def test_empty_dashboard_renders():
     d = AgentDashboard()
     page = render_html(d)
     assert "<!doctype html>" in page
-    assert "0 comparison" in page or "Per (" in page
+    # With no rows, the headline view emits a "No engine pairs in this
+    # partition." card; the appendix block has been removed entirely.
+    assert "No engine pairs" in page or "Agent trajectory dashboard" in page
 
 
 def test_cli_main_writes_dashboard(tmp_path: Path):

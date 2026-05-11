@@ -91,7 +91,10 @@ def _split(page: str, marker: str) -> tuple[str, str]:
     return page[:idx], page[idx:]
 
 
-def test_dense_dashboard_splits_headline_and_appendix():
+def test_dense_dashboard_purges_blocked_engines_from_html():
+    """Inference-only redirect: sglang and HF rows are absent from the
+    rendered HTML (no appendix, no headline), but still appear in
+    `as_dict()` for JSON consumers."""
     reports = [
         _dense_report("vllm", "fsdp", ess=0.999, idx=1),
         _dense_report("vllm", "megatron", ess=0.997, idx=2),
@@ -101,17 +104,16 @@ def test_dense_dashboard_splits_headline_and_appendix():
     ]
     dashboard = build_dense_dashboard(reports)
     page = render_dense_html(dashboard)
-    headline, appendix = _split(page, "data-section=\"all-engines\"")
-    # Headline must reference only vLLM × {FSDP, Megatron}.
-    assert "fsdp" in headline.lower()
-    assert "megatron" in headline.lower()
-    assert "vllm" in headline.lower()
-    assert "sglang" not in headline.lower()
-    assert "hf-transformers" not in headline.lower()
-    # Appendix must contain the rest.
-    assert "sglang" in appendix.lower()
-    assert "hf-transformers" in appendix.lower()
-    assert APPENDIX_HEADER in appendix
+    # vLLM × {FSDP, Megatron} reach the rendered HTML.
+    assert "fsdp" in page.lower()
+    assert "megatron" in page.lower()
+    assert "vllm" in page.lower()
+    # sglang and HF are purged from rendering entirely.
+    assert "sglang" not in page.lower()
+    assert "hf-transformers" not in page.lower()
+    # No appendix block.
+    assert "data-section=\"all-engines\"" not in page
+    assert APPENDIX_HEADER not in page
     # Ingestion is unchanged: all 5 rows survive in JSON.
     payload = dashboard.as_dict()
     assert payload["num_runs"] == 5
@@ -135,7 +137,7 @@ def _router_report(rollout: str, trainer: str, *, idx: int) -> RouterMismatchRep
     )
 
 
-def test_router_dashboard_splits_headline_and_appendix():
+def test_router_dashboard_purges_blocked_engines_from_html():
     reports = [
         _router_report("vllm", "fsdp", idx=1),
         _router_report("vllm", "megatron", idx=2),
@@ -144,15 +146,12 @@ def test_router_dashboard_splits_headline_and_appendix():
     ]
     dashboard = build_router_dashboard(reports)
     page = render_router_html(dashboard)
-    headline, appendix = _split(page, "data-section=\"all-engines\"")
-    assert "fsdp" in headline.lower()
-    assert "megatron" in headline.lower()
-    assert "vllm" in headline.lower()
-    assert "sglang" not in headline.lower()
-    assert "hf-transformers" not in headline.lower()
-    assert "sglang" in appendix.lower()
-    assert "hf-transformers" in appendix.lower()
-    assert APPENDIX_HEADER in appendix
+    assert "fsdp" in page.lower()
+    assert "megatron" in page.lower()
+    assert "vllm" in page.lower()
+    assert "sglang" not in page.lower()
+    assert "hf-transformers" not in page.lower()
+    assert "data-section=\"all-engines\"" not in page
     payload = dashboard.as_dict()
     assert payload["num_runs"] == 4
     assert len(payload["engine_pairs"]) == 4
@@ -184,7 +183,7 @@ def _agent_report(rollout: str, trainer: str, *, idx: int) -> TrajectoryDivergen
     )
 
 
-def test_agent_dashboard_splits_headline_and_appendix():
+def test_agent_dashboard_purges_blocked_engines_from_html():
     reports = [
         _agent_report("vllm", "fsdp", idx=1),
         _agent_report("vllm", "megatron", idx=2),
@@ -194,22 +193,19 @@ def test_agent_dashboard_splits_headline_and_appendix():
     ]
     dashboard = build_agent_dashboard(reports)
     page = render_agent_html(dashboard)
-    headline, appendix = _split(page, "data-section=\"all-engines\"")
-    assert "fsdp" in headline.lower()
-    assert "megatron" in headline.lower()
-    assert "vllm" in headline.lower()
-    assert "sglang" not in headline.lower()
-    assert "hf-transformers" not in headline.lower()
-    assert "sglang" in appendix.lower()
-    assert "hf-transformers" in appendix.lower()
-    assert APPENDIX_HEADER in appendix
+    assert "fsdp" in page.lower()
+    assert "megatron" in page.lower()
+    assert "vllm" in page.lower()
+    assert "sglang" not in page.lower()
+    assert "hf-transformers" not in page.lower()
+    assert "data-section=\"all-engines\"" not in page
     payload = dashboard.as_dict()
     assert payload["num_runs"] == 5
     assert len(payload["engine_pairs"]) == 5
 
 
-def test_empty_dashboards_still_render_with_appendix_marker():
-    """An empty dashboard still emits the partition skeleton."""
+def test_empty_dashboards_render_without_appendix():
+    """An empty dashboard still emits the headline skeleton and no appendix."""
     for renderer, empty in [
         (render_dense_html, DenseDashboard()),
         (render_router_html, RouterDashboard()),
@@ -217,4 +213,4 @@ def test_empty_dashboards_still_render_with_appendix_marker():
     ]:
         page = renderer(empty)
         assert "data-section=\"headline-engines\"" in page
-        assert "data-section=\"all-engines\"" in page
+        assert "data-section=\"all-engines\"" not in page

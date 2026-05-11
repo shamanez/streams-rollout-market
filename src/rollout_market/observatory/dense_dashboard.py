@@ -34,7 +34,7 @@ from ._dashboard_style import (
     traffic_light_tile,
 )
 from ._device import device_bucket_label
-from ._engine_filter import APPENDIX_HEADER, is_headline_pair
+from ._engine_filter import is_headline_pair
 from ._glossary import render_glossary_card
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -403,17 +403,12 @@ def render_html(dashboard: DenseDashboard) -> str:
     ])
 
     headline_view = _dense_engine_view(headline_aggs, headline_rows, "headline")
-    appendix_view = _dense_engine_view(appendix_aggs, appendix_rows, "appendix")
-    appendix_block = (
-        f'<details class="appendix" data-section="all-engines">'
-        f"<summary><strong>{_html.escape(APPENDIX_HEADER)}</strong> — "
-        f"{len(appendix_aggs)} engine pair"
-        f"{'' if len(appendix_aggs) == 1 else 's'} "
-        f"({len(appendix_rows)} run{'' if len(appendix_rows) == 1 else 's'})"
-        f"</summary>"
-        f"{appendix_view}"
-        f"</details>"
-    )
+    # Per the inference-only redirect, sglang/HF rows never reach the
+    # rendered HTML. They still flow through `as_dict()` for JSON
+    # consumers, but the public dashboards only show vLLM × {FSDP,
+    # Megatron}. Drop the appendix block from the rendered surface.
+    appendix_block = ""
+    _ = appendix_aggs, appendix_rows  # ingestion side-effect only
 
     glossary = render_glossary_card([
         "ESS",

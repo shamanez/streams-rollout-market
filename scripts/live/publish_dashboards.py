@@ -199,16 +199,27 @@ def _classify_trainer(trainer_engine: str) -> str | None:
     return None
 
 
+def _is_vllm_rollout(rollout_engine: str) -> bool:
+    """True iff the rollout side is a vLLM variant (the only inference engine)."""
+    return "vllm" in (rollout_engine or "").lower()
+
+
 def _matrix_cells_from_rows(rows: list[dict], metric_key: str) -> dict[tuple[str, str], dict]:
     """Group rows by (trainer_ref_label, precision_x_device) for the matrix.
 
     Returns map: (trainer_label, column_label) -> {value, count, samples}.
     The column label is `"<precision> · <device_bucket>"`.
+
+    Per the inference-only canonical architecture, only `vllm` rollouts
+    paired with `fsdp` or `megatron` trainers populate the matrix.
+    Other rollouts (sglang) and other trainers (HF) are skipped.
     """
     cells: dict[tuple[str, str], dict] = {}
     for row in rows:
         trainer = _classify_trainer(row.get("trainer_engine", ""))
         if trainer is None:
+            continue
+        if not _is_vllm_rollout(row.get("rollout_engine", "")):
             continue
         precision = row.get("precision_class") or row.get("precision", "—")
         device = row.get("device_bucket") or "L40S (g6e.12xlarge)"
@@ -297,11 +308,19 @@ def _render_matrix(
 ) -> str:
     rows = payload.get("rows") or []
     cells = _matrix_cells_from_rows(rows, metric_key)
-    columns = sorted({col for (_, col) in cells.keys()})
-    if not columns:
-        # No rows yet — still emit the skeleton with two placeholder rows so
-        # the structural test sees it and a reader sees what's coming.
-        columns = ["bf16 · L40S (g6e.12xlarge)"]
+    # Always render a stable column for each known rollout precision so
+    # empty cells (e.g. vLLM-fp8 not run yet) show as visible placeholders
+    # rather than disappearing.
+    known_devices = sorted(
+        {row.get("device_bucket") or "L40S (g6e.12xlarge)" for row in rows}
+    ) or ["L40S (g6e.12xlarge)"]
+    columns: list[str] = []
+    for precision in ("bf16", "fp8"):
+        for device in known_devices:
+            columns.append(f"{precision} · {device}")
+    for (_, col) in cells.keys():
+        if col not in columns:
+            columns.append(col)
     grid_html = []
     grid_html.append("<div class='mx-grid'>")
     grid_html.append("<div class='mx-grid-head'>")
