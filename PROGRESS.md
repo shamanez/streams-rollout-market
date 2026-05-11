@@ -29,6 +29,15 @@ not new plan items.
   router, agent) with inline glossaries and modern charts.
 
 ## Completed (operational follow-ups, originally listed as "next")
+- STEER `dashboard.megatron_placeholder`: Megatron-row tiles in both
+  matrices render the literal `TBD — pending HF→Megatron conversion`
+  with the dashed `mx-tile mx-tbd` style when the renderer sees no
+  reports for that (trainer=megatron, precision, device) cell — the
+  placeholder is renderer-generated, not hard-coded into the HTML.
+  Added `tests/test_publish_dashboards.py::test_megatron_placeholder_
+  when_no_megatron_reports` (3 assertions: exact literal match, ≥3
+  occurrences across both matrices, every `data-trainer="megatron"`
+  tile carries the placeholder). 310 passed.
 - STEER `dashboard.dense_moe_split`: restructured `docs/index.html`
   (rendered by `scripts/live/publish_dashboards.py`) so the page now
   opens with two graph-first matrices: **Dense (Qwen3-32B)** and **MoE
@@ -223,7 +232,7 @@ effort-to-evidence ratio:
   remains).
 
 ## Test status
-- pytest -q: **309 passed, 0 failed** (2026-05-11).
+- pytest -q: **310 passed, 0 failed** (2026-05-11).
 - ruff check .: clean.
 - Real-data round-trips: `scripts/live/marketplace_real{,_fp8}.py`
   exit 0.

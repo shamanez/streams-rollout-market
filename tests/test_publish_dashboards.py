@@ -114,6 +114,81 @@ def test_rendered_index_matrix_renders_real_dense_payload():
     assert "mx-good" in page or "mx-warn" in page
 
 
+def test_megatron_placeholder_when_no_megatron_reports():
+    """STEER `dashboard.megatron_placeholder`: with zero Megatron reports
+    ingested, every Megatron row tile in both matrices renders the literal
+    'TBD — pending HF→Megatron conversion' placeholder string."""
+    # A real-ish dense payload with FSDP-only rows; no Megatron rows.
+    dense_payload = {
+        "rows": [
+            {
+                "rollout_engine": "vllm",
+                "trainer_engine": "fsdp",
+                "precision_class": "bf16",
+                "device_bucket": "L40S (g6e.12xlarge)",
+                "ess": 0.998,
+            },
+            {
+                "rollout_engine": "vllm",
+                "trainer_engine": "fsdp",
+                "precision_class": "fp8",
+                "device_bucket": "L40S (g6e.12xlarge)",
+                "ess": 0.992,
+            },
+        ],
+    }
+    # Router payload also FSDP-only.
+    router_payload = {
+        "rows": [
+            {
+                "rollout_engine": "vllm",
+                "trainer_engine": "fsdp",
+                "precision_class": "bf16",
+                "device_bucket": "L40S (g6e.12xlarge)",
+                "router_flip_rate": 0.04,
+            },
+        ],
+    }
+    card_data = []
+    for c in publish_dashboards.CARDS:
+        if c["slug"] == "dense":
+            card_data.append({**c, "ready": True, "filename": "dense_dashboard.html",
+                              "summary": "", "payload": dense_payload})
+        elif c["slug"] == "router":
+            card_data.append({**c, "ready": True, "filename": "router_dashboard.html",
+                              "summary": "", "payload": router_payload})
+        else:
+            card_data.append({**c, "ready": False, "payload": {}})
+    page = publish_dashboards.render_index(card_data)
+    # Placeholder literal exactly as the STEER directive requires.
+    placeholder = publish_dashboards.MEGATRON_PLACEHOLDER
+    assert placeholder == "TBD — pending HF→Megatron conversion"
+    # Megatron row tiles must show the placeholder. With one column in
+    # each matrix (bf16 / fp8 in dense, bf16 in moe), at least 2 tiles
+    # land in the Megatron row across the two matrices.
+    occurrences = page.count(placeholder)
+    assert occurrences >= 3, (
+        f"expected ≥3 Megatron placeholder tiles across both matrices; "
+        f"got {occurrences}"
+    )
+    # The placeholder tile is the TBD style — greyed / dashed.
+    assert "mx-tile mx-tbd" in page
+    # Every Megatron row tile must contain the placeholder. We use the
+    # data-trainer="megatron" marker emitted by `_matrix_tile`.
+    import re
+
+    megatron_tiles = re.findall(
+        r'<a class="mx-tile[^"]*"[^>]*data-trainer="megatron"[^>]*>(.*?)</a>',
+        page,
+        flags=re.DOTALL,
+    )
+    assert megatron_tiles, "expected at least one Megatron row tile"
+    for tile_inner in megatron_tiles:
+        assert placeholder in tile_inner, (
+            f"Megatron tile missing placeholder: {tile_inner!r}"
+        )
+
+
 def test_rendered_index_with_ready_cards_has_no_endpoint_link():
     card_data = []
     for c in publish_dashboards.CARDS:
