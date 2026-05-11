@@ -21,6 +21,17 @@ Each iteration performs ONE unit of work.
 - Check `STEER.md` — if it exists, follow operator redirect instead.
 - Check `AGENT_STOP` — if it exists, stop immediately after updating
   PROGRESS.md.
+
+If `STEER.md` exists, also read `.claude/feature-results.json`. Pick the
+first entry whose `passes` is `false` and use its `directive` field
+verbatim as the input to `/implement-feature`. The loop does NOT mark an
+entry true directly — it writes evidence to `.claude/evidence/` and then
+submits a write to `feature-results.json` that the PreToolUse hook
+`.claude/scripts/verify-result-write.sh` approves only if the evidence
+path exists and is referenced from `evidence_log.jsonl`. Honor every
+"Global directives" bullet in STEER.md (graphs over tables, engine
+filter, device axis, verl glossary shape, one feature-results entry per
+commit).
 - Run `bash .claude/scripts/check-usage.sh` to log session metrics.
 - If session > 70% or weekly > 85%: switch to token-saving mode
   (`/codex-review` for review, haiku for test-runner, skip

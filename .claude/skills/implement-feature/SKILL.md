@@ -40,6 +40,16 @@ list or `docs/future_research.md`.
    ```bash
    bash .claude/scripts/verify-gate.sh
    ```
+
+   If the task was selected from `.claude/feature-results.json` (i.e.
+   `STEER.md` is active), the final action of the iteration is to flip
+   that entry's `passes` to `true` with `evidence` set to the concrete
+   path produced during this iteration (a rendered HTML, a test log, a
+   screenshot under `.claude/evidence/`). The PreToolUse hook
+   `.claude/scripts/verify-result-write.sh` will deny the write if the
+   evidence path does not exist or is not referenced from
+   `.claude/evidence/evidence_log.jsonl`. After a successful flip,
+   commit and move to the next `false` entry on the next iteration.
 7. **Update PROGRESS.md**:
    - Move the task from "Next tasks" to "Completed"
    - Add the next task(s) to "Next tasks"
