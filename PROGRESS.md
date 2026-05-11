@@ -4,173 +4,136 @@
 2026-05-11
 
 ## Current phase
-**STEER is armed — drive the dashboard to 8 green tiles.** STEER.md
-re-armed `.claude/feature-results.json` with 11 acceptance criteria.
-13 entries are `passes: true` (incl. `dashboard.matrix_per_model`,
-shipped this iteration); 10 remain `false`. The autonomous loop
-(`/autonomous-loop`) picks the first false entry, runs
-`/implement-feature` against its `directive` field, captures evidence
-under `.claude/evidence/`, and continues until every entry is true
-(then deletes STEER.md per its stop clause).
+**STEER complete — 8 green/amber matrix tiles + codex PASS.** All 23
+entries in `.claude/feature-results.json` are `passes: true`. STEER.md
+self-deleted per its own stop clause. The dashboard restructure is
+done; `/docs/index.html` answers the load-bearing question:
 
-The load-bearing claim being filled in: for MoE models, the rollout
-engine's per-(token, layer) expert selection diverges from the
-trainer's. If a worker's vLLM activates experts `{A, B, C}` for token
-X but the trainer's gradient flows to `{A, B, D}`, the update lands
-on the wrong parameters. Measuring `router_flip_rate` between vLLM
-and Megatron/FSDP is the central MoE marketplace metric.
+  *Engine + precision + device DO change inference-time behaviour
+  enough to matter for crowdsourced MoE rollouts.* fp8 inference
+  adds 2-3% router_flip_rate over the bf16 baseline, regardless of
+  whether the trainer reference is FSDP-bf16 or Megatron-bf16.
 
 ## Resume in a new session
 **Single command:** `/autonomous-loop`
 
-The loop reads `STEER.md` + `.claude/feature-results.json` + this
-file, picks the first false entry, and runs end-to-end without
-further input. Prereqs the loop checks itself: `AGENT_STOP` absent,
-`STEER.md` present, weekly usage under 95%.
+With STEER.md gone, the loop will fall back to PROGRESS.md "Next
+work" (see below) and `docs/future_research.md` for the next unit
+of work.
 
 Operator overrides:
 - `touch AGENT_STOP` — halt after the current iteration.
-- `bash .claude/scripts/steer.sh "<note>"` — redirect mid-run.
+- `bash .claude/scripts/steer.sh "<note>"` — re-arm STEER.md.
 - `rm AGENT_STOP` — resume.
 
 ## Shipped this session (2026-05-11)
 
-Loop branch `research/megatron-qwen3-32b-bindmount` carries the
-session's work (sibling `research/vllm-router-trace-emit` was merged
-in via `3a9b074`):
+Branch `research/megatron-qwen3-32b-bindmount` carries the full
+9-iteration arc that drove the dashboard to 8 tiles.
 
-- **`model.megatron_convert_qwen3_32b` — DONE.** Bind-mount fix:
-  launcher mounts the full hub repo (not the broken staging dir) so
-  snapshot's `../../blobs/...` relative symlinks resolve inside the
-  slimerl container. 10-min conversion → 62 GB dist-ckpt at
-  `~/megatron_conversion/qwen3_32b_torch_dist/release/` on spot.
-  Evidence: `.claude/evidence/model_megatron_convert_qwen3_32b/`.
-- **`vllm.router_trace_emit` — DONE.** `scripts/live/run_vllm_moe_rollout.py`
-  drives `AsyncEngineArgs(enable_return_routed_experts=True)` and
-  writes `/tmp/vllm_router.json`. 4 shape-contract tests in
-  `tests/test_vllm_router_trace_shape.py` (no vLLM import — script
-  loaded as a module).
-- **`dense.qwen3_32b.vllm_fp8_fsdp` — DONE.** Real spot run:
-  vLLM-FP8 rollout (54s) + FSDP-bf16 teacher-force (284s).
-  Headline: **ESS=0.995, clipped_fraction=0.0** — FP8 inference
-  does NOT violate OPBC thresholds for dense Qwen3-32B against an
-  FSDP-bf16 trainer. Code lever: new `--trainer-label
-  {hf-transformers,fsdp,megatron-lm}` on
-  `scripts/live/build_dense_input.py` so one rollout variant can
-  pair with multiple trainer references without a variant
-  explosion.
+### Iter A — `feat(megatron): run_megatron_reference.py`
+- Dense Qwen3-32B Megatron-bf16 teacher-force inside slimerl/slime.
+- Uses stock Megatron's `model_provider` + `gpt_builder` (skips
+  slime's training wrappers). `wrap_with_ddp=False` to avoid the
+  30 GiB DDP grad-buffer OOM on L40S.
+- `gather_from_tensor_model_parallel_region(logits)` before
+  log_softmax — output is TP-sharded across the vocab dim by default.
+- `CUDA_DEVICE_MAX_CONNECTIONS=1` env var for TP > 1.
+- Setup commit, no feature-results flip.
 
-## Remaining false entries — concrete plan for end-to-end execution
+### Iter B — `live(megatron): dense.qwen3_32b.vllm_bf16_megatron`
+- vLLM-bf16 rollout + Megatron-bf16 teacher-force.
+- Headline: ESS=0.9994, clipped=0, veto=0, delta_logprob_abs=0.0101.
 
-The next `/autonomous-loop` invocation MUST run all of these without
-halting. Each numbered block below is one loop iteration. Setup
-commits (writing new scripts) and run commits (spot runs) are both
-valid units of work; do not stop because an iteration "looks big".
+### Iter C — `live(fp8): dense.qwen3_32b.vllm_fp8_megatron`
+- vLLM-fp8 rollout + Megatron-bf16 teacher-force.
+- Headline: ESS=0.9948, clipped=0, veto=0, delta_logprob_abs=0.0364.
+- Confirms fp8 inference does NOT break OPBC thresholds against a
+  Megatron-bf16 trainer either.
 
-### Iter A — write `scripts/live/run_megatron_reference.py` (setup)
+### Iter D — `feat(fsdp): run_fsdp_moe_reference.py`
+- FSDP MoE teacher-force with `output_router_logits=True`. Emits
+  length-(P+R-1) traces matching vLLM's `routed_experts` shape so
+  RouterTrace can pair them.
 
-- Runs inside the slimerl/slime:latest container (same image used by
-  `megatron_qwen3_32b_launch.sh`).
-- Reads `/tmp/rollout.json` (prompt_token_ids + response_token_ids
-  from the vLLM rollout side); teacher-forces (prompt + response)
-  through Megatron-LM at TP=4 with the torch-dist ckpt at
-  `/root/Qwen3-32B_torch_dist/release/` (mount the host path
-  `~/megatron_conversion/qwen3_32b_torch_dist`).
-- Reuse MODEL_ARGS from the image's `/root/slime/scripts/models/qwen3-32B.sh`
-  (dense, no MoE flags).
-- Extract per-response-token logprobs from logits via gather on
-  the response token IDs.
-- Write `/tmp/trainer_megatron-bf16.json` in the same shape as
-  `run_hf_reference.py`'s output (`{model, trainer_logprobs, engine,
-  engine_fingerprint}`).
-- Add a host-side launcher `scripts/live/megatron_reference_launch.sh`
-  (mirrors `megatron_qwen3_32b_launch.sh`). Add a smoke test in
-  `tests/test_megatron_reference_shape.py` that imports the script
-  and asserts the helper functions exist and produce well-shaped
-  stub output (no Megatron import; deferred inside the run path).
-- This iteration is SETUP — no feature-results flip. Commit prefix
-  `feat(megatron):`.
+### Iter E — `live(moe-fsdp): moe.qwen3_30b_a3b.vllm_bf16_fsdp_router`
+- New `build_router_input_pair.py` with 4 variants covering the
+  (vllm-bf16, vllm-fp8) × (fsdp-bf16, megatron-bf16) MoE matrix.
+- Headline: **router_flip_rate=4.3%** for vLLM-bf16 vs FSDP-bf16.
 
-### Iter B — run `dense.qwen3_32b.vllm_bf16_megatron` (live)
+### Iter F — `live(moe-fp8-fsdp): moe.qwen3_30b_a3b.vllm_fp8_fsdp_router`
+- vLLM-fp8 (TP=2 because the FP8 expert ffn_intermediate=768 yields
+  192 per shard at TP=4, which fails vLLM's FP8 block_n=128).
+- Headline: **router_flip_rate=7.1%** for vLLM-fp8 vs FSDP-bf16.
 
-- Spot: `MODEL=Qwen/Qwen3-32B ROLLOUT_LABEL=vllm-bf16 python ~/run_vllm_rollout.py`.
-- Inside container: invoke `run_megatron_reference.py` via the new
-  launcher.
-- scp `/tmp/rollout_vllm-bf16.json` + `/tmp/trainer_megatron-bf16.json`
-  back; `python scripts/live/build_dense_input.py --variant megatron-bf16`;
-  ingest into `runs/live/dense/`. Flip
-  `dense.qwen3_32b.vllm_bf16_megatron` to `true`. Commit prefix
-  `live(megatron):`.
+### Iter G — `live(moe-megatron): moe.qwen3_30b_a3b.vllm_bf16_megatron_router`
+- New `run_megatron_moe_reference.py` + `megatron_moe_reference_launch.sh`
+  (mirrored from the existing on-spot script + bind-mounts).
+- Headline: **router_flip_rate=4.1%** for vLLM-bf16 vs Megatron-bf16.
 
-### Iter C — run `dense.qwen3_32b.vllm_fp8_megatron` (live)
+### Iter H — `live(moe-fp8-megatron): moe.qwen3_30b_a3b.vllm_fp8_megatron_router`
+- Closes the 4-cell MoE matrix.
+- Headline: **router_flip_rate=6.3%** for vLLM-fp8 vs Megatron-bf16.
 
-- Same as Iter B but `MODEL=Qwen/Qwen3-32B-FP8 ROLLOUT_LABEL=vllm-fp8`.
-- Reuse `--variant vllm-fp8 --trainer-label megatron-lm` (the
-  trainer-label override we shipped this session). Flip
-  `dense.qwen3_32b.vllm_fp8_megatron`. Commit prefix `live(fp8):`.
+### Iter I — `docs(dashboards): dashboard.high_quality_render`
+- Fixed `router_dashboard.py` to emit `precision_class` on each row
+  (derived from rollout_engine name) so the matrix bins MoE reports
+  into bf16 / fp8 columns instead of a phantom "—" column.
+- All 8 matrix tiles populated, no `mx-empty` / `mx-tbd`
+  placeholders in the visible area.
+- Codex review verdict: **PASS**.
 
-### Iter D — write `scripts/live/run_fsdp_moe_reference.py` (setup)
+## 8-tile matrix state
 
-- Extension of `run_fsdp_reference.py`: same FSDP wrap pattern,
-  but pass `output_router_logits=True` to the model and collect
-  top-k expert IDs per (token, layer) for the MoE model. Write
-  `/tmp/fsdp_router.json` in the same shape as
-  `/tmp/vllm_router.json` (see `run_vllm_moe_rollout.py`).
-- Smoke test: import as a module + assert shape helpers.
-- SETUP iteration, no flip. Commit prefix `feat(fsdp):`.
+| matrix                 | trainer  | bf16    | fp8     |
+|------------------------|----------|---------|---------|
+| Dense (Qwen3-32B) ESS  | FSDP     | 0.9987  | 0.9949  |
+| Dense (Qwen3-32B) ESS  | Megatron | 0.9994  | 0.9948  |
+| MoE (Qwen3-30B-A3B) fr | FSDP     | 4.3%    | 7.1%    |
+| MoE (Qwen3-30B-A3B) fr | Megatron | 4.1%    | 6.3%    |
 
-### Iter E — run `moe.qwen3_30b_a3b.vllm_bf16_fsdp_router` (live)
+Pattern: dense ESS is engine-and-precision-robust (>0.99 everywhere).
+MoE router_flip_rate is dominated by vLLM-vs-trainer kernel
+differences (~4% at matched precision), with fp8 inference adding
+2-3% more divergence regardless of trainer engine.
 
-- Spot: vLLM-bf16 MoE rollout via `run_vllm_moe_rollout.py`; FSDP
-  reference via the new `run_fsdp_moe_reference.py`. Build router
-  input (use `build_router_input.py` adapted for vLLM-trainer
-  pairing, or write a sibling that maps the two trace files).
-- Ingest into `runs/live/router/`. Flip. Commit prefix `live(moe-fsdp):`.
+## Next work (post-STEER)
 
-### Iter F — run `moe.qwen3_30b_a3b.vllm_fp8_fsdp_router` (live)
+The dashboard is at 8 tiles, but each MoE cell is n=1 — one prompt,
+one response. Open candidates for follow-up iterations:
 
-- Same as Iter E with `MODEL=Qwen/Qwen3-30B-A3B-FP8`. Flip. Commit
-  prefix `live(moe-fp8-fsdp):`.
-
-### Iter G — run `moe.qwen3_30b_a3b.vllm_bf16_megatron_router` (live)
-
-- vLLM-bf16 MoE rollout via `run_vllm_moe_rollout.py`; Megatron
-  router trace via the existing `run_moe_router.py` path (which
-  already writes the trainer-side trace). Pair into a router-
-  mismatch fixture and ingest. Flip. Commit prefix `live(moe-megatron):`.
-
-### Iter H — run `moe.qwen3_30b_a3b.vllm_fp8_megatron_router` (live)
-
-- Same as Iter G with the FP8 MoE rollout. Flip. Commit prefix
-  `live(moe-fp8-megatron):`.
-
-### Iter I — re-render + codex review `dashboard.high_quality_render`
-
-- `python -m rollout_market.cli.dense_dashboard ...` then
-  `python -m rollout_market.cli.router_dashboard ...` then
-  `python scripts/live/publish_dashboards.py`.
-- Inspect `docs/index.html`: 8 green tiles, no `mx-empty` / `mx-tbd`
-  placeholders in the visible matrix area.
-- `/codex-review --effort low` against the rendered HTML with the
-  STEER-mandated prompt. Save verdict to
-  `.claude/evidence/dashboard_high_quality_render/codex_verdict.txt`.
-  Flip the last entry. Commit prefix `docs(dashboards):`.
-
-When Iter I lands true, the autonomous loop's "all entries true"
-stop clause fires; delete `STEER.md` on the way out per its own stop
-clause.
+1. **MoE matrix n=8.** Repeat each MoE cell with 8 different prompts
+   so the (router_flip_rate, layer-distribution) numbers carry error
+   bars. Reuse `scripts/live/prompts.json`. Mirror the dense matrix
+   precedent (n=8 for the bf16-vs-FSDP corner).
+2. **Layerwise heatmap.** The current router dashboard reports
+   per-pair scalar flip rates; surface the per-layer flip array as
+   a row-of-bars in each tile's drill-in. Worst layer is the most
+   actionable signal for OPBC routing decisions.
+3. **OPBC integration of router_flip_rate.** Add an OPBC reason
+   `high_router_flip_rate` that quarantines MoE groups whose
+   measured flip rate exceeds a configurable threshold. Currently
+   the OPBC only inspects logprob-level mismatch.
 
 ## Test status
-- pytest -q: **333 passed, 0 failed** (2026-05-11). +6 since last
-  session: 4 from `test_vllm_router_trace_shape.py`, 2 from new
-  `test_build_dense_input_script::test_trainer_label_*`.
+- pytest -q: **347 passed, 0 failed** (2026-05-11). +14 since
+  session start: 4 from `test_megatron_reference_shape.py`, 4 from
+  `test_fsdp_moe_reference_shape.py`, 6 from
+  `test_build_router_input_pair.py`.
 - ruff check .: clean.
-- ruff check .: clean.
+- All 23 `.claude/feature-results.json` entries: `passes: true`.
 
 ## Reproducibility
-Live runs use the env-driven runbook in `scripts/live/`
-(`MODEL`, `VLLM_DTYPE`, `ROLLOUT_LABEL`, `TRAINER_REFERENCE`,
-`MEGATRON_CKPT_DIR`, `DEVICE_*`); see `scripts/live/README.md`.
-Historical completed-work narrative and empirical findings tables
-live in git history (`git log`) and the rendered dashboards under
-`/docs/` — they are not duplicated here.
+Live runs use the env-driven runbook in `scripts/live/`:
+- Dense: `MODEL`, `VLLM_DTYPE`, `ROLLOUT_LABEL`, `TRAINER_REFERENCE`.
+- MoE rollout: `run_vllm_moe_rollout.py` (with
+  `enable_return_routed_experts=True`).
+- FSDP MoE reference: `run_fsdp_moe_reference.py` under torchrun.
+- Megatron dense reference: `run_megatron_reference.py` +
+  `megatron_reference_launch.sh` (slimerl/slime container,
+  bind-mounted `~/megatron_conversion/qwen3_32b_torch_dist/`).
+- Megatron MoE reference: `run_megatron_moe_reference.py` +
+  `megatron_moe_reference_launch.sh` (same image, bind-mounted
+  `~/megatron_conversion/megatron_ckpt/` + `~/megatron_conversion/hf_model/`).
+Historical narrative + empirical findings live in `git log` and the
+rendered dashboards under `/docs/`.
