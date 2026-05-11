@@ -85,8 +85,8 @@
     "directive": "Fill the Dense (Qwen3-32B) matrix tile at (rollout=vLLM-fp8, trainer=FSDP-bf16). On the spot: (1) `MODEL=Qwen/Qwen3-32B-FP8 ROLLOUT_LABEL=vllm-fp8 TRAINER_REFERENCE=Qwen/Qwen3-32B python ~/run_vllm_rollout.py` (vLLM serves the FP8-quantized weights from `~/hf-cache`); (2) `torchrun --nproc-per-node=4 ~/run_fsdp_reference.py` to teacher-force the same (prompt + response) through FSDP-wrapped Qwen3-32B in bf16; (3) scp back; (4) build the dense input fixture with `--variant vllm-fp8`; (5) ingest into `runs/live/dense`; (6) re-render. The interesting metric is whether FP8 inference still has clipped_fraction = 0 against a bf16 trainer reference. Evidence: the new dense_mismatch_report.json with `precision_class='fp8'` AND `trainer_engine.name='fsdp'`. Honor STEER.md global directives."
   },
   "dense.qwen3_32b.vllm_fp8_megatron": {
-    "passes": false,
-    "evidence": null,
+    "passes": true,
+    "evidence": ".claude/evidence/dense_qwen3_32b_vllm_fp8_megatron/dense_mismatch_report.json",
     "directive": "Fill the Dense (Qwen3-32B) matrix tile at (rollout=vLLM-fp8, trainer=Megatron-bf16). Depends on `model.megatron_convert_qwen3_32b`. Same recipe as `dense.qwen3_32b.vllm_bf16_megatron` but the rollout side uses `Qwen/Qwen3-32B-FP8` with `ROLLOUT_LABEL=vllm-fp8`. The trainer side is still Megatron-bf16 (full precision on the trainer is non-negotiable per STEER.md global directives). Evidence: the new dense_mismatch_report.json with `precision_class='fp8'` AND `trainer_engine.name='megatron-lm'` AND `model_id` contains `'Qwen3-32B'`. Honor STEER.md global directives."
   },
   "moe.qwen3_30b_a3b.vllm_bf16_megatron_router": {

@@ -1,5 +1,5 @@
 {
-  "num_runs": 44,
+  "num_runs": 45,
   "engine_pairs": [
     {
       "rollout_engine": "sglang",
@@ -77,6 +77,17 @@
       "mean_delta_logprob_abs": 0.03313952830765174,
       "worst_max_abs_log_ratio": 0.7557253837585449,
       "total_policy_tokens": 1024
+    },
+    {
+      "rollout_engine": "vllm-fp8",
+      "trainer_engine": "megatron-lm",
+      "count": 1,
+      "mean_ess": 0.9948414114302595,
+      "mean_clipped_fraction": 0.0,
+      "mean_sequence_log_ratio": -0.5157325901009244,
+      "mean_delta_logprob_abs": 0.036430662430113614,
+      "worst_max_abs_log_ratio": 0.3861668109893799,
+      "total_policy_tokens": 128
     }
   ],
   "rows": [
@@ -915,6 +926,25 @@
       "max_abs_log_ratio": 0.12541615962982178,
       "top_1pct_gradient_mass": 0.00883836393243128,
       "created_at": "2026-05-11T13:34:12.705335+00:00"
+    },
+    {
+      "run_id": "live-qwen3-32b-fp8-vllm-vs-bf16-hf-001-vs-megatron-lm",
+      "model_id": "Qwen/Qwen3-32B-FP8",
+      "rollout_engine": "vllm-fp8",
+      "trainer_engine": "megatron-lm",
+      "precision_class": "fp8",
+      "quantization_class": "fp8",
+      "prompt_id": "p-rl-explainer-001",
+      "num_policy_tokens": 128,
+      "delta_logprob_mean": -0.004029160860163472,
+      "delta_logprob_abs_mean": 0.036430662430113614,
+      "sequence_log_ratio": -0.5157325901009244,
+      "ess": 0.9948414114302595,
+      "clipped_fraction": 0.0,
+      "veto_fraction": 0.0,
+      "max_abs_log_ratio": 0.3861668109893799,
+      "top_1pct_gradient_mass": 0.009736679418907004,
+      "created_at": "2026-05-11T13:41:09.700369+00:00"
     }
   ]
 }
