@@ -25,8 +25,8 @@
     "directive": "Add an optional DeviceFingerprint Pydantic model (vendor, family, cuda_compute, vram_gb, host_label) to src/rollout_market/observatory/dense_mismatch_lab.py, router_mismatch_lab.py, and agent_trajectory_lab.py. Backwards-compatible: device field defaults to None. The corresponding CLIs (src/rollout_market/cli/*) read it from env vars (DEVICE_VENDOR, DEVICE_FAMILY, DEVICE_CUDA_COMPUTE, DEVICE_VRAM_GB, DEVICE_HOST_LABEL) and inject. Dashboards pivot by device; reports with device=None bucket as 'L40S (g6e.12xlarge)' per STEER.md. Round-trip fixture tests for each lab. Document the env vars in scripts/live/README.md. Evidence: round-trip test pass + a rendered dashboard showing a device column. Honor STEER.md global directives."
   },
   "dashboard.dense_moe_split": {
-    "passes": false,
-    "evidence": null,
+    "passes": true,
+    "evidence": ".claude/evidence/dashboard_dense_moe_split/index.html",
     "directive": "Restructure /docs/index.html (rendered by scripts/live/publish_dashboards.py) so it opens with TWO graph-first matrices: one labelled 'Dense (Qwen3-32B)', one labelled 'MoE (Qwen3-30B-A3B)'. Each matrix renders as a tile grid (NOT a table): rows = trainer-ref {FSDP, Megatron}, columns = (precision × device). Each tile is a small chart (bar or traffic-light) summarizing the cell's headline metric: ESS for dense, router_flip_rate for MoE. Tiles deep-link into the detailed dashboards. Add a test asserting the rendered HTML contains data-section='dense-matrix' and data-section='moe-matrix' blocks. Evidence: the rendered /docs/index.html + the new test. Honor STEER.md global directives."
   },
   "dashboard.megatron_placeholder": {

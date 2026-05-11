@@ -186,7 +186,215 @@ def _kpi_block_for(slug: str, payload: dict) -> str:
     return f"<div class='kpi-row'>{''.join(cells)}</div>"
 
 
+TRAINER_REFS = ["fsdp", "megatron"]
+MEGATRON_PLACEHOLDER = "TBD — pending HF→Megatron conversion"
+
+
+def _classify_trainer(trainer_engine: str) -> str | None:
+    n = (trainer_engine or "").lower()
+    if "fsdp" in n:
+        return "fsdp"
+    if "megatron" in n:
+        return "megatron"
+    return None
+
+
+def _matrix_cells_from_rows(rows: list[dict], metric_key: str) -> dict[tuple[str, str], dict]:
+    """Group rows by (trainer_ref_label, precision_x_device) for the matrix.
+
+    Returns map: (trainer_label, column_label) -> {value, count, samples}.
+    The column label is `"<precision> · <device_bucket>"`.
+    """
+    cells: dict[tuple[str, str], dict] = {}
+    for row in rows:
+        trainer = _classify_trainer(row.get("trainer_engine", ""))
+        if trainer is None:
+            continue
+        precision = row.get("precision_class") or row.get("precision", "—")
+        device = row.get("device_bucket") or "L40S (g6e.12xlarge)"
+        col = f"{precision} · {device}"
+        key = (trainer, col)
+        bucket = cells.setdefault(key, {"sum": 0.0, "count": 0, "samples": []})
+        value = row.get(metric_key)
+        if value is None:
+            continue
+        bucket["sum"] += float(value)
+        bucket["count"] += 1
+        bucket["samples"].append(float(value))
+    for v in cells.values():
+        v["value"] = v["sum"] / v["count"] if v["count"] else None
+    return cells
+
+
+def _matrix_tile(
+    *,
+    trainer: str,
+    column: str,
+    cell: dict | None,
+    kind: str,
+    href: str,
+) -> str:
+    """Render a single tile in the (rows=trainer, cols=precision×device) grid.
+
+    `kind` is "dense" (ESS, higher-is-better) or "moe" (router_flip_rate,
+    lower-is-better).
+    """
+    if cell is None or cell.get("count", 0) == 0:
+        if trainer == "megatron":
+            inner = (
+                f"<div class='mx-placeholder'>{_html.escape(MEGATRON_PLACEHOLDER)}</div>"
+            )
+            tile_class = "mx-tile mx-tbd"
+        else:
+            inner = "<div class='mx-empty'>no data</div>"
+            tile_class = "mx-tile mx-empty-tile"
+        return (
+            f'<a class="{tile_class}" href="{_html.escape(href)}" '
+            f'data-trainer="{_html.escape(trainer)}" data-column="{_html.escape(column)}">'
+            f"<div class='mx-col'>{_html.escape(column)}</div>"
+            f"{inner}"
+            f"</a>"
+        )
+    value = cell["value"]
+    if kind == "dense":
+        good = value >= 0.99
+        warn = value >= 0.95
+        kind_class = "good" if good else ("warn" if warn else "bad")
+        display = f"{value:.4f}"
+        sub = "mean ESS"
+    else:
+        good = value <= 0.05
+        warn = value <= 0.15
+        kind_class = "good" if good else ("warn" if warn else "bad")
+        display = f"{value * 100:.1f}%"
+        sub = "mean top-1 flip"
+    spark_max = max(cell["samples"]) if cell["samples"] else value
+    spark_min = min(cell["samples"]) if cell["samples"] else value
+    bar_pct = 0 if value is None else min(max(value if kind == "dense" else (1 - value), 0), 1) * 100
+    return (
+        f'<a class="mx-tile mx-{kind_class}" href="{_html.escape(href)}" '
+        f'data-chart="matrix-tile" data-trainer="{_html.escape(trainer)}" '
+        f'data-column="{_html.escape(column)}">'
+        f"<div class='mx-col'>{_html.escape(column)}</div>"
+        f"<div class='mx-value'>{_html.escape(display)}</div>"
+        f"<div class='mx-bar'><div class='mx-bar-fill' style='width:{bar_pct:.1f}%'></div></div>"
+        f"<div class='mx-sub'>{_html.escape(sub)} · n={cell['count']}"
+        f"{f' · range {spark_min:.4f}-{spark_max:.4f}' if kind == 'dense' else ''}"
+        f"</div>"
+        f"</a>"
+    )
+
+
+def _render_matrix(
+    *,
+    title: str,
+    model: str,
+    payload: dict,
+    metric_key: str,
+    kind: str,
+    detail_href: str,
+    section_slug: str,
+) -> str:
+    rows = payload.get("rows") or []
+    cells = _matrix_cells_from_rows(rows, metric_key)
+    columns = sorted({col for (_, col) in cells.keys()})
+    if not columns:
+        # No rows yet — still emit the skeleton with two placeholder rows so
+        # the structural test sees it and a reader sees what's coming.
+        columns = ["bf16 · L40S (g6e.12xlarge)"]
+    grid_html = []
+    grid_html.append("<div class='mx-grid'>")
+    grid_html.append("<div class='mx-grid-head'>")
+    grid_html.append("<div class='mx-trainer-head'>trainer-ref</div>")
+    for col in columns:
+        grid_html.append(f"<div class='mx-col-head'>{_html.escape(col)}</div>")
+    grid_html.append("</div>")
+    for trainer in TRAINER_REFS:
+        grid_html.append("<div class='mx-row'>")
+        grid_html.append(
+            f"<div class='mx-trainer'>{_html.escape(trainer.upper())}</div>"
+        )
+        for col in columns:
+            cell = cells.get((trainer, col))
+            grid_html.append(
+                _matrix_tile(
+                    trainer=trainer,
+                    column=col,
+                    cell=cell,
+                    kind=kind,
+                    href=detail_href,
+                )
+            )
+        grid_html.append("</div>")
+    grid_html.append("</div>")
+    return (
+        f'<section class="mx-section" data-section="{section_slug}">'
+        f"<h2>{_html.escape(title)}</h2>"
+        f"<p class='mx-blurb'>Model: <code>{_html.escape(model)}</code> · rows are trainer-side references (FSDP / Megatron), columns are <code>precision · device</code>. Click any tile to drill into the detail dashboard.</p>"
+        f"{''.join(grid_html)}"
+        f"</section>"
+    )
+
+
+_MATRIX_STYLES = """
+.mx-section{background:var(--surface);border:1px solid var(--border);border-radius:14px;
+padding:1.25rem 1.5rem;margin:1rem 0;box-shadow:0 1px 2px rgba(15,23,42,.04)}
+.mx-section h2{font-size:1.1rem;margin:0 0 .35rem 0;font-weight:600}
+.mx-blurb{color:var(--muted);margin:0 0 1rem 0;font-size:.9rem}
+.mx-grid{display:grid;gap:.5rem}
+.mx-grid-head,.mx-row{display:grid;grid-template-columns:120px repeat(auto-fit,minmax(170px,1fr));
+gap:.5rem;align-items:stretch}
+.mx-trainer-head,.mx-col-head{color:var(--muted);font-size:.78rem;text-transform:uppercase;
+letter-spacing:.04em;padding:.25rem .35rem;font-weight:600}
+.mx-trainer{display:flex;align-items:center;justify-content:flex-end;padding-right:.6rem;
+font-weight:700;color:#0f172a;font-size:.95rem}
+.mx-tile{display:block;text-decoration:none;color:inherit;
+border:1px solid var(--border);border-radius:10px;padding:.7rem .9rem;background:var(--surface);
+transition:transform .1s ease, box-shadow .1s ease}
+.mx-tile:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(15,23,42,.07)}
+.mx-tile.mx-good{background:#dcfce7;border-color:#86efac}
+.mx-tile.mx-warn{background:#fef3c7;border-color:#fde68a}
+.mx-tile.mx-bad{background:#fee2e2;border-color:#fca5a5}
+.mx-tile.mx-tbd{background:#f1f5f9;border-style:dashed;color:#475569}
+.mx-tile.mx-empty-tile{background:#f8fafc;border-style:dashed;color:#94a3b8}
+.mx-col{font-size:.72rem;color:#64748b;text-transform:uppercase;letter-spacing:.04em;
+font-weight:600;margin-bottom:.2rem}
+.mx-value{font-size:1.35rem;font-weight:700;font-variant-numeric:tabular-nums;color:#0f172a}
+.mx-bar{position:relative;height:6px;background:rgba(15,23,42,.08);border-radius:3px;
+margin:.4rem 0 .35rem 0;overflow:hidden}
+.mx-bar-fill{height:100%;background:#2563eb;border-radius:3px}
+.mx-tile.mx-good .mx-bar-fill{background:#16a34a}
+.mx-tile.mx-warn .mx-bar-fill{background:#ca8a04}
+.mx-tile.mx-bad .mx-bar-fill{background:#dc2626}
+.mx-sub{font-size:.74rem;color:var(--muted);margin-top:.2rem}
+.mx-placeholder{font-size:.85rem;color:#64748b;font-style:italic;padding:.25rem 0}
+.mx-empty{font-size:.85rem;color:#94a3b8;font-style:italic}
+@media (max-width:680px){.mx-grid-head,.mx-row{grid-template-columns:1fr}}
+""".strip()
+
+
 def render_index(card_data: list[dict]) -> str:
+    by_slug = {c.get("slug"): c for c in card_data}
+    dense_payload = (by_slug.get("dense") or {}).get("payload") or {}
+    router_payload = (by_slug.get("router") or {}).get("payload") or {}
+    dense_matrix = _render_matrix(
+        title="Dense (Qwen3-32B)",
+        model="Qwen/Qwen3-32B",
+        payload=dense_payload,
+        metric_key="ess",
+        kind="dense",
+        detail_href="dense_dashboard.html",
+        section_slug="dense-matrix",
+    )
+    moe_matrix = _render_matrix(
+        title="MoE (Qwen3-30B-A3B)",
+        model="Qwen/Qwen3-30B-A3B",
+        payload=router_payload,
+        metric_key="router_flip_rate",
+        kind="moe",
+        detail_href="router_dashboard.html",
+        section_slug="moe-matrix",
+    )
     cards_html = []
     for c in card_data:
         title = _html.escape(c["title"])
@@ -241,6 +449,7 @@ def render_index(card_data: list[dict]) -> str:
         ".kpi .l{font-size:.72rem;color:var(--muted);text-transform:uppercase;"
         "letter-spacing:.04em;margin-top:.1rem}"
         "footer{margin-top:2.5rem;color:var(--muted);font-size:.82rem;text-align:center}"
+        + _MATRIX_STYLES +
         "</style></head><body>"
         "<header>"
         "<h1>streams-rollout-market — live dashboards</h1>"
@@ -252,6 +461,7 @@ def render_index(card_data: list[dict]) -> str:
         "<a href='https://github.com/shamanez/streams-rollout-market' style='color:var(--accent);text-decoration:none;font-size:.92rem'>📂 Source code</a>"
         "</p>"
         "</header>"
+        f"{dense_matrix}{moe_matrix}"
         f"<div class='grid'>{''.join(cards_html)}</div>"
         "<footer>Generated from runs/live/. Each dashboard is regenerated by running the "
         "lab + dashboard CLIs in the source repo. <a href='glossary.html' "

@@ -29,6 +29,18 @@ not new plan items.
   router, agent) with inline glossaries and modern charts.
 
 ## Completed (operational follow-ups, originally listed as "next")
+- STEER `dashboard.dense_moe_split`: restructured `docs/index.html`
+  (rendered by `scripts/live/publish_dashboards.py`) so the page now
+  opens with two graph-first matrices: **Dense (Qwen3-32B)** and **MoE
+  (Qwen3-30B-A3B)**. Each matrix is a tile grid — rows are trainer-side
+  references (`FSDP`, `MEGATRON`), columns are `precision · device`.
+  Each tile carries a numeric headline (ESS for dense, top-1 flip rate
+  for MoE), a coloured bar, and a deep-link `<a href>` into the
+  matching detail dashboard. Empty Megatron tiles render the
+  `TBD — pending HF→Megatron conversion` placeholder. Markers
+  `data-section="dense-matrix"` and `data-section="moe-matrix"` are
+  asserted by new tests in `tests/test_publish_dashboards.py`.
+  309 passed.
 - STEER `dashboard.device_axis`: added
   `src/rollout_market/observatory/_device.py` with a
   `DeviceFingerprint` Pydantic model (vendor / family / cuda_compute /
@@ -211,7 +223,7 @@ effort-to-evidence ratio:
   remains).
 
 ## Test status
-- pytest -q: **307 passed, 0 failed** (2026-05-11).
+- pytest -q: **309 passed, 0 failed** (2026-05-11).
 - ruff check .: clean.
 - Real-data round-trips: `scripts/live/marketplace_real{,_fp8}.py`
   exit 0.

@@ -62,6 +62,58 @@ def test_rendered_index_headline_has_no_endpoint_dashboard_string():
     assert "Agent trajectory dashboard" in headline
 
 
+def test_rendered_index_contains_dense_and_moe_matrices():
+    """STEER `dashboard.dense_moe_split`: index opens with two graph-first
+    matrices labelled Dense (Qwen3-32B) and MoE (Qwen3-30B-A3B)."""
+    card_data = [{**c, "ready": False, "payload": {}} for c in publish_dashboards.CARDS]
+    page = publish_dashboards.render_index(card_data)
+    assert "data-section=\"dense-matrix\"" in page
+    assert "data-section=\"moe-matrix\"" in page
+    assert "Dense (Qwen3-32B)" in page
+    assert "MoE (Qwen3-30B-A3B)" in page
+    # Each matrix renders as a tile grid (data-chart hooks on populated
+    # tiles; the empty/TBD skeleton still emits the row labels FSDP and
+    # MEGATRON).
+    assert "FSDP" in page
+    assert "MEGATRON" in page
+
+
+def test_rendered_index_matrix_renders_real_dense_payload():
+    """When the dense card carries engine-pair + per-row data, the dense
+    matrix surfaces at least one tile with a numeric ESS value."""
+    dense_payload = {
+        "num_runs": 2,
+        "rows": [
+            {
+                "rollout_engine": "vllm",
+                "trainer_engine": "fsdp",
+                "precision_class": "bf16",
+                "device_bucket": "L40S (g6e.12xlarge)",
+                "ess": 0.998,
+            },
+            {
+                "rollout_engine": "vllm",
+                "trainer_engine": "fsdp",
+                "precision_class": "fp8",
+                "device_bucket": "L40S (g6e.12xlarge)",
+                "ess": 0.992,
+            },
+        ],
+    }
+    card_data = []
+    for c in publish_dashboards.CARDS:
+        if c["slug"] == "dense":
+            card_data.append({**c, "ready": True, "filename": "dense_dashboard.html",
+                              "summary": "", "payload": dense_payload})
+        else:
+            card_data.append({**c, "ready": False, "payload": {}})
+    page = publish_dashboards.render_index(card_data)
+    assert "data-chart=\"matrix-tile\"" in page
+    # FSDP × (bf16 · L40S) tile should render an ESS value (>0.99 → green).
+    assert "0.9980" in page or "0.998" in page or "0.992" in page
+    assert "mx-good" in page or "mx-warn" in page
+
+
 def test_rendered_index_with_ready_cards_has_no_endpoint_link():
     card_data = []
     for c in publish_dashboards.CARDS:
