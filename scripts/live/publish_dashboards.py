@@ -217,7 +217,12 @@ def _short_device(bucket: str) -> str:
     return bucket
 
 
-def _matrix_cells_from_rows(rows: list[dict], metric_key: str) -> dict[tuple[str, str], dict]:
+def _matrix_cells_from_rows(
+    rows: list[dict],
+    metric_key: str,
+    *,
+    model_substring: str | None = None,
+) -> dict[tuple[str, str], dict]:
     """Group rows by (trainer_ref_label, precision_x_device) for the matrix.
 
     Returns map: (trainer_label, column_label) -> {value, count, samples}.
@@ -226,6 +231,11 @@ def _matrix_cells_from_rows(rows: list[dict], metric_key: str) -> dict[tuple[str
     Per the inference-only canonical architecture, only `vllm` rollouts
     paired with `fsdp` or `megatron` trainers populate the matrix.
     Other rollouts (sglang) and other trainers (HF) are skipped.
+
+    `model_substring` (e.g. "Qwen3-32B" for the dense matrix, "Qwen3-30B-A3B"
+    for the MoE matrix) filters rows whose `model_id` does not contain the
+    substring. The dense and MoE matrices are model-bound per STEER.md, so
+    rows from the other model must not contaminate this matrix's tiles.
     """
     cells: dict[tuple[str, str], dict] = {}
     for row in rows:
@@ -234,6 +244,9 @@ def _matrix_cells_from_rows(rows: list[dict], metric_key: str) -> dict[tuple[str
             continue
         if not _is_vllm_rollout(row.get("rollout_engine", "")):
             continue
+        if model_substring is not None:
+            if model_substring not in (row.get("model_id") or ""):
+                continue
         precision = row.get("precision_class") or row.get("precision", "—")
         device = _short_device(row.get("device_bucket") or "")
         col = f"{precision} / {device}"
@@ -318,14 +331,19 @@ def _render_matrix(
     kind: str,
     detail_href: str,
     section_slug: str,
+    model_substring: str | None = None,
 ) -> str:
     rows = payload.get("rows") or []
-    cells = _matrix_cells_from_rows(rows, metric_key)
+    if model_substring is not None:
+        eligible_rows = [r for r in rows if model_substring in (r.get("model_id") or "")]
+    else:
+        eligible_rows = rows
+    cells = _matrix_cells_from_rows(rows, metric_key, model_substring=model_substring)
     # Always render a stable column for each known rollout precision so
     # empty cells (e.g. vLLM-fp8 not run yet) show as visible placeholders
     # rather than disappearing.
     known_devices = sorted(
-        {_short_device(row.get("device_bucket") or "") for row in rows}
+        {_short_device(row.get("device_bucket") or "") for row in eligible_rows}
     ) or ["L40S"]
     columns: list[str] = []
     for precision in ("bf16", "fp8"):
@@ -417,6 +435,7 @@ def render_index(card_data: list[dict]) -> str:
         kind="dense",
         detail_href="dense_dashboard.html",
         section_slug="dense-matrix",
+        model_substring="Qwen3-32B",
     )
     moe_matrix = _render_matrix(
         title="MoE (Qwen3-30B-A3B)",
@@ -426,6 +445,7 @@ def render_index(card_data: list[dict]) -> str:
         kind="moe",
         detail_href="router_dashboard.html",
         section_slug="moe-matrix",
+        model_substring="Qwen3-30B-A3B",
     )
     cards_html = []
     for c in card_data:

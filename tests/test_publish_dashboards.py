@@ -85,6 +85,7 @@ def test_rendered_index_matrix_renders_real_dense_payload():
         "num_runs": 2,
         "rows": [
             {
+                "model_id": "Qwen/Qwen3-32B",
                 "rollout_engine": "vllm",
                 "trainer_engine": "fsdp",
                 "precision_class": "bf16",
@@ -92,6 +93,7 @@ def test_rendered_index_matrix_renders_real_dense_payload():
                 "ess": 0.998,
             },
             {
+                "model_id": "Qwen/Qwen3-32B",
                 "rollout_engine": "vllm",
                 "trainer_engine": "fsdp",
                 "precision_class": "fp8",
@@ -122,6 +124,7 @@ def test_megatron_placeholder_when_no_megatron_reports():
     dense_payload = {
         "rows": [
             {
+                "model_id": "Qwen/Qwen3-32B",
                 "rollout_engine": "vllm",
                 "trainer_engine": "fsdp",
                 "precision_class": "bf16",
@@ -129,6 +132,7 @@ def test_megatron_placeholder_when_no_megatron_reports():
                 "ess": 0.998,
             },
             {
+                "model_id": "Qwen/Qwen3-32B",
                 "rollout_engine": "vllm",
                 "trainer_engine": "fsdp",
                 "precision_class": "fp8",
@@ -141,6 +145,7 @@ def test_megatron_placeholder_when_no_megatron_reports():
     router_payload = {
         "rows": [
             {
+                "model_id": "Qwen/Qwen3-30B-A3B",
                 "rollout_engine": "vllm",
                 "trainer_engine": "fsdp",
                 "precision_class": "bf16",
@@ -186,6 +191,113 @@ def test_megatron_placeholder_when_no_megatron_reports():
     for tile_inner in megatron_tiles:
         assert placeholder in tile_inner, (
             f"Megatron tile missing placeholder: {tile_inner!r}"
+        )
+
+
+def test_dense_and_moe_matrices_are_model_bound():
+    """STEER `dashboard.matrix_per_model`: each matrix only ingests rows
+    whose `model_id` belongs to that matrix's model. A Qwen3-30B-A3B row
+    accidentally living in `dense_dashboard.json` must not surface in the
+    Dense matrix, and a Qwen3-32B row in `router_dashboard.json` must not
+    surface in the MoE matrix.
+    """
+    import re
+
+    dense_payload = {
+        "rows": [
+            {
+                "model_id": "Qwen/Qwen3-32B",
+                "rollout_engine": "vllm",
+                "trainer_engine": "fsdp",
+                "precision_class": "bf16",
+                "device_bucket": "L40S (g6e.12xlarge)",
+                "ess": 0.9981,
+            },
+            {
+                # Cross-model contaminant: MoE row that must NOT land in dense.
+                "model_id": "Qwen/Qwen3-30B-A3B",
+                "rollout_engine": "vllm",
+                "trainer_engine": "megatron-lm",
+                "precision_class": "bf16",
+                "device_bucket": "L40S (g6e.12xlarge)",
+                "ess": 0.4242,
+            },
+        ],
+    }
+    router_payload = {
+        "rows": [
+            {
+                "model_id": "Qwen/Qwen3-30B-A3B",
+                "rollout_engine": "vllm",
+                "trainer_engine": "megatron",
+                "precision_class": "bf16",
+                "device_bucket": "L40S (g6e.12xlarge)",
+                "router_flip_rate": 0.0723,
+            },
+            {
+                # Cross-model contaminant: dense row that must NOT land in MoE.
+                "model_id": "Qwen/Qwen3-32B",
+                "rollout_engine": "vllm",
+                "trainer_engine": "fsdp",
+                "precision_class": "bf16",
+                "device_bucket": "L40S (g6e.12xlarge)",
+                "router_flip_rate": 0.9999,
+            },
+        ],
+    }
+    card_data = []
+    for c in publish_dashboards.CARDS:
+        if c["slug"] == "dense":
+            card_data.append({**c, "ready": True, "filename": "dense_dashboard.html",
+                              "summary": "", "payload": dense_payload})
+        elif c["slug"] == "router":
+            card_data.append({**c, "ready": True, "filename": "router_dashboard.html",
+                              "summary": "", "payload": router_payload})
+        else:
+            card_data.append({**c, "ready": False, "payload": {}})
+    page = publish_dashboards.render_index(card_data)
+
+    dense_match = re.search(
+        r'<section class="mx-section" data-section="dense-matrix">(.*?)</section>',
+        page,
+        flags=re.DOTALL,
+    )
+    moe_match = re.search(
+        r'<section class="mx-section" data-section="moe-matrix">(.*?)</section>',
+        page,
+        flags=re.DOTALL,
+    )
+    assert dense_match and moe_match, "expected both matrix sections to render"
+    dense_section = dense_match.group(1)
+    moe_section = moe_match.group(1)
+
+    # Dense matrix: keeps the Qwen3-32B ESS value, drops the MoE row's value.
+    assert "0.9981" in dense_section
+    assert "0.4242" not in dense_section, (
+        "MoE-model row leaked into the Dense matrix"
+    )
+
+    # MoE matrix: keeps the Qwen3-30B-A3B router_flip_rate, drops the dense row.
+    # router_flip_rate=0.0723 → "7.2%" in the rendered tile.
+    assert "7.2%" in moe_section
+    assert "0.9999" not in moe_section
+    assert "100.0%" not in moe_section, (
+        "Dense-model row leaked into the MoE matrix"
+    )
+
+    # The cross-model Megatron row in dense_payload would otherwise have
+    # populated the Megatron row of the Dense matrix; with the filter the
+    # Megatron row in Dense must still render the TBD placeholder.
+    placeholder = publish_dashboards.MEGATRON_PLACEHOLDER
+    megatron_tiles_in_dense = re.findall(
+        r'<a class="mx-tile[^"]*"[^>]*data-trainer="megatron"[^>]*>(.*?)</a>',
+        dense_section,
+        flags=re.DOTALL,
+    )
+    assert megatron_tiles_in_dense, "expected Megatron row tiles in Dense matrix"
+    for inner in megatron_tiles_in_dense:
+        assert placeholder in inner, (
+            "Dense Megatron tile lost its placeholder — MoE row contaminated it"
         )
 
 

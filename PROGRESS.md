@@ -29,6 +29,22 @@ not new plan items.
   router, agent) with inline glossaries and modern charts.
 
 ## Completed (operational follow-ups, originally listed as "next")
+- STEER `dashboard.matrix_per_model`: fixed the model-mixing bug in
+  `scripts/live/publish_dashboards.py`. Added a `model_substring`
+  parameter on `_matrix_cells_from_rows` and `_render_matrix` so the
+  Dense matrix only ingests rows whose `model_id` contains
+  `Qwen3-32B`, and the MoE matrix only ingests rows whose `model_id`
+  contains `Qwen3-30B-A3B`. The two `_render_matrix` call sites in
+  `render_index` now pass the correct substring. Cross-model
+  contaminant rows (e.g. a Qwen3-30B-A3B row in dense_dashboard.json)
+  no longer leak into the wrong matrix. New test
+  `test_dense_and_moe_matrices_are_model_bound` in
+  `tests/test_publish_dashboards.py` feeds both matrices a deliberate
+  cross-model contaminant and asserts each row lands only in the right
+  matrix. Existing dashboard-render tests updated to include
+  `model_id` on their synthetic rows (production rows already carry
+  it). Re-rendered `docs/index.html` saved under
+  `.claude/evidence/dashboard_matrix_per_model/`. 327 passed.
 - STEER `megatron.qwen3_moe_conversion_runbook`: added
   `scripts/live/megatron_convert_qwen3_moe.md` — a self-contained
   runbook for converting `Qwen/Qwen3-30B-A3B` from HF to a Megatron
@@ -301,7 +317,7 @@ effort-to-evidence ratio:
   remains).
 
 ## Test status
-- pytest -q: **326 passed, 0 failed** (2026-05-11).
+- pytest -q: **327 passed, 0 failed** (2026-05-11).
 - ruff check .: clean.
 - Real-data round-trips: `scripts/live/marketplace_real{,_fp8}.py`
   exit 0.
