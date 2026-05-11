@@ -1,0 +1,62 @@
+{
+  "dashboard.endpoint_retired": {
+    "passes": false,
+    "evidence": null,
+    "directive": "Retire the endpoint-coverage dashboard from the public surface. Remove the endpoint card from /docs/index.html (scripts/live/publish_dashboards.py) and from the runtime live index (scripts/live/serve_dashboards.py). Keep src/rollout_market/observatory/endpoint_dashboard.py and its tests; the contract probe still has internal value. Add a test that asserts the rendered /docs/index.html contains no 'endpoint_dashboard' string in its headline section. Evidence: path to the rendered /docs/index.html plus the new test file. Remember the global directives in STEER.md (graphs over tables, engine filter, device axis, verl glossary, one entry per commit)."
+  },
+  "dashboard.engine_filter": {
+    "passes": false,
+    "evidence": null,
+    "directive": "In src/rollout_market/observatory/dense_dashboard.py, router_dashboard.py, and agent_dashboard.py, add a render-time filter so the headline displays only vLLM rollouts and FSDP/Megatron trainer-side references. Rows with sglang or HF-as-engine move to a collapsible 'All engines (full data)' appendix below the headline. Underlying ingestion does NOT change — only display. Add tests for each dashboard asserting the split. Evidence: rendered HTMLs (one per dashboard) showing the headline contains only the three target engines and the appendix contains the rest. Honor STEER.md global directives."
+  },
+  "dashboard.glossary_verl_rewrite": {
+    "passes": false,
+    "evidence": null,
+    "directive": "Rewrite src/rollout_market/observatory/_glossary.py entries to the four-field shape mandated in STEER.md: (1) what the metric is, (2) per-token or per-sequence, (3) cap value with the constant name from mismatch_metrics.py / opbc.py (clamp=20.0 nats, veto_abs_log_ratio=30.0 nats, high_clipped_fraction=0.1, veto_fraction=0.0), (4) drop behavior (token clipped in place vs entire group quarantined). Paraphrase verl's train-inference correction module language (https://github.com/volcengine/verl). Apply to all of: ESS, |Δlogp|, log_ratio, sequence_log_ratio, clipped_fraction, veto_fraction, top_1pct_gradient_mass, second_moment, router_flip_rate, token_expert_disagreement_rate, tool_call_jaccard, first_divergence_step, answer_match, bf16, fp8. Add tests/test_glossary.py asserting every entry has the four fields. Evidence: the new test file + a rendered /docs/glossary.html. Honor STEER.md global directives."
+  },
+  "dashboard.graphs_first": {
+    "passes": false,
+    "evidence": null,
+    "directive": "Replace the headline tables on the dense, router (MoE), agent, and marketplace dashboards with graph-first renders. Use the chart helpers already present in the existing HTML strings — do not add a new charting library. Patterns: bar charts for per-engine-pair aggregates, traffic-light tiles (green / amber / red) for ESS / flip-rate / answer-match thresholds, sparklines for per-run trends. Raw numbers move to tooltips and a collapsible 'Raw numbers' appendix at the bottom. Add tests asserting the headline contains chart markup (e.g. <svg> / <canvas> / data-chart attributes) and that the 'Raw numbers' appendix is present and collapsible. Evidence: rendered HTMLs and at least one screenshot saved under .claude/evidence/screenshots/. Honor STEER.md global directives."
+  },
+  "dashboard.device_axis": {
+    "passes": false,
+    "evidence": null,
+    "directive": "Add an optional DeviceFingerprint Pydantic model (vendor, family, cuda_compute, vram_gb, host_label) to src/rollout_market/observatory/dense_mismatch_lab.py, router_mismatch_lab.py, and agent_trajectory_lab.py. Backwards-compatible: device field defaults to None. The corresponding CLIs (src/rollout_market/cli/*) read it from env vars (DEVICE_VENDOR, DEVICE_FAMILY, DEVICE_CUDA_COMPUTE, DEVICE_VRAM_GB, DEVICE_HOST_LABEL) and inject. Dashboards pivot by device; reports with device=None bucket as 'L40S (g6e.12xlarge)' per STEER.md. Round-trip fixture tests for each lab. Document the env vars in scripts/live/README.md. Evidence: round-trip test pass + a rendered dashboard showing a device column. Honor STEER.md global directives."
+  },
+  "dashboard.dense_moe_split": {
+    "passes": false,
+    "evidence": null,
+    "directive": "Restructure /docs/index.html (rendered by scripts/live/publish_dashboards.py) so it opens with TWO graph-first matrices: one labelled 'Dense (Qwen3-32B)', one labelled 'MoE (Qwen3-30B-A3B)'. Each matrix renders as a tile grid (NOT a table): rows = trainer-ref {FSDP, Megatron}, columns = (precision × device). Each tile is a small chart (bar or traffic-light) summarizing the cell's headline metric: ESS for dense, router_flip_rate for MoE. Tiles deep-link into the detailed dashboards. Add a test asserting the rendered HTML contains data-section='dense-matrix' and data-section='moe-matrix' blocks. Evidence: the rendered /docs/index.html + the new test. Honor STEER.md global directives."
+  },
+  "dashboard.megatron_placeholder": {
+    "passes": false,
+    "evidence": null,
+    "directive": "Every Megatron-row tile in both matrices renders as a 'TBD — pending HF→Megatron conversion' placeholder with a clearly-greyed style. The placeholder is generated by the dashboard renderer when no report exists for that (trainer=Megatron, precision, device) combination — not hard-coded into the HTML. Add a test asserting that with zero Megatron reports ingested, every Megatron tile contains the literal placeholder text. Evidence: the rendered /docs/index.html (showing the placeholders) + the new test. Honor STEER.md global directives."
+  },
+  "dashboard.cto_readability_pass": {
+    "passes": false,
+    "evidence": null,
+    "directive": "Structural review of /docs/index.html: above the fold answers the question 'Does engine + precision + device change rollout/training equivalence enough to matter for RL?' using ONLY the two matrices, with NO mention of public APIs, sglang, or HF-as-engine in the headline. Run /codex-review --effort low against the rendered HTML and the dashboard module diffs. On PASS, save the codex verdict to .claude/evidence/cto_readability_codex_verdict.txt. Evidence: that verdict file. Honor STEER.md global directives. This is the LAST dashboard entry — when this is true the dashboard restructure is complete."
+  },
+  "loop.cwc_default_fail_contract": {
+    "passes": false,
+    "evidence": null,
+    "directive": "Confirm the cwc-long-running-agents default-FAIL contract is correctly wired: (1) .claude/feature-results.json exists with all-false initial entries (this very file), (2) .claude/scripts/verify-result-write.sh is registered as a PreToolUse Write|Edit hook in .claude/settings.json and denies false→true flips without evidence, (3) .claude/README.md maps each of the four cwc primitives (default-FAIL contract, fresh-context evaluator, agent-maintained handoff, operator controls) to a concrete file in this repo. Run a negative test: attempt to write feature-results.json with an entry flipped true and evidence null; assert the hook exits non-zero. Run a positive test: same with evidence set to an existing file referenced from evidence_log.jsonl; assert the hook exits zero. Save both test outputs as .claude/evidence/verify_result_write_negative.txt and .claude/evidence/verify_result_write_positive.txt. Evidence: the positive test output. Honor STEER.md global directives."
+  },
+  "cleanup.consolidate_build_dense_input": {
+    "passes": false,
+    "evidence": null,
+    "directive": "Consolidate scripts/live/build_dense_input.py, build_dense_input_fp8.py, and build_dense_input_sglang.py into a single env-driven script scripts/live/build_dense_input.py that accepts --variant {vllm-bf16,vllm-fp8,sglang-bf16,sglang-fp8,megatron-bf16} (default vllm-bf16) and reads its inputs from /tmp/rollout_<variant>.json + /tmp/trainer_<variant>.json (with vllm-bf16 falling back to /tmp/rollout.json + /tmp/trainer.json for back-compat). Delete the two _fp8 / _sglang variants and update scripts/live/README.md to document the new --variant flag. Add tests/test_build_dense_input_script.py that imports the script as a module and asserts: (a) every variant produces a valid DenseMismatchReport-shaped JSON when given a minimal stub payload via monkeypatch'd Path.read_text, (b) the rollout_engine.fingerprint / precision_class / quantization_class match the variant. Evidence: the new test file. Honor STEER.md global directives (one entry per commit)."
+  },
+  "cleanup.consolidate_marketplace_real": {
+    "passes": false,
+    "evidence": null,
+    "directive": "Consolidate scripts/live/marketplace_real.py and marketplace_real_fp8.py into a single env-driven script scripts/live/marketplace_real.py that accepts --variant {bf16,fp8} (default bf16) and reads /tmp/rollout_<variant>.json + /tmp/trainer_<variant>.json (bf16 falls back to /tmp/rollout.json + /tmp/trainer.json). The bf16 variant builds the honest + toxic_tokenizer + toxic_no_logprobs trio; the fp8 variant builds the realistic precision-mismatch case that validators must reject. Delete marketplace_real_fp8.py and update scripts/live/README.md. Add tests/test_marketplace_real_script.py asserting both variants construct valid SampleGroups for their honest case and that the fp8 variant's group is rejected by validate_group_against_lease when the policy manifest pins bf16. Evidence: the new test file. Honor STEER.md global directives (one entry per commit)."
+  },
+  "megatron.qwen3_moe_conversion_runbook": {
+    "passes": false,
+    "evidence": null,
+    "directive": "Add scripts/live/megatron_convert_qwen3_moe.md — a self-contained runbook for converting Qwen/Qwen3-30B-A3B from HF to a Megatron torch-dist checkpoint on the spot instance using the slimerl/slime:latest docker image. The runbook must pin: (1) the docker image tag, (2) the exact docker run flags (--gpus all --ipc=host --shm-size=64g --ulimit memlock=-1 --ulimit stack=67108864) and volume mounts (host ~/megatron_conversion/{hf_model,megatron_ckpt,logs} → container /root/Qwen3-30B-A3B, /root/Qwen3-30B-A3B_torch_dist, /root/logs), (3) the conversion command (PYTHONPATH=/root/Megatron-LM/ torchrun --nproc-per-node 4 tools/convert_hf_to_torch_dist.py ${MODEL_ARGS[@]} --hf-checkpoint /root/Qwen3-30B-A3B/ --save /root/Qwen3-30B-A3B_torch_dist/), (4) the env vars the existing live scripts already read (MODEL=Qwen/Qwen3-30B-A3B, TRAINER_REFERENCE=megatron, DEVICE_*) so the resulting dist-ckpt feeds router_mismatch_lab without code changes, (5) disk budget (~200 GB peak), time budget (~60 min HF download + ~20 min conversion), and the spot-instance cleanup step. Cross-link from scripts/live/README.md and docs/future_research.md. No Python code changes — this is a doc-only entry. Evidence: the new runbook file path. Honor STEER.md global directives."
+  }
+}

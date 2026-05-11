@@ -32,8 +32,8 @@ class EngineFingerprint(BaseModel):
 class DenseMismatchReport(BaseModel):
     """Stable JSON contract for one dense mismatch comparison.
 
-    Mirrors experiments/mismatch_observatory/metrics_contract.json so a
-    downstream dashboard can render runs without any per-experiment glue.
+    Downstream dashboards consume this schema directly; no per-experiment
+    glue is needed between a lab run and the dashboard renderer.
     """
 
     schema_version: Literal["mismatch_observatory.v0"] = "mismatch_observatory.v0"
