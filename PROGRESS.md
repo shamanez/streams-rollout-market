@@ -47,8 +47,23 @@ under a backgrounded `docker run` (pid 81179 at launch). Output log:
 `~/megatron_conversion/hf_model_qwen3_32b/` (symlinks into
 `~/hf-cache/hub/models--Qwen--Qwen3-32B/snapshots/9216db.../`).
 Target torch-dist checkpoint under
-`~/megatron_conversion/qwen3_32b_torch_dist/` (~20 min runtime
-expected).
+`~/megatron_conversion/qwen3_32b_torch_dist/`.
+
+**Status: failed before save** (12:06 UTC). All 4 ranks raised
+`ValueError: Couldn't instantiate the backend tokenizer from one of:
+(1) a tokenizers library serialization file, (2) a slow tokenizer
+instance to convert or (3) an equivalent slow tokenizer class to
+instantiate and convert. You need to have sentencepiece or tiktoken
+installed to convert a slow tokenizer to a fast one.` from
+`/root/slime/slime/backends/megatron_utils/initialize.py:77`. Most
+likely cause: the symlinks staged into
+`~/megatron_conversion/hf_model_qwen3_32b/` point at host paths
+(`/home/ubuntu/hf-cache/...`) that aren't visible inside the
+container — the readable `tokenizer.json` is dangling. Next session
+should either (a) bind-mount the hf-cache directly into the container,
+or (b) copy (not symlink) the tokenizer files into the staging dir,
+or (c) install `sentencepiece` inside the container before running.
+Conversion takes ~20 min once tokenizer init succeeds.
 
 **Next session — to close out `model.megatron_convert_qwen3_32b`:**
 ```bash
