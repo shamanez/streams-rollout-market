@@ -20,21 +20,6 @@ sys.modules["serve_dashboards"] = serve_dashboards
 SPEC.loader.exec_module(serve_dashboards)  # type: ignore[union-attr]
 
 
-def test_endpoint_summary_format():
-    payload = {
-        "num_runs": 10,
-        "capability_totals": {
-            "token_ids_available": 1,
-            "sampled_logprobs_available": 3,
-            "top_logprobs_available": 3,
-            "seed_supported": 1,
-        },
-    }
-    s = serve_dashboards._endpoint_summary(payload)
-    assert "10 probes" in s
-    assert "sampled_logprobs_available=3/10" in s
-
-
 def test_dense_summary_with_engine_pairs():
     payload = {
         "engine_pairs": [
@@ -103,7 +88,7 @@ def test_render_index_marks_missing_cards(tmp_path: Path, monkeypatch):
     # No dashboards generated → all missing cards.
     assert page.startswith("<!doctype html>")
     assert "missing" in page
-    assert "Endpoint identity-gap dashboard" in page
+    assert "Endpoint identity-gap dashboard" not in page
     assert "Agent trajectory dashboard" in page
 
 

@@ -1,10 +1,9 @@
 """Launch a local HTTP server over runs/ and open the index in a browser.
 
 Generates `runs/live/index.html` that links every produced dashboard
-(endpoint coverage, dense mismatch, MoE router, agent trajectory,
-marketplace simulation) with a one-line headline pulled out of the
-dashboard's JSON. Then serves `runs/` over plain http.server and opens
-the index page.
+(dense mismatch, MoE router, agent trajectory, marketplace simulation)
+with a one-line headline pulled out of the dashboard's JSON. Then serves
+`runs/` over plain http.server and opens the index page.
 
 This is the "click here to see everything" entry point.
 
@@ -38,18 +37,6 @@ def _read_json(path: Path) -> dict | None:
         return json.loads(path.read_text(encoding="utf-8"))
     except (FileNotFoundError, json.JSONDecodeError):
         return None
-
-
-def _endpoint_summary(payload: dict) -> str:
-    if not payload:
-        return ""
-    totals = payload.get("capability_totals", {})
-    n = payload.get("num_runs", 0)
-    parts = []
-    for cap in ("token_ids_available", "sampled_logprobs_available", "top_logprobs_available", "seed_supported"):
-        v = totals.get(cap, 0)
-        parts.append(f"{cap}={v}/{n}")
-    return f"{n} probes — " + ", ".join(parts)
 
 
 def _dense_summary(payload: dict) -> str:
@@ -104,13 +91,6 @@ def _marketplace_summary(payload: dict) -> str:
 
 
 DASHBOARDS = [
-    {
-        "title": "Endpoint identity-gap dashboard",
-        "blurb": "Free-tier API probe coverage matrix. Which providers expose token IDs, logprobs, top_logprobs, seed_supported.",
-        "html": "live/endpoint_dashboard/endpoint_dashboard.html",
-        "json": "live/endpoint_dashboard/endpoint_dashboard.json",
-        "summary_fn": _endpoint_summary,
-    },
     {
         "title": "Dense mismatch dashboard",
         "blurb": "Per-(rollout_engine, trainer_engine) ESS / clipped / sequence-log-ratio over Qwen3-32B response tokens.",

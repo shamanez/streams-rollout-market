@@ -43,18 +43,6 @@ def _read_json(path: Path) -> dict | None:
         return None
 
 
-def _endpoint_summary(payload: dict) -> str:
-    if not payload:
-        return ""
-    totals = payload.get("capability_totals", {})
-    n = payload.get("num_runs", 0)
-    parts = []
-    for cap in ("token_ids_available", "sampled_logprobs_available", "top_logprobs_available", "seed_supported"):
-        v = totals.get(cap, 0)
-        parts.append(f"{cap}={v}/{n}")
-    return f"{n} probes — " + ", ".join(parts)
-
-
 def _dense_summary(payload: dict) -> str:
     pairs = payload.get("engine_pairs", [])
     if not pairs:
@@ -103,14 +91,6 @@ def _market_summary(payload: dict) -> str:
 
 
 CARDS = [
-    {
-        "slug": "endpoint",
-        "title": "Endpoint identity-gap dashboard",
-        "blurb": "Free-tier API probe coverage matrix: which providers expose token IDs, logprobs, top_logprobs, seed_supported.",
-        "html_src": "endpoint_dashboard/endpoint_dashboard.html",
-        "json_src": "endpoint_dashboard/endpoint_dashboard.json",
-        "summary_fn": _endpoint_summary,
-    },
     {
         "slug": "dense",
         "title": "Dense mismatch dashboard",
@@ -179,12 +159,6 @@ _HEADLINES: dict[str, list[tuple[str, callable]]] = {
          lambda p: f"{min((x['mean_ess'] for x in p.get('engine_pairs', [])), default=0):.4f}"),
         ("worst max|log_ratio|",
          lambda p: f"{max((x['worst_max_abs_log_ratio'] for x in p.get('engine_pairs', [])), default=0):.3f}"),
-    ],
-    "endpoint": [
-        ("seed_supported",
-         lambda p: f"{p.get('capability_totals', {}).get('seed_supported', 0)}/{p.get('num_runs', 0)}"),
-        ("sampled_logprobs",
-         lambda p: f"{p.get('capability_totals', {}).get('sampled_logprobs_available', 0)}/{p.get('num_runs', 0)}"),
     ],
     "marketplace": [
         ("submissions",

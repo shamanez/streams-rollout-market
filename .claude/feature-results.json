@@ -1,7 +1,7 @@
 {
   "dashboard.endpoint_retired": {
-    "passes": false,
-    "evidence": null,
+    "passes": true,
+    "evidence": ".claude/evidence/dashboard_endpoint_retired/docs_index.html",
     "directive": "Retire the endpoint-coverage dashboard from the public surface. Remove the endpoint card from /docs/index.html (scripts/live/publish_dashboards.py) and from the runtime live index (scripts/live/serve_dashboards.py). Keep src/rollout_market/observatory/endpoint_dashboard.py and its tests; the contract probe still has internal value. Add a test that asserts the rendered /docs/index.html contains no 'endpoint_dashboard' string in its headline section. Evidence: path to the rendered /docs/index.html plus the new test file. Remember the global directives in STEER.md (graphs over tables, engine filter, device axis, verl glossary, one entry per commit)."
   },
   "dashboard.engine_filter": {

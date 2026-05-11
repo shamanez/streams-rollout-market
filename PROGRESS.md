@@ -29,6 +29,13 @@ not new plan items.
   router, agent) with inline glossaries and modern charts.
 
 ## Completed (operational follow-ups, originally listed as "next")
+- STEER `dashboard.endpoint_retired`: removed the endpoint card from
+  the public `/docs/index.html` (publish_dashboards.py) and the runtime
+  live index (serve_dashboards.py); deleted `docs/endpoint_dashboard.{html,json}`
+  from the published surface; `src/rollout_market/observatory/endpoint_dashboard.py`
+  and its tests retained for internal use. Added `tests/test_publish_dashboards.py`
+  asserting CARDS / _HEADLINES / rendered headline all exclude endpoint.
+  275 passed.
 - sglang as a second rollout engine on the spot instance
   (PR #23, #25): four-cell dense matrix vLLM/sglang × bf16/fp8.
 - MoE router live run with Qwen3-30B-A3B FP8 vs bf16 (PR #26).
@@ -152,7 +159,7 @@ effort-to-evidence ratio:
   remains).
 
 ## Test status
-- pytest -q: **272 passed, 0 failed** (2026-05-11).
+- pytest -q: **275 passed, 0 failed** (2026-05-11).
 - ruff check .: clean.
 - Real-data round-trips: `scripts/live/marketplace_real{,_fp8}.py`
   exit 0.
