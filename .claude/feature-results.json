@@ -113,5 +113,35 @@
     "passes": true,
     "evidence": ".claude/evidence/dashboard_high_quality_render/codex_verdict.txt",
     "directive": "Final acceptance gate. Re-run `python -m rollout_market.cli.dense_dashboard ...`, `python -m rollout_market.cli.router_dashboard ...`, `python -m rollout_market.cli.agent_dashboard ...`, then `python scripts/live/publish_dashboards.py`. Inspect the rendered `docs/index.html`: above the fold MUST show 8 tiles that are colour-coded green / amber / red against the per-metric thresholds (no `mx-empty` and no `mx-tbd` placeholders in the visible matrix area). Run `/codex-review --effort low` against `docs/index.html` with the prompt 'Does this 8-tile dashboard answer the question: does the rollout-vs-trainer engine choice change inference-time behaviour enough to matter for crowdsourced MoE rollouts?'. On PASS save the verdict to `.claude/evidence/dashboard_high_quality_render/codex_verdict.txt`. Evidence: that verdict file + the re-rendered `docs/index.html` snapshot. This is the LAST entry — when it flips true the autonomous loop deletes STEER.md per the stop clause and the dashboard is complete."
+  },
+  "hermes_agent.runner_and_adapter": {
+    "passes": false,
+    "evidence": null,
+    "directive": "Add scripts/live/hermes_agent_runner.py that shells out to the NousResearch/hermes-agent CLI (run one task at a time with OPENAI_BASE_URL+OPENAI_API_KEY env), parses the resulting JSONL trajectory, and writes our AgentTrajectory schema (src/rollout_market/observatory/agent_trajectory_lab.py). The adapter must be a pure function adapt_hermes_record() testable offline. Add tests/test_hermes_agent_runner.py with a fixture JSONL covering: <think> block, two <tool_call> blocks with matched tool-result records, final non-tool assistant turn, plus a negative malformed-record case. rollout_engine.name must come from env var ENGINE_LABEL with default hermes-{model}-{precision}. Honor STEER.md global directives (one entry per commit)."
+  },
+  "hermes_agent.realistic_task_suite": {
+    "passes": false,
+    "evidence": null,
+    "directive": "Add scripts/live/agent_tasks_hermes.json with exactly 12 multi-turn tasks per the table in the approved plan (/Users/shamane/.claude/plans/replicated-inventing-bear.md Iter 2 section). Tasks 5 and 9 require new entries in _SIM_FILES in scripts/live/agent_runner.py: '/tmp/fib.py' (off-by-one fibonacci) and '/tmp/clip.py' (hardcoded bound function). Add tests/test_agent_tasks_hermes_schema.py asserting exactly 12 tasks, all expected_tools exist in TOOL_SCHEMAS, at least 4 use multiple distinct tools, at least 1 has empty or absent expected_tools (the no-op-trivia case), and _SIM_FILES contains both new paths. Honor STEER.md global directives."
+  },
+  "hermes_agent.dense_qwen3_32b_run": {
+    "passes": false,
+    "evidence": null,
+    "directive": "Run scripts/live/hermes_agent_runner.py against vllm-bf16 Qwen3-32B then vllm-fp8 Qwen3-32B on my-vllm-spot-instance, both vLLM serves using --tool-call-parser hermes via the existing scripts/live/serve_qwen_for_agent.sh. For the noise-floor tile, also run bf16 a second time with SEED=4321 (label hermes-qwen3-32b-bf16-seedB). Save trajectories under runs/live/agent/hermes/qwen3-32b/{bf16,bf16_seedB,fp8}/<task_id>.json. Evidence: copy all three dirs into .claude/evidence/hermes_agent_dense_qwen3_32b/ plus a RUN.md with the three serve commands + per-side task completion counts + run timestamps. Honor STEER.md global directives."
+  },
+  "hermes_agent.dense_render": {
+    "passes": false,
+    "evidence": null,
+    "directive": "Pair the dense bf16/fp8 trajectories AND the bf16/bf16_seedB pair via cli.agent_trajectory_lab. Aggregate via cli.agent_dashboard. Extend scripts/live/publish_dashboards.py with a new section data-section=\"hermes-agent-dense-matrix\" between the existing MoE matrix and the cards grid, with TWO tiles: (a) fp8-vs-bf16 (the precision-effect signal), (b) bf16_seedB-vs-bf16 (the noise floor). Color: green if final_answer_match >= 80%, amber 50-80%, red <50%. Bar value = tool_call_jaccard mean across tasks. Tile blurb prose mirrors the existing dense matrix blurb style. Add tests/test_publish_dashboards_hermes_agent.py asserting the rendered docs/index.html contains data-section=\"hermes-agent-dense-matrix\" with two mx-tile children. Evidence: rendered docs/index.html into .claude/evidence/hermes_agent_dense_render/. Honor STEER.md global directives."
+  },
+  "hermes_agent.moe_qwen3_30b_a3b_run": {
+    "passes": false,
+    "evidence": null,
+    "directive": "Run hermes_agent_runner against vllm-bf16 Qwen3-30B-A3B (TP=4) then vllm-fp8 Qwen3-30B-A3B (TP=2 -- the existing FP8 block_n=128 / ffn_intermediate=768 constraint). Also run bf16 a second time with SEED=4321 for the noise floor. Save under runs/live/agent/hermes/qwen3-30b-a3b/{bf16,bf16_seedB,fp8}/. Evidence: all three dirs into .claude/evidence/hermes_agent_moe_qwen3_30b_a3b/ + RUN.md noting the TP=2 constraint and per-side completion counts. Honor STEER.md global directives."
+  },
+  "hermes_agent.moe_render_and_codex": {
+    "passes": false,
+    "evidence": null,
+    "directive": "Mirror Iter 4 (dense_render) for the MoE model: pair, aggregate, add a second section data-section=\"hermes-agent-moe-matrix\" to docs/index.html via publish_dashboards.py with 2 tiles (fp8-vs-bf16 + bf16_seedB-vs-bf16 noise floor). Add tests/test_publish_dashboards_hermes_moe.py asserting BOTH hermes sections render with their 2 tiles each. Update _glossary.py only if a new aggregate metric is introduced (likely just reuse existing tool_call_jaccard / final_answer_match / first_divergence_step). Run /codex-review --effort low against the rendered docs/index.html. Evidence: rendered docs/index.html + codex_verdict.txt into .claude/evidence/hermes_agent_full_render/. Honor STEER.md global directives. This is the LAST hermes-agent entry -- when this is true the matrix is complete and STEER.md self-deletes."
   }
 }
