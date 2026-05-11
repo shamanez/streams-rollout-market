@@ -395,3 +395,15 @@ The variant picks the right `rollout_engine`, `trainer_engine`,
 `precision_class`, and `quantization_class` for the
 `DenseMismatchReport` shape. Default is `vllm-bf16` (zero-argument
 invocation behaves like the original script).
+
+## Megatron-LM as a trainer-side reference (runbook)
+
+See `scripts/live/megatron_convert_qwen3_moe.md` for the self-contained
+runbook that converts `Qwen/Qwen3-30B-A3B` from HF to a Megatron
+torch-dist checkpoint on the spot instance, using the pinned
+`slimerl/slime:latest` docker image. Once the dist-ckpt is built, the
+existing live scripts pick it up via the `TRAINER_REFERENCE=megatron`
+env var (plus `MEGATRON_CKPT_DIR`) and feed it into
+`router_mismatch_lab` / `dense_mismatch_lab` without code changes.
+This is the path that fills the MEGATRON row on the two
+`/docs/index.html` matrices.

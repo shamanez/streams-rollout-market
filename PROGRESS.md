@@ -29,6 +29,19 @@ not new plan items.
   router, agent) with inline glossaries and modern charts.
 
 ## Completed (operational follow-ups, originally listed as "next")
+- STEER `megatron.qwen3_moe_conversion_runbook`: added
+  `scripts/live/megatron_convert_qwen3_moe.md` — a self-contained
+  runbook for converting `Qwen/Qwen3-30B-A3B` from HF to a Megatron
+  torch-dist checkpoint on the spot instance. Pins the
+  `slimerl/slime:latest` docker image, exact docker run flags
+  (`--gpus all --ipc=host --shm-size=64g`, mem/stack ulimits), volume
+  mounts (`hf_model`, `megatron_ckpt`, `logs`), the conversion command
+  (`torchrun --nproc-per-node 4 tools/convert_hf_to_torch_dist.py`),
+  the env vars the existing live scripts read
+  (`MODEL`, `TRAINER_REFERENCE=megatron`, `MEGATRON_CKPT_DIR`,
+  `DEVICE_*`), and the disk/time/cleanup budgets (~200 GB peak,
+  ~80 min total). Cross-linked from `scripts/live/README.md` and
+  `docs/future_research.md`. Doc-only — no Python code changes.
 - STEER `cleanup.consolidate_marketplace_real`: consolidated
   `scripts/live/marketplace_real.py` and `marketplace_real_fp8.py`
   into a single env-driven script with `--variant {bf16, fp8}`

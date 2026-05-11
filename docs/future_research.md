@@ -47,6 +47,12 @@ FSDP forward-only is bit-equivalent to HF transformers (we measured).
 Megatron uses different attention and MLP CUDA kernels even in
 forward, so it's the next trainer engine that would actually move the
 numbers. Blocker: HF→Megatron checkpoint conversion. ~1 day session.
+The end-to-end recipe lives in
+[`scripts/live/megatron_convert_qwen3_moe.md`](../scripts/live/megatron_convert_qwen3_moe.md)
+— a pinned `slimerl/slime:latest` docker run that builds a
+Qwen3-30B-A3B torch-dist checkpoint on the spot instance (~200 GB
+peak, ~80 min total). Once the dist-ckpt lands, the live scripts pick
+it up via `TRAINER_REFERENCE=megatron`; no code changes needed.
 
 ### 6. MoE router under longer horizons and multi-prompt
 The 98.4% top-k set disagreement is from one 64-token sample. Need
