@@ -90,8 +90,8 @@
     "directive": "Fill the Dense (Qwen3-32B) matrix tile at (rollout=vLLM-fp8, trainer=Megatron-bf16). Depends on `model.megatron_convert_qwen3_32b`. Same recipe as `dense.qwen3_32b.vllm_bf16_megatron` but the rollout side uses `Qwen/Qwen3-32B-FP8` with `ROLLOUT_LABEL=vllm-fp8`. The trainer side is still Megatron-bf16 (full precision on the trainer is non-negotiable per STEER.md global directives). Evidence: the new dense_mismatch_report.json with `precision_class='fp8'` AND `trainer_engine.name='megatron-lm'` AND `model_id` contains `'Qwen3-32B'`. Honor STEER.md global directives."
   },
   "moe.qwen3_30b_a3b.vllm_bf16_megatron_router": {
-    "passes": false,
-    "evidence": null,
+    "passes": true,
+    "evidence": ".claude/evidence/moe_qwen3_30b_a3b_vllm_bf16_megatron_router/router_mismatch_report.json",
     "directive": "Fill the MoE (Qwen3-30B-A3B) matrix tile at (rollout=vLLM-bf16, trainer=Megatron-bf16) with a real router_flip_rate measurement. Depends on `vllm.router_trace_emit`. (1) Run `scripts/live/run_vllm_moe_rollout.py MODEL=Qwen/Qwen3-30B-A3B ROLLOUT_LABEL=vllm-bf16` to produce `/tmp/vllm_router.json` (top-k expert IDs per (token, layer) on the rollout side); (2) reuse the existing `/tmp/megatron_router.json` from the Megatron forward pass we already ran (or re-run if the prompt changed); (3) write `scripts/live/build_megatron_router_input.py --rollout-input /tmp/vllm_router.json --megatron-router-input /tmp/megatron_router.json --out /tmp/router_mismatch_input_vllm_bf16_megatron.json` — the existing build helper already handles this shape, just point it at the vLLM trace instead of the HF one; (4) `python -m rollout_market.cli.router_mismatch_lab --input ... --out-root runs/live/router`; (5) re-render. Evidence: the new router_mismatch_report.json with `rollout_engine.name` containing 'vllm' AND `trainer_engine.name='megatron'`. The router_flip_rate value is the headline finding — non-zero = the marketplace MoE problem is real. Honor STEER.md global directives."
   },
   "moe.qwen3_30b_a3b.vllm_bf16_fsdp_router": {
