@@ -10,6 +10,17 @@ tracking). The thesis:
 > check on its own claims, and a way for the next session to pick up
 > cleanly where this one left off.
 
+## Current state (2026-05-12)
+
+- **`feature-results.json`**: 23/23 entries `passes: true`. The
+  STEER cycle that drove the dashboard to 8 green/amber matrix tiles
+  is complete; `STEER.md` self-deleted per its own stop clause.
+- **`evidence/`**: one subdirectory per flipped entry (rollout +
+  trainer JSONs + dashboard renders + codex verdicts).
+- **Next work** lives in `../PROGRESS.md` "Next work" and
+  `../docs/future_research.md`. Re-arm STEER with
+  `bash scripts/steer.sh "<directive>"` to redirect the loop.
+
 ## Primitive → file map
 
 | cwc primitive               | file(s) in this repo                                       |

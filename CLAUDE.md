@@ -8,11 +8,110 @@ This repository implements a decentralized rollout marketplace and rollout valid
 
 ```bash
 pip install -e ".[dev]"                # install with dev deps
-pytest -q                              # run tests
+pytest -q                              # run tests (347 passing)
 ruff check .                           # lint
 ruff format --check .                  # format check
 python examples/local_worker_demo.py   # smoke test
 ```
+
+## How to run
+
+### View the dashboard locally
+
+```bash
+# 1. Re-render docs/index.html from the latest runs/live/*.json bundles.
+python scripts/live/publish_dashboards.py            # writes to docs/
+# 2. Serve docs/ and open the index in a browser.
+python -m http.server -d docs 8000 &
+open http://localhost:8000/
+```
+
+The shipped `docs/index.html` answers one question above the fold:
+*does engine + precision + device change inference-time behaviour
+enough to matter for crowdsourced MoE rollouts?* Two matrices (dense
+Qwen3-32B + MoE Qwen3-30B-A3B), four green/amber tiles each, traffic-
+light coloured against per-metric thresholds. Headline numbers come
+from `runs/live/{dense,router,agent}_dashboard.{html,json}`.
+
+### Dense matrix (Qwen3-32B) — vLLM rollout vs FSDP/Megatron reference
+
+Each cell is one `live(...)` commit. Env-driven, runs on
+`my-vllm-spot-instance`. Outputs land in `runs/live/dense/`.
+
+```bash
+# vLLM-bf16 rollout (writes /tmp/rollout.json on the spot)
+ssh my-vllm-spot-instance 'cd ~ && VLLM_DTYPE=bfloat16 \
+  python scripts/live/run_vllm_rollout.py'
+
+# FSDP-bf16 teacher-force (writes /tmp/trainer.json)
+ssh my-vllm-spot-instance 'cd ~ && torchrun --nproc-per-node 4 \
+  scripts/live/run_fsdp_reference.py'
+
+# Megatron-bf16 teacher-force inside slimerl/slime container
+ssh my-vllm-spot-instance 'bash scripts/live/megatron_reference_launch.sh'
+
+# Pair them into a DenseMismatchReport and render the tile.
+python scripts/live/build_dense_input.py --variant vllm-bf16 \
+  --out runs/live/dense/vllm-bf16-fsdp-bf16.json
+python -m rollout_market.cli.dense_dashboard \
+  --reports-glob 'runs/live/dense/*.json' \
+  --out-dir runs/live/dense_dashboard
+```
+
+Variants supported by `build_dense_input.py --variant`:
+`{vllm-bf16, vllm-fp8, sglang-bf16, sglang-fp8, megatron-bf16}`.
+Currently shipped tiles: 4 (FSDP × {bf16,fp8} + Megatron × {bf16,fp8}).
+
+### MoE matrix (Qwen3-30B-A3B) — router_flip_rate per (engine × precision)
+
+Mirror of the dense path but with router-trace emission. vLLM-fp8 MoE
+runs at TP=2 (TP=4 fails vLLM's FP8 `block_n=128` constraint).
+
+```bash
+# vLLM MoE rollout with router traces (writes /tmp/vllm_router.json)
+ssh my-vllm-spot-instance 'cd ~ && VLLM_DTYPE=bfloat16 \
+  python scripts/live/run_vllm_moe_rollout.py'
+
+# FSDP MoE reference (writes /tmp/fsdp_router.json)
+ssh my-vllm-spot-instance 'cd ~ && torchrun --nproc-per-node 4 \
+  scripts/live/run_fsdp_moe_reference.py'
+
+# Megatron MoE reference inside slimerl/slime container
+ssh my-vllm-spot-instance 'bash scripts/live/megatron_moe_reference_launch.sh'
+
+# Pair into a RouterMismatchReport; --variant picks one of four cells.
+python scripts/live/build_router_input_pair.py \
+  --rollout-input /tmp/vllm_router.json \
+  --trainer-input /tmp/fsdp_router.json \
+  --variant vllm-bf16-fsdp-bf16 \
+  --out runs/live/router/<variant>.json
+python -m rollout_market.cli.router_dashboard \
+  --reports-glob 'runs/live/router/*.json' \
+  --out-dir runs/live/router_dashboard
+```
+
+Variants: `{vllm-bf16, vllm-fp8} × {fsdp-bf16, megatron-bf16}` (4 cells).
+
+### Autonomous loop
+
+```bash
+/autonomous-loop              # picks up from PROGRESS.md "Next work"
+touch AGENT_STOP              # halt after current iteration
+rm AGENT_STOP                 # resume
+bash .claude/scripts/steer.sh "<directive>"   # re-arm STEER.md
+```
+
+### Free-tier endpoint probes (legacy / appendix)
+
+```bash
+set -a; source .env; set +a
+python -m rollout_market.cli.endpoint_probe --provider groq \
+  --base-url https://api.groq.com/openai/v1 \
+  --model llama-3.3-70b-versatile --api-key-env GROQ_API_KEY \
+  --out-root runs/live/groq
+```
+
+`scripts/live/README.md` has the full per-provider matrix.
 
 ## Phase 1 constraint: FREE TIER ONLY (MANDATORY)
 

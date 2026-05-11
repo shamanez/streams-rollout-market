@@ -22,12 +22,32 @@ This repository is not a trainer. It does not implement PPO, GRPO, RLOO, DPO, FS
 
 ## Public wedge: Mismatch Observatory
 
-The first thing to show is the Rollout Mismatch Observatory:
+The Rollout Mismatch Observatory ships as a live, graph-first dashboard:
 
-1. endpoint identity gap probe for free/cheap OpenAI-compatible endpoints
-2. controlled dense mismatch lab with the same checkpoint served under different engines/precision
-3. small MoE router mismatch lab
-4. market simulation where OPBC accepts, corrects, quarantines, or rejects worker output
+- **[/docs/index.html](docs/index.html)** — two matrices, eight tiles,
+  one question:
+
+  > Does engine + precision + device change inference-time behaviour
+  > enough to matter for crowdsourced MoE rollouts?
+
+  *Yes for MoE, no for dense.* At matched precision (bf16/bf16) vLLM-as-
+  rollout vs FSDP/Megatron-as-trainer-reference diverges ~4% per
+  (token, layer) on router decisions; fp8 inference adds 2-3% on top.
+  Dense ESS stays >0.99 across all four cells.
+
+The four labs behind those tiles:
+
+1. dense mismatch lab — same checkpoint, vLLM rollout vs FSDP/Megatron
+   teacher-force, ESS / |Δlogp| / clipped-fraction reported per pair
+2. MoE router mismatch lab — `output_router_logits=True`, paired with
+   vLLM `enable_return_routed_experts=True`, router_flip_rate per layer
+3. agent-trajectory lab — first-divergence-step, tool-call Jaccard,
+   answer-match across rollout vs trainer-served generations
+4. marketplace simulation — OPBC accepts/corrects/quarantines/rejects
+   honest/noisy/stale/toxic worker profiles
+
+The endpoint-coverage probe is retired from the public surface (still
+shipped as `src/rollout_market/observatory/endpoint_probe.py`).
 
 ## Quick start
 
@@ -35,9 +55,21 @@ The first thing to show is the Rollout Mismatch Observatory:
 python -m venv .venv
 source .venv/bin/activate
 pip install -e .[dev]
-pytest -q
+pytest -q                                            # 347 passing
 python examples/local_worker_demo.py
 ```
+
+### View the dashboard locally
+
+```bash
+python scripts/live/publish_dashboards.py            # re-renders docs/
+python -m http.server -d docs 8000 &
+open http://localhost:8000/
+```
+
+Live experiments run on the spot instance; see the
+**[How to run](CLAUDE.md#how-to-run)** section in `CLAUDE.md` for the
+dense + MoE matrix runbook.
 
 ## Repository layout
 

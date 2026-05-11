@@ -1,7 +1,7 @@
 # PROGRESS.md — Agent Handoff State
 
 ## Last updated
-2026-05-11
+2026-05-12
 
 ## Current phase
 **STEER complete — 8 green/amber matrix tiles + codex PASS.** All 23
@@ -14,6 +14,12 @@ done; `/docs/index.html` answers the load-bearing question:
   adds 2-3% router_flip_rate over the bf16 baseline, regardless of
   whether the trainer reference is FSDP-bf16 or Megatron-bf16.
 
+Branch hygiene (2026-05-12): all merged research/setup branches
+deleted locally + on origin. Repo now carries `main` +
+`research/megatron-and-engine-purge` (predecessor branch, kept for
+historical reference — its two commits were superseded by the work
+that landed on main).
+
 ## Resume in a new session
 **Single command:** `/autonomous-loop`
 
@@ -25,6 +31,14 @@ Operator overrides:
 - `touch AGENT_STOP` — halt after the current iteration.
 - `bash .claude/scripts/steer.sh "<note>"` — re-arm STEER.md.
 - `rm AGENT_STOP` — resume.
+
+## How to view the dashboard
+```bash
+python scripts/live/publish_dashboards.py    # re-render docs/
+python -m http.server -d docs 8000 &
+open http://localhost:8000/
+```
+Full live-experiment runbook lives in `CLAUDE.md#how-to-run`.
 
 ## Shipped this session (2026-05-11)
 
