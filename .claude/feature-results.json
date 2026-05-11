@@ -105,8 +105,8 @@
     "directive": "Fill the MoE (Qwen3-30B-A3B) matrix tile at (rollout=vLLM-fp8, trainer=Megatron-bf16). Same recipe as `moe.qwen3_30b_a3b.vllm_bf16_megatron_router` but the rollout side uses `Qwen/Qwen3-30B-A3B-FP8`. This is the headline cell — fp8 inference is what crowdsourced workers will actually run, and we expect router_flip_rate to be higher here than in the bf16 cell. Evidence: new router_mismatch_report.json with `rollout_engine.name` containing 'fp8' AND `trainer_engine.name='megatron'`. Honor STEER.md global directives."
   },
   "moe.qwen3_30b_a3b.vllm_fp8_fsdp_router": {
-    "passes": false,
-    "evidence": null,
+    "passes": true,
+    "evidence": ".claude/evidence/moe_qwen3_30b_a3b_vllm_fp8_fsdp_router/router_mismatch_report.json",
     "directive": "Fill the MoE (Qwen3-30B-A3B) matrix tile at (rollout=vLLM-fp8, trainer=FSDP-bf16). Same recipe as `moe.qwen3_30b_a3b.vllm_bf16_fsdp_router` but the rollout side uses `Qwen/Qwen3-30B-A3B-FP8`. Evidence: new router_mismatch_report.json with rollout fp8 + trainer fsdp. Honor STEER.md global directives."
   },
   "dashboard.high_quality_render": {
