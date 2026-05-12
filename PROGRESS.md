@@ -1,7 +1,36 @@
 # PROGRESS.md — Agent Handoff State
 
 ## Last updated
-2026-05-12 (cycle 3 v2 iter 2 setup-12 — proxy hashes user message as prompt_index)
+2026-05-12 (cycle 3 v2 iter 2 setup-13 — MoE routed_experts forward-compat in proxy)
+
+## Cycle 3 v2 iter 2 — setup-13 commit (2026-05-12)
+
+Forward-compatibility for the MoE side (`hermes_agent.moe_capture_*`
+feature-results entries):
+
+- `inject_logprobs` now also stamps
+  `extra_body.return_routed_experts=True`. Dense vLLM serves and
+  non-vLLM upstreams silently ignore the unknown extra (the
+  ``setdefault`` keeps the caller's choice when they explicitly
+  disable it).
+- `extract_probes` now also harvests
+  `choices[0].logprobs.content[*].routed_experts` into the sidecar
+  record's `response_routed_experts` field — same shape the AgentStep
+  schema expects, same shape the dense filler/builder/pair pipeline
+  passes through unchanged.
+- 4 new tests: routed_experts present (captured), absent (omitted),
+  inject behavior, caller-preference preservation. **453 passing
+  (+4 from 449)**.
+
+The MoE side of the pipeline (router_flip_rate matrix tiles) is now
+the same operational shape as Dense: run the proxy, run Hermes-Agent
+against an MoE-serving vLLM, merge probes, fill prompt IDs, build
+input, run `run_fsdp_moe_reference.py` / `run_megatron_moe_reference.py`,
+pair into RouterMismatchReport. The actual `pair_hermes_moe_reports.py`
+joiner is a sibling of `pair_hermes_dense_reports.py` and is the next
+bounded code piece if needed.
+
+## Cycle 3 v2 iter 2 — setup-12 commit (2026-05-12)
 
 ## Cycle 3 v2 iter 2 — setup-12 commit (2026-05-12)
 

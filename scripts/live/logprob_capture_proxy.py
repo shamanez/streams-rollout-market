@@ -86,6 +86,11 @@ def inject_logprobs(request_body: bytes) -> bytes:
     extra = body.setdefault("extra_body", {})
     if isinstance(extra, dict):
         extra.setdefault("return_tokens_as_token_ids", True)
+        # MoE forward-compat: ask vLLM to return per-(token, layer)
+        # routed_experts when the served model is MoE and the engine
+        # was launched with enable_return_routed_experts=True. Dense
+        # serves silently ignore the unknown extra.
+        extra.setdefault("return_routed_experts", True)
     return json.dumps(body).encode("utf-8")
 
 
@@ -139,7 +144,9 @@ def extract_probes(
         return None
     response_logprobs: list[float] = []
     response_token_ids: list[int] = []
+    routed_experts: list[list[list[int]]] = []
     saw_any_token_id = False
+    saw_any_routed = False
     for entry in content:
         if not isinstance(entry, dict):
             return None
@@ -151,6 +158,16 @@ def extract_probes(
         if isinstance(tid, int):
             response_token_ids.append(tid)
             saw_any_token_id = True
+        # MoE forward-compat: vLLM stamps routed_experts per-token
+        # under choices[0].logprobs.content[*].routed_experts when
+        # the engine was launched with enable_return_routed_experts.
+        # Shape: [moe_layer][top_k] per token. We accept any nested
+        # list of ints and let the AgentStep validator enforce the
+        # length parity downstream.
+        re = entry.get("routed_experts")
+        if isinstance(re, list):
+            routed_experts.append(re)
+            saw_any_routed = True
     out: dict = {
         "prompt_index": prompt_index,
         "turn_idx": turn_idx,
@@ -158,6 +175,8 @@ def extract_probes(
     }
     if saw_any_token_id and len(response_token_ids) == len(response_logprobs):
         out["response_token_ids"] = response_token_ids
+    if saw_any_routed and len(routed_experts) == len(response_logprobs):
+        out["response_routed_experts"] = routed_experts
     return out
 
 
