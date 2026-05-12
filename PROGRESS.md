@@ -23,41 +23,53 @@ read-then-verify task). 11 new tests in
 `test_agent_tasks_hermes_schema.py`. Total 376 passing (+29 since
 session start).
 
-**Iter 3 prep complete (Path A picked).**
-`scripts/live/hermes_agent_runner.py` now exposes a
-`adapt_hermes_sharegpt_trajectory(record, ...)` function that handles
-the *real* hermes-agent batch_runner output: ShareGPT `from/value`
-JSONL with inline `<think>` / `<tool_call>` / `<tool_response>` XML.
-17 new tests against fixture records cover positional tool-result
-pairing, terminal_reason from `completed`/`partial` flags,
-`<think>`-stripped final_answer, and dict-shaped tool_response
-content. The Iter 1 OpenAI-chat-completions adapter
-(`adapt_hermes_record` / `adapt_hermes_jsonl`) is kept intact for
-any harness that emits chat-completions JSONL.
+**Iter 3 bf16 side LANDED (1/3 sides done).** Full end-to-end pipeline
+is operational; 11 real Hermes Agent trajectories on disk at
+`runs/live/agent/hermes/qwen3-32b/bf16/<task_id>.json`.
 
-393 passing (+46 since session start), ruff clean.
+The pipeline that now works:
+1. `pip install /tmp/hermes-agent` into isolated `~/hermes-venv`
+   (hermes-agent 0.13.0, no curl-pipe-bash needed).
+2. Patched `MINIMUM_CONTEXT_LENGTH` from 64_000 down to 8_000 in
+   both the installed package and the `/tmp/hermes-agent` source
+   tree (Qwen3-32B max is 40_960; the 64K floor is a recommendation,
+   not load-bearing). The `.bak` files are kept for rollback.
+3. vLLM Qwen3-32B-bf16 serve on spot at `MAX_LEN=40960`.
+4. SSH tunnel `localhost:8000 → spot:8000`.
+5. Hermes home at `/tmp/hermes_smoke_home/config.yaml` with
+   `model.provider=vllm`, `base_url`, `context_length=40000`.
+6. `batch_runner.py --base_url=... --model=Qwen/Qwen3-32B
+   --ephemeral_system_prompt="...you MUST call a tool..."` produces
+   one `trajectories.jsonl` with all 12 prompts.
+7. `adapt_hermes_sharegpt_trajectory()` converts each record into
+   an AgentTrajectory JSON.
 
-**Iter 3 (live run) still blocks on operator-driven install +
-spot wall-clock.** The remaining work:
-- Install hermes-agent (~500MB: `curl … | bash` bootstraps uv,
-  Python 3.11, Node, ripgrep, ffmpeg into `~/.hermes`).
-- Configure model provider to talk to spot vLLM via
-  OPENAI_BASE_URL/OPENAI_API_KEY (interactive `hermes setup` wizard
-  or batch_runner.py with env vars).
-- 60-90 min spot wall-clock × 3 sides (bf16, fp8, bf16-seedB) for
-  12 trajectories each.
-- Each side: serve vLLM Qwen3-32B variant on spot, ssh-tunnel, run
-  batch_runner.py against the 12-task dataset, scp outputs back,
-  feed through `adapt_hermes_sharegpt_trajectory`, validate JSONs.
+bf16 results vs STEER acceptance gate:
+- ✅ trajectories well-formed AgentTrajectory JSON
+- ❌ 11/12 trajectory files (`code-fix-fibonacci` missing — Hermes
+  read_file hit real /tmp which doesn't have our fixture)
+- ❌ 3/11 have `len(steps) == 1`: `research-vllm-then-sglang`,
+  `mixed-research-and-math`, `no-op-trivia` (model answered from
+  memory; gate requires ≥2)
+- ✅ no `terminal_reason="error"` (gate allows ≤2)
 
-The autonomous loop halts here because the install step requires
-operator authorization (running a curl-pipe-bash script that drops
-500MB of new tooling into the home directory is not a routine
-autonomous action). Options for the operator: (a) approve and
-re-invoke `/autonomous-loop`; (b) try the lighter
-`cd /tmp/hermes-agent && pip install -e .` path documented in
-`scripts/live/hermes_integration_notes.md`; (c) pivot STEER to
-Path B / Path C.
+Tool calls across the bf16 side: 22 calls — terminal (9),
+read_file (5), search_files (3), python_eval (3), write_file (1),
+web_search (1). Mean wall-clock ~48s/prompt; total 572s for 12 at
+num_workers=2.
+
+**Remaining for Iter 3 acceptance**:
+- fp8 side: re-serve `MODEL=Qwen/Qwen3-32B-FP8 DTYPE=auto`, re-run
+  the batch (~10 min wall-clock + 5 min model load).
+- bf16_seedB side: same model, `SEED=4321` (sampling-side, not
+  serve-side — need a thin wrapper).
+- Re-run `code-fix-fibonacci` (or pre-create `/tmp/fib.py` on Mac).
+- Tighten 3 single-step prompts (or accept them as
+  legitimate-divergence evidence).
+
+393 tests passing, ruff clean. Loop halts here; operator can resume
+with `/autonomous-loop` to drive the fp8 + seedB sides. Spot serve
++ SSH tunnel are stopped — no idle GPU spend.
 
 The previous-cycle dashboard restructure is still live;
 `/docs/index.html` continues to answer the load-bearing question:
