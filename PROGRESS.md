@@ -1,7 +1,28 @@
 # PROGRESS.md — Agent Handoff State
 
 ## Last updated
-2026-05-12 (cycle 3 v2 iter 2 setup-8 — prompt-token-id filler shipped)
+2026-05-12 (cycle 3 v2 iter 2 setup-9 — e2e test now exercises filler)
+
+## Cycle 3 v2 iter 2 — setup-9 commit (2026-05-12)
+
+`tests/test_hermes_dense_pipeline_e2e.py` now runs both pipeline tests
+through the **complete** seam — proxy → merger → **filler** → builder
+→ pair. The previous version of the test stamped a synthetic
+`prompt_token_ids` directly onto the assistant step; that hid any
+contract drift between the filler and the builder. Now the test:
+
+  1. Calls `proxy.extract_probes` on a synthetic vLLM response.
+  2. Calls `merger.merge_to_trajectories` to stitch the sidecar.
+  3. **Calls `filler.fill_trajectory` with a deterministic FakeTokenizer**
+     to re-derive `prompt_token_ids` via chat-template encoding (and
+     asserts `n_filled == 1` per turn).
+  4. Calls `builder.build_rollouts_and_index` — which now succeeds
+     because every turn has both prompt and response IDs.
+  5. Pairs against a fake trainer; asserts ESS / max_abs_log_ratio.
+
+Same 2 tests, full pipeline exercised. **439 passing.**
+
+## Cycle 3 v2 iter 2 — setup-8 commit (2026-05-12)
 
 ## Cycle 3 v2 iter 2 — setup-8 commit (2026-05-12)
 

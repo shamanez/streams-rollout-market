@@ -68,6 +68,46 @@ def pair_mod() -> ModuleType:
     return _load_script("pair_hermes_dense_reports")
 
 
+@pytest.fixture(scope="module")
+def filler_mod() -> ModuleType:
+    return _load_script("fill_prompt_token_ids")
+
+
+class _FakeTokenizer:
+    """Deterministic chat-template stub mirroring the one in
+    test_hermes_token_extraction.py — keeps the e2e test offline."""
+
+    ROLE_OPEN: dict[str, int] = {
+        "system": 90001,
+        "user": 90002,
+        "assistant": 90003,
+        "tool": 90004,
+    }
+    ROLE_CLOSE: int = 90099
+    GEN_PROMPT_MARKER: int = 90100
+
+    def apply_chat_template(
+        self,
+        conversation: list[dict],
+        *,
+        add_generation_prompt: bool = False,
+        tokenize: bool = True,
+    ) -> list[int]:
+        assert tokenize is True
+        ids: list[int] = []
+        for msg in conversation:
+            role = msg["role"]
+            ids.append(self.ROLE_OPEN[role])
+            if role == "assistant":
+                ids.append(self.GEN_PROMPT_MARKER)
+            ids.extend(ord(c) for c in msg["content"])
+            ids.append(self.ROLE_CLOSE)
+        if add_generation_prompt:
+            ids.append(self.ROLE_OPEN["assistant"])
+            ids.append(self.GEN_PROMPT_MARKER)
+        return ids
+
+
 def _synth_vllm_response(tokens: list[tuple[str, int, float]]) -> bytes:
     content = [{"token": tok, "logprob": lp, "token_id": tid} for tok, tid, lp in tokens]
     return json.dumps(
@@ -114,6 +154,7 @@ def test_full_dense_pipeline_e2e(
     merger_mod: ModuleType,
     builder_mod: ModuleType,
     pair_mod: ModuleType,
+    filler_mod: ModuleType,
 ) -> None:
     # --- step 1: proxy.extract_probes(synthetic vLLM response) -----------
     tokens = [
@@ -149,16 +190,19 @@ def test_full_dense_pipeline_e2e(
     assert step.response_token_ids == [t[1] for t in tokens]
     assert step.response_logprobs == pytest.approx([t[2] for t in tokens])
 
-    # --- step 3: builder.build_rollouts_and_index ------------------------
-    # The proxy can't capture prompt_token_ids from chat-completions, so
-    # we synthesise them here as a stand-in for what the upcoming
-    # tokenizer-side encoding step would emit. Without prompt_token_ids
-    # the builder skips the turn; that's a separate test in
-    # test_build_hermes_dense_input.py.
-    step_with_prompt = step.model_copy(
-        update={"prompt_token_ids": [10, 11, 12, 13, 14, 15, 16, 17]}
-    )
-    traj_with_prompt = traj.model_copy(update={"steps": [step_with_prompt]})
+    # --- step 3a: filler.fill_trajectory re-derives prompt_token_ids ---
+    # This is the load-bearing step that replaces the previous synthetic
+    # stamp: the proxy can't capture prompt_token_ids from
+    # chat-completions, so we let the filler do the real chat-template
+    # encoding from the trajectory's accumulated history.
+    traj_with_prompt, n_filled = filler_mod.fill_trajectory(traj, _FakeTokenizer())
+    assert n_filled == 1
+    filled_step = traj_with_prompt.assistant_steps()[0]
+    assert filled_step.prompt_token_ids is not None
+    # Captured response IDs survived the fill step untouched.
+    assert filled_step.response_token_ids == [t[1] for t in tokens]
+
+    # --- step 3b: builder.build_rollouts_and_index ---------------------
     rollouts, index = builder_mod.build_rollouts_and_index(
         [traj_with_prompt], precision_class="bf16"
     )
@@ -204,6 +248,7 @@ def test_full_dense_pipeline_propagates_divergence(
     merger_mod: ModuleType,
     builder_mod: ModuleType,
     pair_mod: ModuleType,
+    filler_mod: ModuleType,
 ) -> None:
     """A genuine rollout-vs-trainer logprob divergence on the wire
     must surface as a measurable ESS drop in the final report.
@@ -221,12 +266,8 @@ def test_full_dense_pipeline_propagates_divergence(
         engine_label="hermes-qwen3-32b-fp8",
         engine_fingerprint="sha256:hermes-qwen3-32b-fp8",
     )
-    step = (
-        trajectories[0]
-        .assistant_steps()[0]
-        .model_copy(update={"prompt_token_ids": list(range(20, 25))})
-    )
-    traj = trajectories[0].model_copy(update={"steps": [step]})
+    traj, n_filled = filler_mod.fill_trajectory(trajectories[0], _FakeTokenizer())
+    assert n_filled == 1
     _, index = builder_mod.build_rollouts_and_index([traj], precision_class="fp8")
     # Trainer disagrees by a per-token-varying delta. A constant
     # offset would leave ESS == 1.0 (the importance weights would be
