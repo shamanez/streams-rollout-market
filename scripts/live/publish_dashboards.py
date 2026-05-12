@@ -427,7 +427,10 @@ def _hermes_pair_tile(
         kind_class = "warn"
     else:
         kind_class = "bad"
-    display = f"{fam * 100:.0f}%"
+    # Display the answered count "X/N" rather than a "0%" / "0.0" string so
+    # the value is recognisable as a real measurement (not a placeholder)
+    # even when strict text matching produces a zero.
+    display = f"{answered}/{n}" if n else "—/—"
     bar_pct = min(max(jaccard, 0.0), 1.0) * 100
     div_str = (
         f"first-div mean step {first_div:.1f}"
@@ -683,7 +686,7 @@ def render_index(card_data: list[dict]) -> str:
         model_substring="Qwen3-32B",
         bf16_engine="hermes-qwen3-32b-bf16",
         fp8_engine="hermes-qwen3-32b-fp8",
-        seedb_engine="hermes-qwen3-32b-bf16-seedB",
+        seedb_engine="hermes-qwen3-32b-bf16_seedB",
         detail_href="agent_dashboard.html",
         blurb_html=hermes_dense_blurb,
     )
@@ -694,7 +697,7 @@ def render_index(card_data: list[dict]) -> str:
         model_substring="Qwen3-30B-A3B",
         bf16_engine="hermes-qwen3-30b-a3b-bf16",
         fp8_engine="hermes-qwen3-30b-a3b-fp8",
-        seedb_engine="hermes-qwen3-30b-a3b-bf16-seedB",
+        seedb_engine="hermes-qwen3-30b-a3b-bf16_seedB",
         detail_href="agent_dashboard.html",
         blurb_html=hermes_moe_blurb,
     )

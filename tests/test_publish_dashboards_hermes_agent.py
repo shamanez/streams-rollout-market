@@ -123,7 +123,7 @@ def _agent_payload_full_matrix() -> dict:
                 "final_answer_match_rate": 0.75,
             },
             {
-                "rollout_engine": "hermes-qwen3-32b-bf16-seedB",
+                "rollout_engine": "hermes-qwen3-32b-bf16_seedB",
                 "trainer_engine": "hermes-qwen3-32b-bf16",
                 "count": 12,
                 "mean_first_divergence_step": 2.6,
@@ -141,7 +141,7 @@ def _agent_payload_full_matrix() -> dict:
                 "final_answer_match_rate": 0.58,
             },
             {
-                "rollout_engine": "hermes-qwen3-30b-a3b-bf16-seedB",
+                "rollout_engine": "hermes-qwen3-30b-a3b-bf16_seedB",
                 "trainer_engine": "hermes-qwen3-30b-a3b-bf16",
                 "count": 12,
                 "mean_first_divergence_step": 2.4,
@@ -219,7 +219,7 @@ def _extract_tile_blocks(section: str) -> list[str]:
     return out
 
 
-_BAD_PLACEHOLDERS = {"—", "TBD", "0%", "0.00", "n/a", ""}
+_BAD_PLACEHOLDERS = {"—", "TBD", "0%", "0.00", "n/a", "", "—/—"}
 
 
 def _mx_value(tile: str) -> str:
@@ -239,6 +239,15 @@ def _mx_class(tile: str) -> str:
     return tile[start:end] if end != -1 else ""
 
 
+_COUNT_RE_PATTERN = r"^\d+/\d+$"
+
+
+def _looks_like_answered_count(v: str) -> bool:
+    """The mx-value is the answered/total count `X/N`."""
+    import re
+    return bool(re.match(_COUNT_RE_PATTERN, v)) and "/0" not in v.split("/", 1)[-1].lstrip()
+
+
 def test_hermes_dense_tiles_have_numeric_values_and_valid_class() -> None:
     page = publish_dashboards.render_index(_card_data_with_hermes())
     a = page.index('data-section="hermes-agent-dense-matrix"')
@@ -248,10 +257,10 @@ def test_hermes_dense_tiles_have_numeric_values_and_valid_class() -> None:
     assert tiles, "no tiles found in hermes-dense section"
     for tile in tiles:
         v = _mx_value(tile)
-        assert v not in _BAD_PLACEHOLDERS, f"placeholder value rendered: {v!r} in {tile[:120]!r}"
-        # value text should look like an integer percent (e.g. "75%")
-        assert v.endswith("%") and v[:-1].lstrip("-").isdigit(), (
-            f"hermes tile value is not an integer percent: {v!r}"
+        assert v not in _BAD_PLACEHOLDERS, f"placeholder value rendered: {v!r}"
+        # mx-value is an "X/N" answered-of-total count.
+        assert _looks_like_answered_count(v), (
+            f"hermes tile value must be answered-count X/N, got {v!r}"
         )
         cls = _mx_class(tile)
         assert cls in {"good", "warn", "bad"}, (
@@ -269,7 +278,9 @@ def test_hermes_moe_tiles_have_numeric_values_and_valid_class() -> None:
     for tile in tiles:
         v = _mx_value(tile)
         assert v not in _BAD_PLACEHOLDERS
-        assert v.endswith("%") and v[:-1].lstrip("-").isdigit()
+        assert _looks_like_answered_count(v), (
+            f"hermes tile value must be answered-count X/N, got {v!r}"
+        )
         cls = _mx_class(tile)
         assert cls in {"good", "warn", "bad"}
 
@@ -321,7 +332,7 @@ def test_select_hermes_pairs_picks_precision_and_noise_floor() -> None:
         model_substring="qwen3-32b",
         bf16_engine="hermes-qwen3-32b-bf16",
         fp8_engine="hermes-qwen3-32b-fp8",
-        seedb_engine="hermes-qwen3-32b-bf16-seedB",
+        seedb_engine="hermes-qwen3-32b-bf16_seedB",
     )
     assert p is not None and p["rollout_engine"] == "hermes-qwen3-32b-fp8"
-    assert n is not None and n["rollout_engine"] == "hermes-qwen3-32b-bf16-seedB"
+    assert n is not None and n["rollout_engine"] == "hermes-qwen3-32b-bf16_seedB"

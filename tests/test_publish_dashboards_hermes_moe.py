@@ -64,12 +64,12 @@ def test_moe_precision_effect_pair_resolves_correctly() -> None:
         model_substring="qwen3-30b-a3b",
         bf16_engine="hermes-qwen3-30b-a3b-bf16",
         fp8_engine="hermes-qwen3-30b-a3b-fp8",
-        seedb_engine="hermes-qwen3-30b-a3b-bf16-seedB",
+        seedb_engine="hermes-qwen3-30b-a3b-bf16_seedB",
     )
     assert p is not None
     assert p["rollout_engine"] == "hermes-qwen3-30b-a3b-fp8"
     assert n is not None
-    assert n["rollout_engine"] == "hermes-qwen3-30b-a3b-bf16-seedB"
+    assert n["rollout_engine"] == "hermes-qwen3-30b-a3b-bf16_seedB"
 
 
 def test_pre_existing_tiles_non_regression() -> None:
