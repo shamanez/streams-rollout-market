@@ -1,7 +1,26 @@
 # PROGRESS.md — Agent Handoff State
 
 ## Last updated
-2026-05-12 (cycle 3 v2 iter 2 setup-20 — multi-task e2e test for hash pairing)
+2026-05-12 (cycle 3 v2 iter 2 setup-21 — pair_hermes_dense respects engine_fingerprint)
+
+## Cycle 3 v2 iter 2 — setup-21 commit (2026-05-12)
+
+`scripts/live/pair_hermes_dense_reports.py::_trainer_engine_from_entry`
+now prefers the trainer payload's explicit `engine_fingerprint` when
+supplied (the Megatron-side scripts stamp a build-identifying string;
+the FSDP-side scripts don't). Falls back to deriving from FSDP-shape
+defaults to keep existing fixtures unchanged.
+
+Caught by a new test that feeds a Megatron-shaped trainer payload
+(engine="megatron-lm", explicit engine_fingerprint with "megatron-core"
+in it) and asserts both the engine name AND the fingerprint propagate
+to the rendered DenseMismatchReport.
+
+- 1 new test in test_pair_hermes_dense_reports.py.
+- 1-line behavior fix in pair_hermes_dense_reports.py.
+- **475 passing (+1 from 474)**.
+
+## Cycle 3 v2 iter 2 — setup-20 commit (2026-05-12)
 
 ## Cycle 3 v2 iter 2 — setup-20 commit (2026-05-12)
 

@@ -51,20 +51,29 @@ _DEFAULT_TRAINER_ENGINE_VERSION = "torch-2.4"
 def _trainer_engine_from_entry(entry: dict) -> EngineFingerprint:
     """Build an ``EngineFingerprint`` from one ``/tmp/trainers.json`` entry.
 
-    Mirrors the schema ``run_fsdp_reference.py`` emits — name=``fsdp``,
-    sharding=``FULL_SHARD``, dtype=``bfloat16``, attn_impl=``sdpa`` —
-    and falls back to safe defaults so test fixtures don't have to
-    populate every key.
+    Prefers the trainer's own ``engine_fingerprint`` when supplied (the
+    Megatron-side scripts stamp one that identifies the exact build:
+    ``sha256:megatron-core-r0.13-tp4-bf16-torch-dist``). Falls back to
+    a derived fingerprint built from FSDP-shape defaults so the dense
+    pipeline keeps working unchanged when the trainer payload omits
+    the field.
     """
     engine_name = entry.get("engine", _DEFAULT_TRAINER_ENGINE_NAME)
-    sharding = entry.get("sharding", "FULL_SHARD")
-    dtype = entry.get("dtype", "bfloat16")
-    attn = entry.get("attn_impl", "sdpa")
-    world = entry.get("world_size", "?")
+    explicit = entry.get("engine_fingerprint")
+    if isinstance(explicit, str) and explicit:
+        fingerprint = explicit
+    else:
+        sharding = entry.get("sharding", "FULL_SHARD")
+        dtype = entry.get("dtype", "bfloat16")
+        attn = entry.get("attn_impl", "sdpa")
+        world = entry.get("world_size", "?")
+        fingerprint = (
+            f"sha256:{engine_name}-{sharding.lower()}-{dtype}-{attn}-ws{world}"
+        )
     return EngineFingerprint(
         name=engine_name,
         version=_DEFAULT_TRAINER_ENGINE_VERSION,
-        fingerprint=f"sha256:{engine_name}-{sharding.lower()}-{dtype}-{attn}-ws{world}",
+        fingerprint=fingerprint,
     )
 
 

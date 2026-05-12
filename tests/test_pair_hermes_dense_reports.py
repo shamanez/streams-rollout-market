@@ -228,6 +228,47 @@ def test_pair_response_logprobs_drive_ess(pair_mod: ModuleType) -> None:
     assert reports[0].delta_logprob_abs_mean == pytest.approx(0.0)
 
 
+def test_pair_handles_megatron_shaped_trainer_payload(pair_mod: ModuleType) -> None:
+    """The pair script's engine-fingerprint helper must build a sensible
+    EngineFingerprint from a Megatron-shaped trainer entry (engine=
+    'megatron-lm', no FSDP-specific keys). Same recipe as the FSDP path
+    but verifies the engine label survives all the way to the rendered
+    report's trainer_engine.name."""
+    traj = _make_trajectory("t1", n_turns=1)
+    index, _ = _make_index_and_trainers(traj)
+    megatron_trainers = [
+        {
+            "trainer_logprobs": list(index["entries"][0]["response_logprobs"]),
+            "engine": "megatron-lm",
+            "engine_fingerprint": "sha256:megatron-core-r0.13-tp4-bf16-torch-dist",
+            "dtype": "bfloat16",
+            "world_size": 4,
+            "prompt_idx": 0,
+        }
+    ]
+    reports = pair_mod.pair_reports(
+        index=index,
+        trainers=megatron_trainers,
+        trajectories_by_run_id={traj.run_id: traj},
+        precision_class="bf16",
+    )
+    rep = reports[0]
+    # The trainer engine name propagates from the trainer entry.
+    assert rep.trainer_engine.name == "megatron-lm"
+    # And the explicit engine_fingerprint from the trainer payload
+    # survives onto the report (it identifies the exact trainer config).
+    assert "megatron-core" in rep.trainer_engine.fingerprint
+    # An explicit label override beats the trainer-entry value.
+    reports_override = pair_mod.pair_reports(
+        index=index,
+        trainers=megatron_trainers,
+        trajectories_by_run_id={traj.run_id: traj},
+        precision_class="bf16",
+        trainer_engine_label="megatron-bf16",
+    )
+    assert reports_override[0].trainer_engine.name == "megatron-bf16"
+
+
 def test_cli_writes_reports_under_out_root(pair_mod: ModuleType, tmp_path: Path) -> None:
     traj = _make_trajectory("t1", n_turns=2)
     index, trainers = _make_index_and_trainers(traj)
