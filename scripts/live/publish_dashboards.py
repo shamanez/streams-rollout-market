@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import html as _html
 import json
+import re
 import shutil
 from pathlib import Path
 
@@ -802,6 +803,55 @@ def render_index(card_data: list[dict]) -> str:
     )
 
 
+def _copy_agent_diff_click_through(out_dir: Path) -> int:
+    """Copy the latest per-(pair, task) agent_divergence_report.html into
+    ``out_dir/agent_diff/<pair-slug>/<task-id>.html`` so the matrix tiles
+    have a reachable detail page per task.
+
+    The pair script writes reports under
+    ``runs/live/agent_diff/<pair-slug>/<UTC-ts>-<UUID>/agent_divergence_report.html``.
+    With replicates there are multiple reports per (pair, task); we
+    keep the most recent (by directory mtime) so the published page
+    reflects the latest run. Returns the number of pages written.
+    """
+    src_root = LIVE_ROOT / "agent_diff"
+    if not src_root.is_dir():
+        return 0
+    # latest_for[(pair, task)] = (mtime, html_path)
+    latest_for: dict[tuple[str, str], tuple[float, Path]] = {}
+    for report_json in src_root.glob("*/*/agent_divergence_report.json"):
+        try:
+            payload = json.loads(report_json.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        task_id = payload.get("task_id")
+        if not isinstance(task_id, str) or not task_id:
+            continue
+        pair_slug = report_json.parent.parent.name
+        html_path = report_json.with_name("agent_divergence_report.html")
+        if not html_path.exists():
+            continue
+        mtime = report_json.parent.stat().st_mtime
+        key = (pair_slug, task_id)
+        existing = latest_for.get(key)
+        if existing is None or mtime > existing[0]:
+            latest_for[key] = (mtime, html_path)
+
+    written = 0
+    target_root = out_dir / "agent_diff"
+    if target_root.exists():
+        shutil.rmtree(target_root)
+    target_root.mkdir(parents=True, exist_ok=True)
+    for (pair_slug, task_id), (_mtime, html) in sorted(latest_for.items()):
+        dest_dir = target_root / pair_slug
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        # Sanitize task_id for filesystem: only allow [\w.-].
+        safe = re.sub(r"[^\w.\-]", "_", task_id)
+        shutil.copy2(html, dest_dir / f"{safe}.html")
+        written += 1
+    return written
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -839,8 +889,12 @@ def main() -> int:
 
     (out_dir / "index.html").write_text(render_index(card_data), encoding="utf-8")
     (out_dir / "glossary.html").write_text(_render_full_glossary_html(), encoding="utf-8")
+    diff_pages = _copy_agent_diff_click_through(out_dir)
     written = sum(1 for c in card_data if c.get("ready"))
-    print(f"wrote {out_dir} — {written} dashboards + index.html + glossary.html")
+    print(
+        f"wrote {out_dir} — {written} dashboards + index.html + glossary.html"
+        + (f" + {diff_pages} agent_diff click-through pages" if diff_pages else "")
+    )
     return 0
 
 
