@@ -1,7 +1,41 @@
 # PROGRESS.md — Agent Handoff State
 
 ## Last updated
-2026-05-12 (cycle 3 v2 iter 2 setup-11 — proxy auto-derives turn_idx from messages)
+2026-05-12 (cycle 3 v2 iter 2 setup-12 — proxy hashes user message as prompt_index)
+
+## Cycle 3 v2 iter 2 — setup-12 commit (2026-05-12)
+
+Closes the multi-task probe-pairing bug. Setup-11 fixed turn_idx but
+left prompt_index defaulting to 0, so a multi-task hermes-agent run
+would funnel all probes into the same bucket — only the first task's
+sharegpt record would pick up probes; the rest would have empty
+`probes_by_turn`.
+
+Fixed by making **both** axes of the (prompt_index, turn_idx) key
+auto-derive from the request body:
+
+  * `derive_turn_idx(body)` = count of prior assistant messages.
+  * `derive_prompt_index(body)` = hex sha256[:16] of the first user
+    message (stable across turns of one task, distinct across tasks).
+
+The merger now accepts string prompt_index (hash form) and pairs
+each ShareGPT record by recomputing the same hash on its first
+`from=human` entry. Integer prompt_index still works when an upstream
+explicitly sets X-Prompt-Index — both pairing paths run simultaneously
+so a single record can be matched either way.
+
+- Proxy: new `derive_prompt_index` pure function + handler wiring.
+- Merger: `_first_user_message_hash` helper + dual-key
+  `probes_by_turn` filter (matches either integer-or-hash).
+- Tests: 4 new unit tests for `derive_prompt_index` + a merger
+  integration test for the hash-pair path. **449 passing (+3 from
+  446)**.
+
+The proxy is now fully header-free for multi-task runs: hermes-agent
+runs against it unchanged, all probes land in one sidecar, and the
+merger transparently pairs each task's probes to its trajectory.
+
+## Cycle 3 v2 iter 2 — setup-11 commit (2026-05-12)
 
 ## Cycle 3 v2 iter 2 — setup-11 commit (2026-05-12)
 

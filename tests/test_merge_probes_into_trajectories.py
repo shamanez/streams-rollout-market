@@ -195,6 +195,74 @@ def test_merge_tolerates_missing_probes_on_some_turns(merger: ModuleType) -> Non
     assert assistants[1].prompt_token_ids is None
 
 
+def test_merge_pairs_by_hash_when_probe_prompt_index_is_string(
+    merger: ModuleType,
+) -> None:
+    """When the proxy auto-derives prompt_index as a hash of the first
+    user message, the merger must compute the same hash for the
+    sharegpt record's first ``from=human`` value and pair on that —
+    even when the sharegpt records carry a different (integer)
+    prompt_index field."""
+    from hashlib import sha256
+
+    # Two distinct tasks; the proxy stamps hash-derived prompt_index.
+    task_a_text = "What is 2+2?"
+    task_b_text = "What is 3+3?"
+    hash_a = sha256(task_a_text.encode()).hexdigest()[:16]
+    hash_b = sha256(task_b_text.encode()).hexdigest()[:16]
+
+    sg_a = {
+        "prompt_index": 0,
+        "conversations": [
+            {"from": "system", "value": "sys"},
+            {"from": "human", "value": task_a_text},
+            {"from": "gpt", "value": "<think>\n</think>\nAnswer: 4"},
+        ],
+        "completed": True,
+        "partial": False,
+    }
+    sg_b = {
+        "prompt_index": 1,
+        "conversations": [
+            {"from": "system", "value": "sys"},
+            {"from": "human", "value": task_b_text},
+            {"from": "gpt", "value": "<think>\n</think>\nAnswer: 6"},
+        ],
+        "completed": True,
+        "partial": False,
+    }
+    # Probes use hash-derived prompt_index, NOT the integer.
+    probes = [
+        {
+            "prompt_index": hash_a,
+            "turn_idx": 0,
+            "response_token_ids": [10, 11],
+            "response_logprobs": [-0.1, -0.2],
+        },
+        {
+            "prompt_index": hash_b,
+            "turn_idx": 0,
+            "response_token_ids": [20, 21],
+            "response_logprobs": [-0.05, -0.1],
+        },
+    ]
+    tasks = [
+        {"task_id": "qa1", "task_text": "x", "available_tools": []},
+        {"task_id": "qa2", "task_text": "x", "available_tools": []},
+    ]
+    trajs = merger.merge_to_trajectories(
+        sharegpt_records=[sg_a, sg_b],
+        probe_records=probes,
+        tasks=tasks,
+        model_id="Qwen/Qwen3-32B",
+        engine_label="hermes-qwen3-32b-bf16",
+        engine_fingerprint="sha256:x",
+    )
+    # Each task's probes landed on the right trajectory.
+    assert trajs[0].assistant_steps()[0].response_token_ids == [10, 11]
+    assert trajs[1].assistant_steps()[0].response_token_ids == [20, 21]
+
+
 def test_merge_rejects_length_mismatch(merger: ModuleType) -> None:
     with pytest.raises(ValueError, match="align 1:1"):
         merger.merge_to_trajectories(

@@ -23,14 +23,19 @@ to an upstream vLLM endpoint (the SSH-tunnelled spot serve), and:
 
 ``prompt_index`` and ``turn_idx`` come from request headers
 ``X-Prompt-Index`` and ``X-Turn-Idx`` when set (a patched batch_runner
-or thin wrapper can stamp them). When ``X-Turn-Idx`` is absent the
-proxy auto-derives it by counting prior assistant messages in the
-request's ``messages`` array — that count is exactly the index of the
-turn being generated, so hermes-agent doesn't need any modification.
-When ``X-Prompt-Index`` is absent it defaults to ``0``; running the
-proxy with a per-task sidecar (rotating the ``--sidecar`` path between
-task runs) is the simplest way to keep tasks separable without
-header wiring.
+or thin wrapper can stamp them). Both auto-derive in their absence:
+
+  * ``turn_idx`` = count of prior ``role=assistant`` messages in the
+    request body (that count equals the index of the turn being
+    generated);
+  * ``prompt_index`` = hex sha256[:16] of the first ``role=user``
+    message in the request body (stable across turns of one task,
+    distinct between tasks).
+
+With those defaults the proxy is fully header-free: hermes-agent
+runs against it unchanged and the merger pairs probes to ShareGPT
+records by recomputing the same hash from each record's first
+``from=human`` value.
 
 The pure functions ``inject_logprobs(request_body)`` and
 ``extract_probes(request_body, response_body)`` carry all the
@@ -88,7 +93,7 @@ def extract_probes(
     request_body: bytes,
     response_body: bytes,
     *,
-    prompt_index: int,
+    prompt_index: int | str,
     turn_idx: int,
 ) -> dict | None:
     """Build a probe sidecar record from a chat-completions response.
@@ -184,6 +189,52 @@ def derive_turn_idx(request_body: bytes) -> int:
     return sum(1 for m in messages if isinstance(m, dict) and m.get("role") == "assistant")
 
 
+def derive_prompt_index(request_body: bytes) -> str:
+    """Derive a stable per-task ``prompt_index`` from the request body.
+
+    Multi-task hermes-agent runs would otherwise collide on
+    ``prompt_index=0`` (the legacy header-absent default), so the
+    merger could only pair the first task's probes. Hashing the first
+    user message gives a stable string identifier — every turn of the
+    same task carries the same first-user message, so all of that
+    task's probes group under one ``prompt_index``. Different tasks
+    naturally hash to different identifiers without operator wiring.
+
+    Returns ``"0"`` for non-JSON / malformed bodies (string form to
+    keep the field type stable across both paths). Pure function.
+
+    The hash is a hex-encoded sha256 truncated to 16 chars — collision
+    probability is ~2^-32 across the per-run task set, which is more
+    than enough for our 12-task suite.
+    """
+    if not request_body:
+        return "0"
+    try:
+        body = json.loads(request_body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return "0"
+    if not isinstance(body, dict):
+        return "0"
+    messages = body.get("messages")
+    if not isinstance(messages, list):
+        return "0"
+    for m in messages:
+        if isinstance(m, dict) and m.get("role") == "user":
+            content = m.get("content")
+            if isinstance(content, str) and content:
+                return _hash_user_message(content)
+    return "0"
+
+
+def _hash_user_message(text: str) -> str:
+    """Stable hex-encoded sha256[:16] of a string. Used by both the
+    proxy and the merger so the two sides agree on the prompt_index
+    derived from a task's first user message."""
+    from hashlib import sha256
+
+    return sha256(text.encode("utf-8")).hexdigest()[:16]
+
+
 def _sidecar_lock_factory() -> threading.Lock:
     return threading.Lock()
 
@@ -246,7 +297,14 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         # Sidecar capture before we forward — gives the operator the
         # data even if the response write to the client fails.
         if is_chat:
-            prompt_idx = int(self.headers.get("X-Prompt-Index", "0"))
+            prompt_hdr = self.headers.get("X-Prompt-Index")
+            if prompt_hdr is not None:
+                prompt_idx: int | str = int(prompt_hdr) if prompt_hdr.isdigit() else prompt_hdr
+            else:
+                # Auto-derive a stable per-task identifier so multi-task
+                # runs don't all collide on prompt_index=0. The merger
+                # uses the same hash of the first user message to pair.
+                prompt_idx = derive_prompt_index(body)
             turn_hdr = self.headers.get("X-Turn-Idx")
             if turn_hdr is not None:
                 turn_idx = int(turn_hdr)

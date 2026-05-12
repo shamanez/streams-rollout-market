@@ -65,7 +65,43 @@ _PROBE_KEYS = (
 )
 
 
-def index_probes(probe_records: list[dict]) -> dict[tuple[int, int], dict]:
+def _first_user_message_hash(sharegpt_record: dict) -> str | None:
+    """Return ``sha256(first_human_value)[:16]`` matching the proxy's
+    ``derive_prompt_index`` derivation.
+
+    Returns ``None`` if the record has no ``from=human`` entry — in
+    that case only the integer ``prompt_index`` match path applies.
+    """
+    from hashlib import sha256
+
+    convs = sharegpt_record.get("conversations") or []
+    if not isinstance(convs, list):
+        return None
+    for conv in convs:
+        if isinstance(conv, dict) and conv.get("from") == "human":
+            value = conv.get("value")
+            if isinstance(value, str) and value:
+                return sha256(value.encode("utf-8")).hexdigest()[:16]
+    return None
+
+
+def _coerce_prompt_index(raw: object) -> int | str:
+    """Coerce a probe record's ``prompt_index`` to either int (legacy
+    sequential) or str (hash-derived from the first user message).
+
+    The proxy's auto-derive path emits the hex hash; an upstream that
+    explicitly sets a numeric header still produces an int. Both
+    shapes survive a JSON round-trip — int stays int, str stays str —
+    so the merger can pair either way without ambiguity.
+    """
+    if isinstance(raw, int):
+        return raw
+    if isinstance(raw, str):
+        return int(raw) if raw.isdigit() else raw
+    raise ValueError(f"prompt_index must be int or str, got {type(raw).__name__}: {raw!r}")
+
+
+def index_probes(probe_records: list[dict]) -> dict[tuple[int | str, int], dict]:
     """Group probe records by ``(prompt_index, turn_idx)``.
 
     Each value contains only the load-bearing probe fields — extra
@@ -73,14 +109,19 @@ def index_probes(probe_records: list[dict]) -> dict[tuple[int, int], dict]:
     Raises ``ValueError`` if a record is missing the required keys
     OR if two records collide on the same ``(prompt_index, turn_idx)``
     pair (would indicate a buggy upstream capture).
+
+    ``prompt_index`` may be either an integer (legacy / X-Prompt-Index
+    set explicitly) or a hex string (the proxy's auto-derived hash of
+    the first user message). The merger handles both — see
+    ``merge_to_trajectories``.
     """
-    out: dict[tuple[int, int], dict] = {}
+    out: dict[tuple[int | str, int], dict] = {}
     for i, rec in enumerate(probe_records):
         if not isinstance(rec, dict):
             raise ValueError(f"probe record {i} is not a dict: {rec!r}")
         if "prompt_index" not in rec or "turn_idx" not in rec:
             raise ValueError(f"probe record {i} missing prompt_index or turn_idx: {rec!r}")
-        key = (int(rec["prompt_index"]), int(rec["turn_idx"]))
+        key = (_coerce_prompt_index(rec["prompt_index"]), int(rec["turn_idx"]))
         if key in out:
             raise ValueError(f"duplicate probe record for prompt_index={key[0]}, turn_idx={key[1]}")
         out[key] = {k: rec[k] for k in _PROBE_KEYS if k in rec}
@@ -145,13 +186,23 @@ def merge_to_trajectories(
     probe_index = index_probes(probe_records)
     out: list[AgentTrajectory] = []
     for i, (sg, task) in enumerate(zip(sharegpt_records, tasks)):
-        # Some upstream pipelines stamp prompt_index on the record;
-        # prefer that, else fall back to positional index.
-        prompt_index = int(sg.get("prompt_index", i))
+        # Two ways to pair probes to this sharegpt record:
+        #   (1) integer prompt_index match (legacy / explicit header);
+        #   (2) hash match — the proxy's auto-derived prompt_index is
+        #       a hash of the request's first user message; recompute
+        #       the same hash from the sharegpt record's first
+        #       ``from=human`` conv entry.
+        # ``probes_by_turn`` is built from both candidates so a probe
+        # set produced by either path lands on the right record.
+        legacy_idx = int(sg.get("prompt_index", i))
+        sharegpt_hash = _first_user_message_hash(sg)
+        candidate_pidx: set[int | str] = {legacy_idx}
+        if sharegpt_hash is not None:
+            candidate_pidx.add(sharegpt_hash)
         probes_by_turn = {
             turn_idx: probes
             for (pidx, turn_idx), probes in probe_index.items()
-            if pidx == prompt_index
+            if pidx in candidate_pidx
         }
         stitched = inject_probes(sg, probes_by_turn)
         traj = runner.adapt_hermes_sharegpt_trajectory(  # type: ignore[attr-defined]

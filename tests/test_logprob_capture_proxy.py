@@ -130,6 +130,52 @@ def test_derive_turn_idx_handles_missing_messages(proxy: ModuleType) -> None:
     assert proxy.derive_turn_idx(b"") == 0
 
 
+# --- derive_prompt_index ----------------------------------------------------
+
+
+def test_derive_prompt_index_hashes_first_user_message(proxy: ModuleType) -> None:
+    """The hash of the first user message is the stable per-task
+    identifier. Same task across turns → same hash. Different tasks
+    → different hashes."""
+    body_a = json.dumps(
+        {
+            "messages": [
+                {"role": "system", "content": "sys"},
+                {"role": "user", "content": "what is 2+2?"},
+                {"role": "assistant", "content": "4"},
+            ]
+        }
+    ).encode()
+    body_b = json.dumps(
+        {
+            "messages": [
+                {"role": "system", "content": "sys"},
+                {"role": "user", "content": "what is 2+2?"},
+            ]
+        }
+    ).encode()
+    body_other = json.dumps({"messages": [{"role": "user", "content": "what is 3+3?"}]}).encode()
+    h_a = proxy.derive_prompt_index(body_a)
+    h_b = proxy.derive_prompt_index(body_b)
+    h_other = proxy.derive_prompt_index(body_other)
+    # Same task, different turn-states → same hash.
+    assert h_a == h_b
+    # Different task → different hash.
+    assert h_a != h_other
+    # Hash is a 16-char hex string.
+    assert len(h_a) == 16
+    assert all(c in "0123456789abcdef" for c in h_a)
+
+
+def test_derive_prompt_index_fallback_zero_string(proxy: ModuleType) -> None:
+    """Bodies without a user message or non-JSON fall back to '0'
+    (string form keeps the field type stable)."""
+    assert proxy.derive_prompt_index(b"") == "0"
+    assert proxy.derive_prompt_index(b"not json") == "0"
+    assert proxy.derive_prompt_index(b'{"messages": []}') == "0"
+    assert proxy.derive_prompt_index(b'{"messages": [{"role": "system", "content": "x"}]}') == "0"
+
+
 # --- extract_probes ---------------------------------------------------------
 
 
@@ -373,7 +419,9 @@ def test_end_to_end_proxy_auto_derives_turn_idx_without_header(
     lines = [ln for ln in sidecar.read_text().splitlines() if ln.strip()]
     assert len(lines) == 1
     rec = json.loads(lines[0])
-    # X-Prompt-Index absent → defaults to 0.
-    assert rec["prompt_index"] == 0
+    # X-Prompt-Index absent → auto-derived as hex hash of first user msg.
+    assert isinstance(rec["prompt_index"], str)
+    assert len(rec["prompt_index"]) == 16
+    assert all(c in "0123456789abcdef" for c in rec["prompt_index"])
     # turn_idx auto-derived from 2 prior assistant messages.
     assert rec["turn_idx"] == 2
