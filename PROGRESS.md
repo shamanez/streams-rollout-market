@@ -1,7 +1,28 @@
 # PROGRESS.md — Agent Handoff State
 
 ## Last updated
-2026-05-12 (cycle 3 v2 iter 2 setup-18 — OPBC high_router_flip_rate gate)
+2026-05-12 (cycle 3 v2 iter 2 setup-19 — scripts/live/README runbook updated)
+
+## Cycle 3 v2 iter 2 — setup-19 commit (2026-05-12)
+
+`scripts/live/README.md` now documents every cycle-3 v2 capture
+component (proxy, merger, filler, builder, dense pair, MoE pair) +
+a fully worked 9-step end-to-end runbook for the laptop+spot
+pipeline. Operator handoff is now self-contained from the README:
+
+  1. spot vLLM serve
+  2. SSH tunnel + capture proxy
+  3. hermes-agent run against the proxy
+  4. merger stitches sharegpt + sidecar
+  5. fill missing prompt_token_ids
+  6. build trainer input + index
+  7. scp + torchrun teacher-force
+  8. pair into DenseMismatchReport
+  9. publish_dashboards re-render
+
+Documentation-only change. 473 passing (unchanged).
+
+## Cycle 3 v2 iter 2 — setup-18 commit (2026-05-12)
 
 ## Cycle 3 v2 iter 2 — setup-18 commit (2026-05-12)
 
