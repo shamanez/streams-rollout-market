@@ -167,20 +167,31 @@ def extract_token_pairs(
     """Return one ``(prompt_token_ids, response_token_ids)`` pair per
     assistant turn in ``trajectory``.
 
-    Two paths:
+    Three paths, ranked by stability:
 
-      1. **Captured token IDs (preferred, long-term stable).** If every
+      1. **Captured token IDs (preferred, long-term stable).** If an
          assistant step carries ``prompt_token_ids`` *and*
          ``response_token_ids`` populated by the rollout-time probe,
-         those exact IDs are returned. No tokenizer is needed; the
-         tokenizer arg may be ``None``. This path is tokenizer-version
-         agnostic and exactly reproduces what vLLM saw at generation
-         time.
+         those exact IDs are returned. No tokenizer is needed for
+         this step; the tokenizer arg may be ``None`` for trajectories
+         in which every turn is fully captured. This path is
+         tokenizer-version agnostic and exactly reproduces what vLLM
+         saw at generation time.
 
-      2. **Chat-template re-encoding (fallback).** For legacy
+      2. **Partial capture (response-only).** When
+         ``response_token_ids`` is captured but ``prompt_token_ids`` is
+         missing — the realistic case for the OpenAI chat-completions
+         proxy, which can only observe response-side data — the prompt
+         is reconstructed via chat-template encoding while the
+         captured response IDs are preserved verbatim. The trainer
+         then sees the *exact* tokens vLLM emitted on the response
+         side; only the prompt side is re-derived. Requires a
+         tokenizer.
+
+      3. **Chat-template re-encoding (fallback).** For legacy
          trajectories captured before the rollout probes existed —
-         where ``prompt_token_ids`` / ``response_token_ids`` are
-         ``None`` — the function re-encodes via the supplied
+         both ``prompt_token_ids`` and ``response_token_ids`` are
+         ``None`` — both sides are re-encoded via the supplied
          tokenizer's chat template:
 
            * **prompt** = chat-templated encoding of ``system + user +
@@ -195,9 +206,9 @@ def extract_token_pairs(
          Raises ``ValueError`` when the tokenizer is missing on this
          path or the chat template does not extend its output.
 
-    Pure function — no file I/O, no env reads. The mixed case (some
-    steps captured, others not) falls back to re-encoding for the
-    missing-id steps so callers never see partial output.
+    Pure function — no file I/O, no env reads. Mixed trajectories
+    (some turns fully captured, some partial, some legacy) work
+    transparently: each turn picks its own path.
     """
     pairs: list[tuple[list[int], list[int]]] = []
     assistant_steps = [s for s in trajectory.steps if s.role == "assistant"]
@@ -205,10 +216,12 @@ def extract_token_pairs(
         captured_prompt = step.prompt_token_ids
         captured_response = step.response_token_ids
         if captured_prompt is not None and captured_response is not None:
-            # Preferred path — exact IDs vLLM saw / emitted.
+            # Path 1 — exact IDs vLLM saw / emitted.
             pairs.append((list(captured_prompt), list(captured_response)))
             continue
-        # Fallback: re-encode via chat template.
+        # Path 2 + 3 require chat-template re-encoding for at least
+        # the prompt side; surface the missing-tokenizer condition the
+        # same way regardless of which sub-path we're on.
         if tokenizer is None:
             raise ValueError(
                 f"assistant turn {i} has no captured token IDs and no "
@@ -219,7 +232,6 @@ def extract_token_pairs(
             target_assistant_idx=i,
             system_prompt=system_prompt,
         )
-        response_text = _strip_think(step.content)
         prompt_ids = _coerce_to_id_list(
             tokenizer.apply_chat_template(
                 prior_msgs,
@@ -227,6 +239,14 @@ def extract_token_pairs(
                 tokenize=True,
             )
         )
+        if captured_response is not None:
+            # Path 2 — preserve the captured response, re-derive the
+            # prompt only. The response IDs are load-bearing for the
+            # mismatch metric so we must NOT re-encode them.
+            pairs.append((prompt_ids, list(captured_response)))
+            continue
+        # Path 3 — fully legacy re-encoding for both sides.
+        response_text = _strip_think(step.content)
         full_ids = _coerce_to_id_list(
             tokenizer.apply_chat_template(
                 prior_msgs + [{"role": "assistant", "content": response_text}],

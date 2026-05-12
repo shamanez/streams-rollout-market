@@ -1,7 +1,31 @@
 # PROGRESS.md — Agent Handoff State
 
 ## Last updated
-2026-05-12 (cycle 3 v2 iter 2 setup-6 — end-to-end pipeline integration test shipped)
+2026-05-12 (cycle 3 v2 iter 2 setup-7 — partial-capture branch in extractor)
+
+## Cycle 3 v2 iter 2 — setup-7 commit (2026-05-12)
+
+`hermes_token_extraction.extract_token_pairs` now handles the
+realistic proxy-captured scenario directly:
+
+- **Path 1 (preferred):** both `prompt_token_ids` and
+  `response_token_ids` captured — return verbatim. Unchanged.
+- **Path 2 (NEW, proxy-realistic):** `response_token_ids` captured
+  but `prompt_token_ids` is None — preserve the captured response
+  verbatim (vLLM emitted those exact tokens; re-encoding would yield
+  different IDs) and re-derive only the prompt via chat-template.
+- **Path 3 (legacy fallback):** both None — re-encode both. Unchanged.
+
+Without this branch, partial-capture trajectories would fall into the
+legacy path and have their response tokens re-encoded — destroying
+the very signal the proxy captured. The mixed-capture test
+(`test_extract_mixed_capture_falls_back_to_chat_template`) already
+covered the per-turn mix; the new tests cover the per-turn partial
+shape that the proxy actually produces.
+
+2 new tests; **433 passing (+2 from 431)**.
+
+## Cycle 3 v2 iter 2 — setup-6 commit (2026-05-12)
 
 ## Cycle 3 v2 iter 2 — setup-6 commit (2026-05-12)
 

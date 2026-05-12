@@ -474,6 +474,60 @@ def test_extract_mixed_capture_falls_back_to_chat_template(extractor, tokenizer)
     assert pairs[1] == (captured_prompt, captured_response)
 
 
+def test_extract_partial_capture_keeps_response_reencodes_prompt(extractor, tokenizer):
+    """Realistic proxy-captured trajectory: response_token_ids was
+    observed (from the chat-completions response payload) but
+    prompt_token_ids was not (chat-completions doesn't surface prompt
+    IDs by default). The extractor must keep the captured response
+    verbatim — re-encoding would yield different IDs than vLLM
+    actually emitted — and only re-derive the prompt via chat-template.
+    """
+    captured_response = [777, 888, 999, 1010]
+    traj = _make_trajectory(
+        "partial",
+        "compute it",
+        [
+            AgentStep(
+                step_idx=0,
+                role="assistant",
+                content="<think>\n</think>\nThe answer is 4.",
+                response_token_ids=captured_response,
+                response_logprobs=[-0.1, -0.2, -0.05, -0.01],
+            )
+        ],
+    )
+    pairs = extractor.extract_token_pairs(traj, tokenizer)
+    assert len(pairs) == 1
+    prompt_ids, response_ids = pairs[0]
+    # Captured response IDs survive untouched.
+    assert response_ids == captured_response
+    # Prompt was re-derived via the chat template (and so ends with
+    # the assistant generation-prompt marker).
+    assert prompt_ids[-1] == FakeTokenizer.GEN_PROMPT_MARKER
+    assert FakeTokenizer.ROLE_OPEN["user"] in prompt_ids
+
+
+def test_extract_partial_capture_requires_tokenizer(extractor):
+    """Even with response_token_ids captured, the prompt side still
+    needs a tokenizer for the chat-template encoding. Missing it must
+    raise the same error message the legacy branch produces."""
+    traj = _make_trajectory(
+        "partial-no-tok",
+        "x",
+        [
+            AgentStep(
+                step_idx=0,
+                role="assistant",
+                content="answer",
+                response_token_ids=[1, 2, 3],
+                response_logprobs=[-0.1, -0.2, -0.3],
+            )
+        ],
+    )
+    with pytest.raises(ValueError, match="no captured token IDs"):
+        extractor.extract_token_pairs(traj, tokenizer=None)
+
+
 def test_coerce_handles_batch_encoding_and_encoding_shapes(extractor):
     """Verify the BatchEncoding / Encoding shape adapters used on the spot.
 
