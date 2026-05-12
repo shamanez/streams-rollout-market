@@ -416,14 +416,20 @@ def _hermes_pair_tile(
             f"<div class='mx-empty'>no data</div>"
             f"</a>"
         )
-    fam = float(pair.get("final_answer_match_rate") or 0.0)
+    # Soft match (numeric-equivalence / substring) is the load-bearing
+    # signal: strict text-equality is too strict for multi-turn agent
+    # answers ("...per 24-hour day..." vs "...in a 24-hour day...",
+    # same number). Falls back to strict for older reports that pre-date
+    # the field.
+    fam_soft = float(pair.get("final_answer_match_soft_rate") or 0.0)
+    fam_strict = float(pair.get("final_answer_match_rate") or 0.0)
+    # Use the soft rate when present; otherwise the strict rate keeps
+    # backward compatibility.
+    fam = fam_soft if fam_soft > 0 else fam_strict
     jaccard = float(pair.get("mean_tool_call_jaccard") or 0.0)
     first_div = pair.get("mean_first_divergence_step")
     n = int(pair.get("count") or 0)
-    # "answered" = trajectories whose final_answer text matched the trainer.
-    # fully_matched_count counts a stricter thing (no first divergence at
-    # any step), which is misleading for the per-STEER "k-of-N answered"
-    # subtitle. Derive the per-pair answered count from final_answer_match_rate.
+    # "answered" = trajectories whose final_answer soft-matched the trainer.
     answered = int(round(fam * n))
     if fam >= 0.80:
         kind_class = "good"

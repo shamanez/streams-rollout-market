@@ -22,6 +22,7 @@ from __future__ import annotations
 import hashlib
 import html as _html
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
@@ -156,6 +157,7 @@ class TrajectoryDivergenceReport(BaseModel):
     tool_choice_disagreement_rate: float
     tool_call_jaccard: float
     final_answer_match: bool
+    final_answer_match_soft: bool = False
     rollout_terminal_reason: str
     trainer_terminal_reason: str
 
@@ -175,6 +177,76 @@ def _content_matches(a: str, b: str) -> bool:
     if not a and not b:
         return True
     return _normalize(a) == _normalize(b)
+
+
+# Numeric tokens: signed/unsigned integers + decimals + commas (e.g.
+# "8,294,400", "-2.5", "120"). The trailing comma/period inside the
+# bracket lets us match "8,294,400" as one group; we strip non-digit
+# bookends afterwards.
+_NUM_RE = re.compile(r"[-+]?\d[\d,.\-]*\d|\d")
+
+
+def _extract_numbers(text: str) -> set[str]:
+    """Return canonicalised numeric tokens found in ``text``.
+
+    Strips commas + trailing zeros so 1,200,000 and 1200000 and 1200000.0
+    all map to the same canonical key. Returns an empty set if nothing
+    parses.
+    """
+    out: set[str] = set()
+    for m in _NUM_RE.findall(text):
+        s = m.replace(",", "").strip("-.")
+        if not s:
+            continue
+        try:
+            f = float(s)
+        except ValueError:
+            continue
+        if f == int(f):
+            out.add(str(int(f)))
+        else:
+            # Normalize "1.20" -> "1.2"
+            out.add(f"{f:g}")
+    return out
+
+
+def _soft_content_match(a: str, b: str) -> bool:
+    """Looser equality for multi-turn agent final answers.
+
+    Hermes Agent (and Qwen3 in general) produces answers like
+    "The total is **8,294,400**." vs "The total number is 8294400."
+    that carry the *same load-bearing number* with different surface
+    text. The strict ``_content_matches`` returns False; this softer
+    check returns True when:
+
+      - both texts are empty (trivial agreement), OR
+      - the strict matcher returns True, OR
+      - the set of numeric tokens in each text is non-empty and
+        equal (the surface phrasing differs but the numbers don't),
+        OR
+      - one normalised text is a proper substring of the other (the
+        longer answer contains the shorter as a prefix/middle).
+
+    Designed to be load-bearing for the marketplace question ("did
+    the agents land on the same answer?"), NOT to replace the strict
+    metric — both are reported in ``TrajectoryDivergenceReport`` so
+    dashboards can show either.
+    """
+    if not a and not b:
+        return True
+    if _content_matches(a, b):
+        return True
+    na = _extract_numbers(a)
+    nb = _extract_numbers(b)
+    if na and na == nb:
+        return True
+    ra = _normalize(a)
+    rb = _normalize(b)
+    if ra and rb and (ra in rb or rb in ra):
+        # Cheap substring match — protects against trailing prose or
+        # introductory boilerplate around an otherwise-identical core.
+        return True
+    return False
 
 
 def compute_trajectory_divergence(
@@ -255,14 +327,17 @@ def compute_trajectory_divergence(
     jaccard = (len(r_sig_set & t_sig_set) / len(union)) if union else 1.0
 
     final_match = _content_matches(rollout.final_answer, trainer.final_answer)
+    final_match_soft = _soft_content_match(rollout.final_answer, trainer.final_answer)
     if rollout.final_answer == "" and trainer.final_answer == "":
         # Neither answered — call it a match only if both ran out of steps
         # for the same reason; otherwise treat as a non-match because
         # neither produced a usable answer.
-        final_match = (
+        same_terminal = (
             rollout.terminal_reason == trainer.terminal_reason
             and rollout.terminal_reason == "answered"
         )
+        final_match = same_terminal
+        final_match_soft = same_terminal
 
     return TrajectoryDivergenceReport(
         run_id=f"{rollout.run_id}-vs-{trainer.run_id}",
@@ -282,6 +357,7 @@ def compute_trajectory_divergence(
         ),
         tool_call_jaccard=jaccard,
         final_answer_match=final_match,
+        final_answer_match_soft=final_match_soft,
         rollout_terminal_reason=rollout.terminal_reason,
         trainer_terminal_reason=trainer.terminal_reason,
         same_step_count=len(r_assist) == len(t_assist),

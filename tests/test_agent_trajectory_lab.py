@@ -109,6 +109,80 @@ def test_identical_trajectories_have_no_divergence():
     assert rep.tool_choice_disagreement_rate == 0.0
     assert rep.tool_call_jaccard == 1.0
     assert rep.final_answer_match is True
+    assert rep.final_answer_match_soft is True
+
+
+# --- soft answer match -----------------------------------------------------
+
+
+def test_soft_match_picks_up_same_number_different_phrasing():
+    """Surface phrasing changes around the same number must soft-match."""
+    a = _traj(run_id="a", rollout="vllm-bf16", final_answer="The total is **8,294,400** tokens per day.")
+    b = _traj(run_id="b", rollout="vllm-fp8", final_answer="That comes to 8294400 tokens daily.")
+    rep = compute_trajectory_divergence(a, b)
+    assert rep.final_answer_match is False  # strict normalised-text equality fails
+    assert rep.final_answer_match_soft is True  # numeric equivalence rescues it
+
+
+def test_soft_match_rejects_different_numbers():
+    a = _traj(run_id="a", rollout="vllm-bf16", final_answer="The total is 8294400 tokens.")
+    b = _traj(run_id="b", rollout="vllm-fp8", final_answer="The total is 8295000 tokens.")
+    rep = compute_trajectory_divergence(a, b)
+    assert rep.final_answer_match is False
+    assert rep.final_answer_match_soft is False
+
+
+def test_soft_match_picks_up_substring():
+    """The shorter answer is contained in the longer one."""
+    a = _traj(run_id="a", rollout="vllm-bf16", final_answer="The answer is 42.")
+    b = _traj(run_id="b", rollout="vllm-fp8", final_answer="After careful analysis, the answer is 42.")
+    rep = compute_trajectory_divergence(a, b)
+    assert rep.final_answer_match is False
+    assert rep.final_answer_match_soft is True
+
+
+def test_soft_match_strict_equality_still_implies_soft():
+    a = _traj(run_id="a", rollout="vllm-bf16", final_answer="same answer")
+    b = _traj(run_id="b", rollout="vllm-fp8", final_answer="Same Answer")
+    rep = compute_trajectory_divergence(a, b)
+    assert rep.final_answer_match is True
+    assert rep.final_answer_match_soft is True
+
+
+def test_soft_match_handles_decimal_normalisation():
+    """1.20 and 1.2 are the same number after canonicalisation."""
+    from rollout_market.observatory.agent_trajectory_lab import _soft_content_match
+    assert _soft_content_match("The ratio is 1.20.", "The ratio is 1.2.")
+
+
+def test_soft_match_handles_thousands_separator():
+    from rollout_market.observatory.agent_trajectory_lab import _soft_content_match
+    assert _soft_content_match("1,200,000 tokens", "1200000 tokens")
+    assert _soft_content_match("1,200,000", "1200000")
+
+
+def test_soft_match_returns_false_when_one_side_empty():
+    a = _traj(run_id="a", rollout="vllm-bf16", final_answer="The answer is 5.", terminal="answered")
+    # one side empty + the other has content -> no soft match
+    b = _traj(
+        run_id="b",
+        rollout="vllm-fp8",
+        final_answer="",
+        terminal="max_steps",
+    )
+    rep = compute_trajectory_divergence(b, a)
+    assert rep.final_answer_match is False
+    assert rep.final_answer_match_soft is False
+
+
+def test_soft_match_both_empty_with_answered_terminal_is_true():
+    """The existing empty-empty rule (both answered, both empty answer) keeps
+    its strict behaviour and propagates to the soft flag."""
+    a = _traj(run_id="a", rollout="vllm-bf16", final_answer="", terminal="answered")
+    b = _traj(run_id="b", rollout="vllm-fp8", final_answer="", terminal="answered")
+    rep = compute_trajectory_divergence(a, b)
+    assert rep.final_answer_match is True
+    assert rep.final_answer_match_soft is True
 
 
 def test_divergence_on_tool_choice():

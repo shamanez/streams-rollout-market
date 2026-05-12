@@ -50,6 +50,7 @@ class AgentRow:
     tool_call_jaccard: float
     final_answer_match: bool
     created_at: str
+    final_answer_match_soft: bool = False
     device_bucket: str = "L40S (g6e.12xlarge)"
 
     @property
@@ -70,6 +71,7 @@ class AgentEnginePairAggregate:
     mean_tool_choice_disagreement_rate: float
     mean_tool_call_jaccard: float
     final_answer_match_rate: float
+    final_answer_match_soft_rate: float
     mean_rollout_steps: float
     mean_trainer_steps: float
 
@@ -109,6 +111,10 @@ class AgentDashboard:
                         1 for r in rows if r.final_answer_match
                     )
                     / n,
+                    final_answer_match_soft_rate=sum(
+                        1 for r in rows if r.final_answer_match_soft
+                    )
+                    / n,
                     mean_rollout_steps=sum(r.rollout_steps for r in rows) / n,
                     mean_trainer_steps=sum(r.trainer_steps for r in rows) / n,
                 )
@@ -129,6 +135,7 @@ class AgentDashboard:
                     "mean_tool_choice_disagreement_rate": agg.mean_tool_choice_disagreement_rate,
                     "mean_tool_call_jaccard": agg.mean_tool_call_jaccard,
                     "final_answer_match_rate": agg.final_answer_match_rate,
+                    "final_answer_match_soft_rate": agg.final_answer_match_soft_rate,
                     "mean_rollout_steps": agg.mean_rollout_steps,
                     "mean_trainer_steps": agg.mean_trainer_steps,
                 }
@@ -148,6 +155,7 @@ class AgentDashboard:
                     "tool_choice_disagreement_rate": r.tool_choice_disagreement_rate,
                     "tool_call_jaccard": r.tool_call_jaccard,
                     "final_answer_match": r.final_answer_match,
+                    "final_answer_match_soft": r.final_answer_match_soft,
                     "created_at": r.created_at,
                 }
                 for r in self.rows
@@ -169,6 +177,7 @@ def _row_from_report(report: TrajectoryDivergenceReport) -> AgentRow:
         tool_choice_disagreement_rate=report.tool_choice_disagreement_rate,
         tool_call_jaccard=report.tool_call_jaccard,
         final_answer_match=report.final_answer_match,
+        final_answer_match_soft=getattr(report, "final_answer_match_soft", False),
         created_at=report.created_at.isoformat(),
         device_bucket=device_bucket_label(report.device),
     )

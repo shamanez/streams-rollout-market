@@ -1,5 +1,5 @@
 {
-  "num_runs": 59,
+  "num_runs": 41,
   "engine_pairs": [
     {
       "rollout_engine": "hermes-qwen3-30b-a3b-bf16_seedB",
@@ -11,6 +11,7 @@
       "mean_tool_choice_disagreement_rate": 0.2777777777777778,
       "mean_tool_call_jaccard": 0.48055555555555557,
       "final_answer_match_rate": 0.1111111111111111,
+      "final_answer_match_soft_rate": 0.4444444444444444,
       "mean_rollout_steps": 2.3333333333333335,
       "mean_trainer_steps": 1.7777777777777777
     },
@@ -24,6 +25,7 @@
       "mean_tool_choice_disagreement_rate": 0.2777777777777778,
       "mean_tool_call_jaccard": 0.3862433862433863,
       "final_answer_match_rate": 0.1111111111111111,
+      "final_answer_match_soft_rate": 0.5555555555555556,
       "mean_rollout_steps": 1.7777777777777777,
       "mean_trainer_steps": 1.7777777777777777
     },
@@ -37,6 +39,7 @@
       "mean_tool_choice_disagreement_rate": 0.24722222222222223,
       "mean_tool_call_jaccard": 0.29375,
       "final_answer_match_rate": 0.0,
+      "final_answer_match_soft_rate": 0.25,
       "mean_rollout_steps": 2.4166666666666665,
       "mean_trainer_steps": 2.4166666666666665
     },
@@ -50,47 +53,9 @@
       "mean_tool_choice_disagreement_rate": 0.3151515151515152,
       "mean_tool_call_jaccard": 0.32045454545454544,
       "final_answer_match_rate": 0.0,
+      "final_answer_match_soft_rate": 0.36363636363636365,
       "mean_rollout_steps": 2.1818181818181817,
       "mean_trainer_steps": 2.3636363636363638
-    },
-    {
-      "rollout_engine": "sglang-bf16",
-      "trainer_engine": "vllm-bf16",
-      "count": 6,
-      "mean_first_divergence_step": 1.8,
-      "fully_matched_count": 1,
-      "diverged_count": 5,
-      "mean_tool_choice_disagreement_rate": 0.2738095238095238,
-      "mean_tool_call_jaccard": 0.8333333333333334,
-      "final_answer_match_rate": 0.16666666666666666,
-      "mean_rollout_steps": 3.1666666666666665,
-      "mean_trainer_steps": 3.0
-    },
-    {
-      "rollout_engine": "sglang-fp8",
-      "trainer_engine": "vllm-bf16",
-      "count": 6,
-      "mean_first_divergence_step": 0.6,
-      "fully_matched_count": 1,
-      "diverged_count": 5,
-      "mean_tool_choice_disagreement_rate": 0.08333333333333333,
-      "mean_tool_call_jaccard": 0.5416666666666666,
-      "final_answer_match_rate": 0.16666666666666666,
-      "mean_rollout_steps": 2.3333333333333335,
-      "mean_trainer_steps": 3.0
-    },
-    {
-      "rollout_engine": "vllm-fp8",
-      "trainer_engine": "vllm-bf16",
-      "count": 6,
-      "mean_first_divergence_step": 1.0,
-      "fully_matched_count": 2,
-      "diverged_count": 4,
-      "mean_tool_choice_disagreement_rate": 0.03333333333333333,
-      "mean_tool_call_jaccard": 0.8666666666666667,
-      "final_answer_match_rate": 0.3333333333333333,
-      "mean_rollout_steps": 2.5,
-      "mean_trainer_steps": 3.0
     }
   ],
   "rows": [
@@ -107,7 +72,8 @@
       "tool_choice_disagreement_rate": 0.5,
       "tool_call_jaccard": 0.125,
       "final_answer_match": false,
-      "created_at": "2026-05-12T03:24:05.761114+00:00"
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T03:38:52.764998+00:00"
     },
     {
       "run_id": "hermes-qwen3-30b-a3b-bf16_seedB-code-read-then-modify-vs-hermes-qwen3-30b-a3b-bf16-code-read-then-modify",
@@ -122,7 +88,8 @@
       "tool_choice_disagreement_rate": 1.0,
       "tool_call_jaccard": 0.2,
       "final_answer_match": false,
-      "created_at": "2026-05-12T03:24:05.888156+00:00"
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T03:38:52.892624+00:00"
     },
     {
       "run_id": "hermes-qwen3-30b-a3b-bf16_seedB-math-bf16-vram-budget-vs-hermes-qwen3-30b-a3b-bf16-math-bf16-vram-budget",
@@ -137,7 +104,8 @@
       "tool_choice_disagreement_rate": 0.0,
       "tool_call_jaccard": 0.0,
       "final_answer_match": false,
-      "created_at": "2026-05-12T03:24:06.014724+00:00"
+      "final_answer_match_soft": true,
+      "created_at": "2026-05-12T03:38:53.020308+00:00"
     },
     {
       "run_id": "hermes-qwen3-30b-a3b-bf16_seedB-math-tokens-per-gpu-day-vs-hermes-qwen3-30b-a3b-bf16-math-tokens-per-gpu-day",
@@ -152,7 +120,8 @@
       "tool_choice_disagreement_rate": 0.0,
       "tool_call_jaccard": 1.0,
       "final_answer_match": false,
-      "created_at": "2026-05-12T03:24:06.142637+00:00"
+      "final_answer_match_soft": true,
+      "created_at": "2026-05-12T03:38:53.147218+00:00"
     },
     {
       "run_id": "hermes-qwen3-30b-a3b-bf16_seedB-mixed-research-and-math-vs-hermes-qwen3-30b-a3b-bf16-mixed-research-and-math",
@@ -167,7 +136,8 @@
       "tool_choice_disagreement_rate": 0.0,
       "tool_call_jaccard": 1.0,
       "final_answer_match": false,
-      "created_at": "2026-05-12T03:24:06.270380+00:00"
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T03:38:53.298849+00:00"
     },
     {
       "run_id": "hermes-qwen3-30b-a3b-bf16_seedB-multi-tool-with-irrelevant-result-vs-hermes-qwen3-30b-a3b-bf16-multi-tool-with-irrelevant-result",
@@ -182,7 +152,8 @@
       "tool_choice_disagreement_rate": 0.5,
       "tool_call_jaccard": 0.0,
       "final_answer_match": false,
-      "created_at": "2026-05-12T03:24:06.397190+00:00"
+      "final_answer_match_soft": true,
+      "created_at": "2026-05-12T03:38:53.428255+00:00"
     },
     {
       "run_id": "hermes-qwen3-30b-a3b-bf16_seedB-no-op-trivia-vs-hermes-qwen3-30b-a3b-bf16-no-op-trivia",
@@ -197,7 +168,8 @@
       "tool_choice_disagreement_rate": 0.0,
       "tool_call_jaccard": 1.0,
       "final_answer_match": true,
-      "created_at": "2026-05-12T03:24:06.525568+00:00"
+      "final_answer_match_soft": true,
+      "created_at": "2026-05-12T03:38:53.556872+00:00"
     },
     {
       "run_id": "hermes-qwen3-30b-a3b-bf16_seedB-plan-3step-experiment-vs-hermes-qwen3-30b-a3b-bf16-plan-3step-experiment",
@@ -212,7 +184,8 @@
       "tool_choice_disagreement_rate": 0.5,
       "tool_call_jaccard": 0.0,
       "final_answer_match": false,
-      "created_at": "2026-05-12T03:24:06.653206+00:00"
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T03:38:53.684471+00:00"
     },
     {
       "run_id": "hermes-qwen3-30b-a3b-bf16_seedB-research-vllm-then-sglang-vs-hermes-qwen3-30b-a3b-bf16-research-vllm-then-sglang",
@@ -227,7 +200,8 @@
       "tool_choice_disagreement_rate": 0.0,
       "tool_call_jaccard": 1.0,
       "final_answer_match": false,
-      "created_at": "2026-05-12T03:24:06.787472+00:00"
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T03:38:53.811812+00:00"
     },
     {
       "run_id": "hermes-qwen3-30b-a3b-fp8-code-fix-fibonacci-vs-hermes-qwen3-30b-a3b-bf16-code-fix-fibonacci",
@@ -242,7 +216,8 @@
       "tool_choice_disagreement_rate": 0.0,
       "tool_call_jaccard": 0.14285714285714285,
       "final_answer_match": false,
-      "created_at": "2026-05-12T03:24:04.615445+00:00"
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T03:38:51.605164+00:00"
     },
     {
       "run_id": "hermes-qwen3-30b-a3b-fp8-code-read-then-modify-vs-hermes-qwen3-30b-a3b-bf16-code-read-then-modify",
@@ -257,7 +232,8 @@
       "tool_choice_disagreement_rate": 1.0,
       "tool_call_jaccard": 0.3333333333333333,
       "final_answer_match": false,
-      "created_at": "2026-05-12T03:24:04.742325+00:00"
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T03:38:51.735285+00:00"
     },
     {
       "run_id": "hermes-qwen3-30b-a3b-fp8-math-bf16-vram-budget-vs-hermes-qwen3-30b-a3b-bf16-math-bf16-vram-budget",
@@ -272,7 +248,8 @@
       "tool_choice_disagreement_rate": 0.0,
       "tool_call_jaccard": 0.0,
       "final_answer_match": false,
-      "created_at": "2026-05-12T03:24:04.869920+00:00"
+      "final_answer_match_soft": true,
+      "created_at": "2026-05-12T03:38:51.863222+00:00"
     },
     {
       "run_id": "hermes-qwen3-30b-a3b-fp8-math-tokens-per-gpu-day-vs-hermes-qwen3-30b-a3b-bf16-math-tokens-per-gpu-day",
@@ -287,7 +264,8 @@
       "tool_choice_disagreement_rate": 0.0,
       "tool_call_jaccard": 0.0,
       "final_answer_match": false,
-      "created_at": "2026-05-12T03:24:04.997525+00:00"
+      "final_answer_match_soft": true,
+      "created_at": "2026-05-12T03:38:51.990211+00:00"
     },
     {
       "run_id": "hermes-qwen3-30b-a3b-fp8-mixed-research-and-math-vs-hermes-qwen3-30b-a3b-bf16-mixed-research-and-math",
@@ -302,7 +280,8 @@
       "tool_choice_disagreement_rate": 0.0,
       "tool_call_jaccard": 1.0,
       "final_answer_match": false,
-      "created_at": "2026-05-12T03:24:05.125106+00:00"
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T03:38:52.117302+00:00"
     },
     {
       "run_id": "hermes-qwen3-30b-a3b-fp8-multi-tool-with-irrelevant-result-vs-hermes-qwen3-30b-a3b-bf16-multi-tool-with-irrelevant-result",
@@ -317,7 +296,8 @@
       "tool_choice_disagreement_rate": 0.5,
       "tool_call_jaccard": 0.0,
       "final_answer_match": false,
-      "created_at": "2026-05-12T03:24:05.253083+00:00"
+      "final_answer_match_soft": true,
+      "created_at": "2026-05-12T03:38:52.245748+00:00"
     },
     {
       "run_id": "hermes-qwen3-30b-a3b-fp8-no-op-trivia-vs-hermes-qwen3-30b-a3b-bf16-no-op-trivia",
@@ -332,7 +312,8 @@
       "tool_choice_disagreement_rate": 0.0,
       "tool_call_jaccard": 1.0,
       "final_answer_match": true,
-      "created_at": "2026-05-12T03:24:05.379850+00:00"
+      "final_answer_match_soft": true,
+      "created_at": "2026-05-12T03:38:52.376537+00:00"
     },
     {
       "run_id": "hermes-qwen3-30b-a3b-fp8-plan-3step-experiment-vs-hermes-qwen3-30b-a3b-bf16-plan-3step-experiment",
@@ -347,7 +328,8 @@
       "tool_choice_disagreement_rate": 1.0,
       "tool_call_jaccard": 0.0,
       "final_answer_match": false,
-      "created_at": "2026-05-12T03:24:05.506850+00:00"
+      "final_answer_match_soft": true,
+      "created_at": "2026-05-12T03:38:52.507592+00:00"
     },
     {
       "run_id": "hermes-qwen3-30b-a3b-fp8-research-vllm-then-sglang-vs-hermes-qwen3-30b-a3b-bf16-research-vllm-then-sglang",
@@ -362,7 +344,8 @@
       "tool_choice_disagreement_rate": 0.0,
       "tool_call_jaccard": 1.0,
       "final_answer_match": false,
-      "created_at": "2026-05-12T03:24:05.633805+00:00"
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T03:38:52.635670+00:00"
     },
     {
       "run_id": "hermes-qwen3-32b-bf16_seedB-code-fix-factorial-vs-hermes-qwen3-32b-bf16-code-fix-factorial",
@@ -377,7 +360,8 @@
       "tool_choice_disagreement_rate": 0.0,
       "tool_call_jaccard": 1.0,
       "final_answer_match": false,
-      "created_at": "2026-05-12T03:02:36.477449+00:00"
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T03:38:49.845274+00:00"
     },
     {
       "run_id": "hermes-qwen3-32b-bf16_seedB-code-fix-fibonacci-vs-hermes-qwen3-32b-bf16-code-fix-fibonacci",
@@ -392,7 +376,8 @@
       "tool_choice_disagreement_rate": 0.0,
       "tool_call_jaccard": 0.2,
       "final_answer_match": false,
-      "created_at": "2026-05-12T03:02:36.604385+00:00"
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T03:38:49.973215+00:00"
     },
     {
       "run_id": "hermes-qwen3-32b-bf16_seedB-code-read-then-modify-vs-hermes-qwen3-32b-bf16-code-read-then-modify",
@@ -407,7 +392,8 @@
       "tool_choice_disagreement_rate": 0.6666666666666666,
       "tool_call_jaccard": 0.2,
       "final_answer_match": false,
-      "created_at": "2026-05-12T03:02:36.730181+00:00"
+      "final_answer_match_soft": true,
+      "created_at": "2026-05-12T03:38:50.100351+00:00"
     },
     {
       "run_id": "hermes-qwen3-32b-bf16_seedB-four-tool-sequence-vs-hermes-qwen3-32b-bf16-four-tool-sequence",
@@ -422,7 +408,8 @@
       "tool_choice_disagreement_rate": 0.8,
       "tool_call_jaccard": 0.125,
       "final_answer_match": false,
-      "created_at": "2026-05-12T03:02:36.856968+00:00"
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T03:38:50.229503+00:00"
     },
     {
       "run_id": "hermes-qwen3-32b-bf16_seedB-math-bf16-vram-budget-vs-hermes-qwen3-32b-bf16-math-bf16-vram-budget",
@@ -437,7 +424,8 @@
       "tool_choice_disagreement_rate": 0.0,
       "tool_call_jaccard": 0.0,
       "final_answer_match": false,
-      "created_at": "2026-05-12T03:02:36.983585+00:00"
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T03:38:50.357909+00:00"
     },
     {
       "run_id": "hermes-qwen3-32b-bf16_seedB-math-tokens-per-gpu-day-vs-hermes-qwen3-32b-bf16-math-tokens-per-gpu-day",
@@ -452,7 +440,8 @@
       "tool_choice_disagreement_rate": 0.0,
       "tool_call_jaccard": 0.0,
       "final_answer_match": false,
-      "created_at": "2026-05-12T03:02:37.111098+00:00"
+      "final_answer_match_soft": true,
+      "created_at": "2026-05-12T03:38:50.487429+00:00"
     },
     {
       "run_id": "hermes-qwen3-32b-bf16_seedB-mixed-research-and-math-vs-hermes-qwen3-32b-bf16-mixed-research-and-math",
@@ -467,7 +456,8 @@
       "tool_choice_disagreement_rate": 1.0,
       "tool_call_jaccard": 0.0,
       "final_answer_match": false,
-      "created_at": "2026-05-12T03:02:37.238352+00:00"
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T03:38:50.618257+00:00"
     },
     {
       "run_id": "hermes-qwen3-32b-bf16_seedB-multi-tool-with-irrelevant-result-vs-hermes-qwen3-32b-bf16-multi-tool-with-irrelevant-result",
@@ -482,7 +472,8 @@
       "tool_choice_disagreement_rate": 0.0,
       "tool_call_jaccard": 0.0,
       "final_answer_match": false,
-      "created_at": "2026-05-12T03:02:37.365230+00:00"
+      "final_answer_match_soft": true,
+      "created_at": "2026-05-12T03:38:50.746557+00:00"
     },
     {
       "run_id": "hermes-qwen3-32b-bf16_seedB-no-op-trivia-vs-hermes-qwen3-32b-bf16-no-op-trivia",
@@ -497,7 +488,8 @@
       "tool_choice_disagreement_rate": 0.0,
       "tool_call_jaccard": 1.0,
       "final_answer_match": false,
-      "created_at": "2026-05-12T03:02:37.497247+00:00"
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T03:38:50.873679+00:00"
     },
     {
       "run_id": "hermes-qwen3-32b-bf16_seedB-plan-3step-experiment-vs-hermes-qwen3-32b-bf16-plan-3step-experiment",
@@ -512,7 +504,8 @@
       "tool_choice_disagreement_rate": 0.0,
       "tool_call_jaccard": 0.0,
       "final_answer_match": false,
-      "created_at": "2026-05-12T03:02:37.625647+00:00"
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T03:38:51.001325+00:00"
     },
     {
       "run_id": "hermes-qwen3-32b-bf16_seedB-plan-then-budget-vs-hermes-qwen3-32b-bf16-plan-then-budget",
@@ -527,7 +520,8 @@
       "tool_choice_disagreement_rate": 0.5,
       "tool_call_jaccard": 0.0,
       "final_answer_match": false,
-      "created_at": "2026-05-12T03:02:37.753951+00:00"
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T03:38:51.130432+00:00"
     },
     {
       "run_id": "hermes-qwen3-32b-bf16_seedB-research-vllm-then-sglang-vs-hermes-qwen3-32b-bf16-research-vllm-then-sglang",
@@ -542,7 +536,8 @@
       "tool_choice_disagreement_rate": 0.0,
       "tool_call_jaccard": 1.0,
       "final_answer_match": false,
-      "created_at": "2026-05-12T03:02:37.883650+00:00"
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T03:38:51.261190+00:00"
     },
     {
       "run_id": "hermes-qwen3-32b-fp8-code-fix-factorial-vs-hermes-qwen3-32b-bf16-code-fix-factorial",
@@ -557,7 +552,8 @@
       "tool_choice_disagreement_rate": 0.0,
       "tool_call_jaccard": 1.0,
       "final_answer_match": false,
-      "created_at": "2026-05-12T03:02:35.077999+00:00"
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T03:38:48.438176+00:00"
     },
     {
       "run_id": "hermes-qwen3-32b-fp8-code-fix-fibonacci-vs-hermes-qwen3-32b-bf16-code-fix-fibonacci",
@@ -572,7 +568,8 @@
       "tool_choice_disagreement_rate": 0.6666666666666666,
       "tool_call_jaccard": 0.2,
       "final_answer_match": false,
-      "created_at": "2026-05-12T03:02:35.208314+00:00"
+      "final_answer_match_soft": true,
+      "created_at": "2026-05-12T03:38:48.565813+00:00"
     },
     {
       "run_id": "hermes-qwen3-32b-fp8-code-read-then-modify-vs-hermes-qwen3-32b-bf16-code-read-then-modify",
@@ -587,7 +584,8 @@
       "tool_choice_disagreement_rate": 0.0,
       "tool_call_jaccard": 0.2,
       "final_answer_match": false,
-      "created_at": "2026-05-12T03:02:35.334781+00:00"
+      "final_answer_match_soft": true,
+      "created_at": "2026-05-12T03:38:48.694893+00:00"
     },
     {
       "run_id": "hermes-qwen3-32b-fp8-four-tool-sequence-vs-hermes-qwen3-32b-bf16-four-tool-sequence",
@@ -602,7 +600,8 @@
       "tool_choice_disagreement_rate": 0.8,
       "tool_call_jaccard": 0.125,
       "final_answer_match": false,
-      "created_at": "2026-05-12T03:02:35.462541+00:00"
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T03:38:48.823485+00:00"
     },
     {
       "run_id": "hermes-qwen3-32b-fp8-math-bf16-vram-budget-vs-hermes-qwen3-32b-bf16-math-bf16-vram-budget",
@@ -617,7 +616,8 @@
       "tool_choice_disagreement_rate": 0.0,
       "tool_call_jaccard": 0.0,
       "final_answer_match": false,
-      "created_at": "2026-05-12T03:02:35.590522+00:00"
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T03:38:48.951203+00:00"
     },
     {
       "run_id": "hermes-qwen3-32b-fp8-math-tokens-per-gpu-day-vs-hermes-qwen3-32b-bf16-math-tokens-per-gpu-day",
@@ -632,7 +632,8 @@
       "tool_choice_disagreement_rate": 0.0,
       "tool_call_jaccard": 0.0,
       "final_answer_match": false,
-      "created_at": "2026-05-12T03:02:35.717881+00:00"
+      "final_answer_match_soft": true,
+      "created_at": "2026-05-12T03:38:49.079792+00:00"
     },
     {
       "run_id": "hermes-qwen3-32b-fp8-mixed-research-and-math-vs-hermes-qwen3-32b-bf16-mixed-research-and-math",
@@ -647,7 +648,8 @@
       "tool_choice_disagreement_rate": 1.0,
       "tool_call_jaccard": 0.0,
       "final_answer_match": false,
-      "created_at": "2026-05-12T03:02:35.845883+00:00"
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T03:38:49.207806+00:00"
     },
     {
       "run_id": "hermes-qwen3-32b-fp8-multi-tool-with-irrelevant-result-vs-hermes-qwen3-32b-bf16-multi-tool-with-irrelevant-result",
@@ -662,7 +664,8 @@
       "tool_choice_disagreement_rate": 0.0,
       "tool_call_jaccard": 0.0,
       "final_answer_match": false,
-      "created_at": "2026-05-12T03:02:35.971805+00:00"
+      "final_answer_match_soft": true,
+      "created_at": "2026-05-12T03:38:49.334701+00:00"
     },
     {
       "run_id": "hermes-qwen3-32b-fp8-no-op-trivia-vs-hermes-qwen3-32b-bf16-no-op-trivia",
@@ -677,7 +680,8 @@
       "tool_choice_disagreement_rate": 0.0,
       "tool_call_jaccard": 1.0,
       "final_answer_match": false,
-      "created_at": "2026-05-12T03:02:36.097097+00:00"
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T03:38:49.462200+00:00"
     },
     {
       "run_id": "hermes-qwen3-32b-fp8-plan-3step-experiment-vs-hermes-qwen3-32b-bf16-plan-3step-experiment",
@@ -692,7 +696,8 @@
       "tool_choice_disagreement_rate": 1.0,
       "tool_call_jaccard": 0.0,
       "final_answer_match": false,
-      "created_at": "2026-05-12T03:02:36.224502+00:00"
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T03:38:49.589751+00:00"
     },
     {
       "run_id": "hermes-qwen3-32b-fp8-research-vllm-then-sglang-vs-hermes-qwen3-32b-bf16-research-vllm-then-sglang",
@@ -707,277 +712,8 @@
       "tool_choice_disagreement_rate": 0.0,
       "tool_call_jaccard": 1.0,
       "final_answer_match": false,
-      "created_at": "2026-05-12T03:02:36.350399+00:00"
-    },
-    {
-      "run_id": "sglang-bf16-code-fix-factorial-vs-vllm-bf16-code-fix-factorial",
-      "task_id": "code-fix-factorial",
-      "model_id": "Qwen/Qwen3-32B",
-      "rollout_engine": "sglang-bf16",
-      "trainer_engine": "vllm-bf16",
-      "rollout_steps": 7,
-      "trainer_steps": 8,
-      "first_divergence_step": 6,
-      "first_divergence_kind": "tool_choice",
-      "tool_choice_disagreement_rate": 0.14285714285714285,
-      "tool_call_jaccard": 1.0,
-      "final_answer_match": false,
-      "created_at": "2026-05-10T09:51:17.146158+00:00"
-    },
-    {
-      "run_id": "sglang-bf16-math-multi-step-vs-vllm-bf16-math-multi-step",
-      "task_id": "math-multi-step",
-      "model_id": "Qwen/Qwen3-32B",
-      "rollout_engine": "sglang-bf16",
-      "trainer_engine": "vllm-bf16",
-      "rollout_steps": 3,
-      "trainer_steps": 2,
-      "first_divergence_step": 0,
-      "first_divergence_kind": "tool_choice",
-      "tool_choice_disagreement_rate": 1.0,
-      "tool_call_jaccard": 0.0,
-      "final_answer_match": false,
-      "created_at": "2026-05-10T09:51:17.505402+00:00"
-    },
-    {
-      "run_id": "sglang-bf16-math-population-ratio-vs-vllm-bf16-math-population-ratio",
-      "task_id": "math-population-ratio",
-      "model_id": "Qwen/Qwen3-32B",
-      "rollout_engine": "sglang-bf16",
-      "trainer_engine": "vllm-bf16",
-      "rollout_steps": 3,
-      "trainer_steps": 2,
-      "first_divergence_step": 1,
-      "first_divergence_kind": "tool_choice",
-      "tool_choice_disagreement_rate": 0.5,
-      "tool_call_jaccard": 1.0,
-      "final_answer_match": false,
-      "created_at": "2026-05-10T09:51:16.788451+00:00"
-    },
-    {
-      "run_id": "sglang-bf16-math-tokens-per-day-vs-vllm-bf16-math-tokens-per-day",
-      "task_id": "math-tokens-per-day",
-      "model_id": "Qwen/Qwen3-32B",
-      "rollout_engine": "sglang-bf16",
-      "trainer_engine": "vllm-bf16",
-      "rollout_steps": 2,
-      "trainer_steps": 2,
-      "first_divergence_step": null,
-      "first_divergence_kind": null,
-      "tool_choice_disagreement_rate": 0.0,
-      "tool_call_jaccard": 1.0,
-      "final_answer_match": true,
-      "created_at": "2026-05-10T09:51:16.607931+00:00"
-    },
-    {
-      "run_id": "sglang-bf16-plan-rollout-experiment-vs-vllm-bf16-plan-rollout-experiment",
-      "task_id": "plan-rollout-experiment",
-      "model_id": "Qwen/Qwen3-32B",
-      "rollout_engine": "sglang-bf16",
-      "trainer_engine": "vllm-bf16",
-      "rollout_steps": 2,
-      "trainer_steps": 2,
-      "first_divergence_step": 1,
-      "first_divergence_kind": "content",
-      "tool_choice_disagreement_rate": 0.0,
-      "tool_call_jaccard": 1.0,
-      "final_answer_match": false,
-      "created_at": "2026-05-10T09:51:17.326635+00:00"
-    },
-    {
-      "run_id": "sglang-bf16-research-vllm-version-vs-vllm-bf16-research-vllm-version",
-      "task_id": "research-vllm-version",
-      "model_id": "Qwen/Qwen3-32B",
-      "rollout_engine": "sglang-bf16",
-      "trainer_engine": "vllm-bf16",
-      "rollout_steps": 2,
-      "trainer_steps": 2,
-      "first_divergence_step": 1,
-      "first_divergence_kind": "content",
-      "tool_choice_disagreement_rate": 0.0,
-      "tool_call_jaccard": 1.0,
-      "final_answer_match": false,
-      "created_at": "2026-05-10T09:51:16.967658+00:00"
-    },
-    {
-      "run_id": "sglang-fp8-code-fix-factorial-vs-vllm-bf16-code-fix-factorial",
-      "task_id": "code-fix-factorial",
-      "model_id": "Qwen/Qwen3-32B",
-      "rollout_engine": "sglang-fp8",
-      "trainer_engine": "vllm-bf16",
-      "rollout_steps": 4,
-      "trainer_steps": 8,
-      "first_divergence_step": 1,
-      "first_divergence_kind": "tool_args",
-      "tool_choice_disagreement_rate": 0.5,
-      "tool_call_jaccard": 0.25,
-      "final_answer_match": false,
-      "created_at": "2026-05-10T09:51:18.218458+00:00"
-    },
-    {
-      "run_id": "sglang-fp8-math-multi-step-vs-vllm-bf16-math-multi-step",
-      "task_id": "math-multi-step",
-      "model_id": "Qwen/Qwen3-32B",
-      "rollout_engine": "sglang-fp8",
-      "trainer_engine": "vllm-bf16",
-      "rollout_steps": 2,
-      "trainer_steps": 2,
-      "first_divergence_step": 0,
-      "first_divergence_kind": "tool_args",
-      "tool_choice_disagreement_rate": 0.0,
-      "tool_call_jaccard": 0.0,
-      "final_answer_match": false,
-      "created_at": "2026-05-10T09:51:18.577879+00:00"
-    },
-    {
-      "run_id": "sglang-fp8-math-population-ratio-vs-vllm-bf16-math-population-ratio",
-      "task_id": "math-population-ratio",
-      "model_id": "Qwen/Qwen3-32B",
-      "rollout_engine": "sglang-fp8",
-      "trainer_engine": "vllm-bf16",
-      "rollout_steps": 2,
-      "trainer_steps": 2,
-      "first_divergence_step": 1,
-      "first_divergence_kind": "content",
-      "tool_choice_disagreement_rate": 0.0,
-      "tool_call_jaccard": 1.0,
-      "final_answer_match": false,
-      "created_at": "2026-05-10T09:51:17.863192+00:00"
-    },
-    {
-      "run_id": "sglang-fp8-math-tokens-per-day-vs-vllm-bf16-math-tokens-per-day",
-      "task_id": "math-tokens-per-day",
-      "model_id": "Qwen/Qwen3-32B",
-      "rollout_engine": "sglang-fp8",
-      "trainer_engine": "vllm-bf16",
-      "rollout_steps": 2,
-      "trainer_steps": 2,
-      "first_divergence_step": null,
-      "first_divergence_kind": null,
-      "tool_choice_disagreement_rate": 0.0,
-      "tool_call_jaccard": 1.0,
-      "final_answer_match": true,
-      "created_at": "2026-05-10T09:51:17.684476+00:00"
-    },
-    {
-      "run_id": "sglang-fp8-plan-rollout-experiment-vs-vllm-bf16-plan-rollout-experiment",
-      "task_id": "plan-rollout-experiment",
-      "model_id": "Qwen/Qwen3-32B",
-      "rollout_engine": "sglang-fp8",
-      "trainer_engine": "vllm-bf16",
-      "rollout_steps": 2,
-      "trainer_steps": 2,
-      "first_divergence_step": 0,
-      "first_divergence_kind": "tool_args",
-      "tool_choice_disagreement_rate": 0.0,
-      "tool_call_jaccard": 0.0,
-      "final_answer_match": false,
-      "created_at": "2026-05-10T09:51:18.398888+00:00"
-    },
-    {
-      "run_id": "sglang-fp8-research-vllm-version-vs-vllm-bf16-research-vllm-version",
-      "task_id": "research-vllm-version",
-      "model_id": "Qwen/Qwen3-32B",
-      "rollout_engine": "sglang-fp8",
-      "trainer_engine": "vllm-bf16",
-      "rollout_steps": 2,
-      "trainer_steps": 2,
-      "first_divergence_step": 1,
-      "first_divergence_kind": "content",
-      "tool_choice_disagreement_rate": 0.0,
-      "tool_call_jaccard": 1.0,
-      "final_answer_match": false,
-      "created_at": "2026-05-10T09:51:18.039957+00:00"
-    },
-    {
-      "run_id": "vllm-fp8-code-fix-factorial-vs-vllm-bf16-code-fix-factorial",
-      "task_id": "code-fix-factorial",
-      "model_id": "Qwen/Qwen3-32B",
-      "rollout_engine": "vllm-fp8",
-      "trainer_engine": "vllm-bf16",
-      "rollout_steps": 5,
-      "trainer_steps": 8,
-      "first_divergence_step": 1,
-      "first_divergence_kind": "tool_args",
-      "tool_choice_disagreement_rate": 0.2,
-      "tool_call_jaccard": 0.2,
-      "final_answer_match": false,
-      "created_at": "2026-05-10T09:51:16.072209+00:00"
-    },
-    {
-      "run_id": "vllm-fp8-math-multi-step-vs-vllm-bf16-math-multi-step",
-      "task_id": "math-multi-step",
-      "model_id": "Qwen/Qwen3-32B",
-      "rollout_engine": "vllm-fp8",
-      "trainer_engine": "vllm-bf16",
-      "rollout_steps": 2,
-      "trainer_steps": 2,
-      "first_divergence_step": null,
-      "first_divergence_kind": null,
-      "tool_choice_disagreement_rate": 0.0,
-      "tool_call_jaccard": 1.0,
-      "final_answer_match": true,
-      "created_at": "2026-05-10T09:51:16.427175+00:00"
-    },
-    {
-      "run_id": "vllm-fp8-math-population-ratio-vs-vllm-bf16-math-population-ratio",
-      "task_id": "math-population-ratio",
-      "model_id": "Qwen/Qwen3-32B",
-      "rollout_engine": "vllm-fp8",
-      "trainer_engine": "vllm-bf16",
-      "rollout_steps": 2,
-      "trainer_steps": 2,
-      "first_divergence_step": 1,
-      "first_divergence_kind": "content",
-      "tool_choice_disagreement_rate": 0.0,
-      "tool_call_jaccard": 1.0,
-      "final_answer_match": false,
-      "created_at": "2026-05-10T09:51:15.716171+00:00"
-    },
-    {
-      "run_id": "vllm-fp8-math-tokens-per-day-vs-vllm-bf16-math-tokens-per-day",
-      "task_id": "math-tokens-per-day",
-      "model_id": "Qwen/Qwen3-32B",
-      "rollout_engine": "vllm-fp8",
-      "trainer_engine": "vllm-bf16",
-      "rollout_steps": 2,
-      "trainer_steps": 2,
-      "first_divergence_step": null,
-      "first_divergence_kind": null,
-      "tool_choice_disagreement_rate": 0.0,
-      "tool_call_jaccard": 1.0,
-      "final_answer_match": true,
-      "created_at": "2026-05-10T09:51:15.538290+00:00"
-    },
-    {
-      "run_id": "vllm-fp8-plan-rollout-experiment-vs-vllm-bf16-plan-rollout-experiment",
-      "task_id": "plan-rollout-experiment",
-      "model_id": "Qwen/Qwen3-32B",
-      "rollout_engine": "vllm-fp8",
-      "trainer_engine": "vllm-bf16",
-      "rollout_steps": 2,
-      "trainer_steps": 2,
-      "first_divergence_step": 1,
-      "first_divergence_kind": "content",
-      "tool_choice_disagreement_rate": 0.0,
-      "tool_call_jaccard": 1.0,
-      "final_answer_match": false,
-      "created_at": "2026-05-10T09:51:16.249620+00:00"
-    },
-    {
-      "run_id": "vllm-fp8-research-vllm-version-vs-vllm-bf16-research-vllm-version",
-      "task_id": "research-vllm-version",
-      "model_id": "Qwen/Qwen3-32B",
-      "rollout_engine": "vllm-fp8",
-      "trainer_engine": "vllm-bf16",
-      "rollout_steps": 2,
-      "trainer_steps": 2,
-      "first_divergence_step": 1,
-      "first_divergence_kind": "content",
-      "tool_choice_disagreement_rate": 0.0,
-      "tool_call_jaccard": 1.0,
-      "final_answer_match": false,
-      "created_at": "2026-05-10T09:51:15.895159+00:00"
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T03:38:49.717829+00:00"
     }
   ]
 }
