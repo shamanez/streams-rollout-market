@@ -1,7 +1,44 @@
 # PROGRESS.md — Agent Handoff State
 
 ## Last updated
-2026-05-12 (cycle 3 v2 iter 2 setup-2 — build_hermes_dense_input builder shipped)
+2026-05-12 (cycle 3 v2 iter 2 setup-3 — pair_hermes_dense_reports shipped)
+
+## Cycle 3 v2 iter 2 — setup-3 commit (2026-05-12)
+
+`hermes_agent.dense_capture_then_fsdp` part (d)-prep shipped on
+`research/hermes-dense-pair-reports`:
+
+- `scripts/live/pair_hermes_dense_reports.py` joins the
+  `build_hermes_dense_input` index against the trainer-side output
+  (`/tmp/trainers.json` from `run_fsdp_reference.py`) and emits one
+  `DenseMismatchReport` per (trajectory, assistant_turn) under
+  `runs/live/dense/<pair-slug>/<task_id>-turn<k>/`. The dashboard
+  renderer ingests these unchanged.
+- `pair_reports(...)` is a pure function; the CLI is a thin
+  argparse/I-O wrapper. Trainer engine label can be overridden so the
+  same pair script handles `fsdp-bf16` vs `megatron-bf16` cells.
+- 7 new offline tests; 410 passing (+7 from 403).
+
+The end-to-end laptop+spot pipeline is now wired top-to-bottom on the
+code side:
+
+  1. (spot) Hermes Agent rollouts capture probes -> trajectory JSONs.
+  2. (laptop) `build_hermes_dense_input` -> `/tmp/rollouts_hermes_*.json`
+     + `/tmp/hermes_dense_index_*.json`.
+  3. (spot) `scp + torchrun run_fsdp_reference.py` ->
+     `/tmp/trainers.json`.
+  4. (laptop) `scp back + pair_hermes_dense_reports.py` ->
+     `runs/live/dense/hermes-*/...`.
+  5. `python scripts/live/publish_dashboards.py` re-renders.
+
+Step (1) — the actual rollout-side probe capture — is still blocked
+on hermes-agent batch_runner instrumentation on the spot. No
+hermes-agent install is present on spot as of 2026-05-12T05:31Z; the
+next iteration should investigate the cheapest path to wire
+`logprobs=True, top_logprobs=1` + persistence of `prompt_token_ids` /
+`response_token_ids` into hermes-agent's chat-completions calls.
+
+## Cycle 3 v2 iter 2 — setup-2 commit (2026-05-12)
 
 ## Cycle 3 v2 iter 2 — setup-2 commit (2026-05-12)
 
