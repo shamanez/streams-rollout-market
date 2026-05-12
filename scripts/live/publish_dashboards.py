@@ -159,20 +159,14 @@ _HEADLINES: dict[str, list[tuple[str, callable]]] = {
             ),
         ),
     ],
-    "router": [
-        (
-            "worst top-1 flip rate",
-            lambda p: (
-                f"{max((x['mean_router_flip_rate'] for x in p.get('engine_pairs', [])), default=0) * 100:.1f}%"
-            ),
-        ),
-        (
-            "worst top-k set disagreement",
-            lambda p: (
-                f"{max((x['mean_token_expert_disagreement_rate'] for x in p.get('engine_pairs', [])), default=0) * 100:.1f}%"
-            ),
-        ),
-    ],
+    # The cycle-2 MoE router_flip_rate KPIs (e.g. "7.1% worst top-1 flip
+    # rate") were retired per operator direction 2026-05-12 ("Remove all
+    # the numbers from cycle-2 MoE, I think it was wrong"). The router
+    # card's kpi-row is intentionally empty until the planned native-API
+    # replay path produces fresh Hermes-multi-turn routing numbers — see
+    # the router-flip-rate-placeholder section above the fold and
+    # docs/future_research.md for the wiring.
+    "router": [],
     "dense": [
         (
             "worst ESS",
