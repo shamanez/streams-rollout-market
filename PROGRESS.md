@@ -1,7 +1,37 @@
 # PROGRESS.md — Agent Handoff State
 
 ## Last updated
-2026-05-12 (cycle 3 v2 iter 2 setup-14 — pair_hermes_moe_reports MoE joiner)
+2026-05-12 (cycle 3 v2 iter 2 setup-15 — multi-prompt mode in run_fsdp_moe_reference)
+
+## Cycle 3 v2 iter 2 — setup-15 commit (2026-05-12)
+
+`scripts/live/run_fsdp_moe_reference.py` now supports the multi-prompt
+input contract `pair_hermes_moe_reports.py` expects. New `load_rollouts()`
+helper prefers `/tmp/rollouts.json` (list) over the legacy
+`/tmp/rollout.json` (single dict); main loop iterates over each
+prompt and aggregates per-prompt payloads to `/tmp/trainers_moe.json`
+in multi-prompt mode (back-compat: single mode still writes
+`/tmp/fsdp_router.json`).
+
+- Model load is done once; the forward-pass loop reuses it.
+- Each payload carries `prompt_idx` so `pair_hermes_moe_reports.py`
+  can join by index.
+- 5 new offline tests for the pure helpers
+  (`load_rollouts`, `routed_position_indices`,
+  `format_fsdp_router_payload`). **464 passing (+5 from 459)**.
+
+The full multi-task hermes MoE pipeline is now wired end-to-end:
+
+  1. proxy captures probes (Dense + MoE).
+  2. merger stitches probes onto AgentTrajectory.
+  3. fill_prompt_token_ids derives prompt IDs via chat-template.
+  4. build_hermes_dense_input -> /tmp/rollouts.json + index.
+  5. scp to spot.
+  6. torchrun run_fsdp_moe_reference.py -> /tmp/trainers_moe.json.
+  7. scp back.
+  8. pair_hermes_moe_reports -> RouterMismatchReport per (traj, turn).
+
+## Cycle 3 v2 iter 2 — setup-14 commit (2026-05-12)
 
 ## Cycle 3 v2 iter 2 — setup-14 commit (2026-05-12)
 

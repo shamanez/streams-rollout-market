@@ -43,7 +43,31 @@ from pathlib import Path
 
 MODEL_DEFAULT = "Qwen/Qwen3-30B-A3B"
 ROLLOUT_PATH = Path("/tmp/rollout.json")
+ROLLOUTS_PATH = Path("/tmp/rollouts.json")
 OUT_PATH = Path(os.environ.get("FSDP_ROUTER_OUT", "/tmp/fsdp_router.json"))
+TRAINERS_PATH = Path(os.environ.get("FSDP_ROUTER_TRAINERS_OUT", "/tmp/trainers_moe.json"))
+
+
+def load_rollouts() -> tuple[list[dict], bool]:
+    """Resolve the multi-prompt vs single-prompt input contract.
+
+    Returns ``(rollouts_list, is_multi)``. Prefers
+    ``/tmp/rollouts.json`` (list) over ``/tmp/rollout.json`` (single
+    dict) so the multi-prompt Hermes pipeline lands without breaking
+    the existing single-prompt single-prompt flow. The boolean tells
+    the caller which output convention to follow:
+
+      * ``is_multi=True``  → write the list to ``TRAINERS_PATH`` (matches
+        the dense pipeline's ``/tmp/trainers.json`` shape).
+      * ``is_multi=False`` → write the single payload to ``OUT_PATH``
+        (back-compat for the legacy single-prompt single-prompt flow).
+    """
+    if ROLLOUTS_PATH.exists():
+        rollouts = json.loads(ROLLOUTS_PATH.read_text())
+        if not isinstance(rollouts, list):
+            raise ValueError(f"{ROLLOUTS_PATH} must contain a list, got {type(rollouts).__name__}")
+        return rollouts, True
+    return [json.loads(ROLLOUT_PATH.read_text())], False
 
 
 def routed_position_indices(prompt_len: int, response_len: int) -> list[int]:
@@ -146,19 +170,13 @@ def main() -> None:
     dist.init_process_group(backend="nccl")
     torch.cuda.set_device(local_rank)
 
-    rollout = json.loads(ROLLOUT_PATH.read_text())
-    model_id = os.environ.get("MODEL") or rollout.get("model") or MODEL_DEFAULT
-    prompt_token_ids = rollout["prompt_token_ids"]
-    response_token_ids = rollout["response_token_ids"]
-    prompt_len = len(prompt_token_ids)
-    response_len = len(response_token_ids)
-    seed = int(rollout.get("seed", 1234))
-    prompt_text = rollout.get("prompt_text", "")
+    rollouts, is_multi = load_rollouts()
+    model_id = os.environ.get("MODEL") or rollouts[0].get("model") or MODEL_DEFAULT
 
     if rank == 0:
         print(
             f"[fsdp-moe] world_size={world_size} model={model_id} "
-            f"prompt_len={prompt_len} response_len={response_len}",
+            f"num_prompts={len(rollouts)} mode={'multi' if is_multi else 'single'}",
             flush=True,
         )
 
@@ -173,15 +191,14 @@ def main() -> None:
     model.eval()
     dist.barrier()
     if rank == 0:
-        print(f"[fsdp-moe] HF load complete in {time.time()-t0:.1f}s", flush=True)
+        print(f"[fsdp-moe] HF load complete in {time.time() - t0:.1f}s", flush=True)
 
     cfg = model.config
     num_experts = int(getattr(cfg, "num_experts", 0))
     top_k = int(getattr(cfg, "num_experts_per_tok", 0))
     if num_experts == 0 or top_k == 0:
         raise RuntimeError(
-            f"{model_id} does not look like a MoE model "
-            f"(num_experts={num_experts}, top_k={top_k})"
+            f"{model_id} does not look like a MoE model (num_experts={num_experts}, top_k={top_k})"
         )
 
     auto_wrap_policy = __import__("functools").partial(
@@ -197,53 +214,69 @@ def main() -> None:
     )
     dist.barrier()
     if rank == 0:
-        print(f"[fsdp-moe] FSDP wrap complete in {time.time()-t1:.1f}s", flush=True)
+        print(f"[fsdp-moe] FSDP wrap complete in {time.time() - t1:.1f}s", flush=True)
 
-    ids = torch.tensor(
-        [prompt_token_ids + response_token_ids],
-        dtype=torch.long,
-        device=f"cuda:{local_rank}",
-    )
+    payloads: list[dict] = []
     t2 = time.time()
-    with torch.no_grad():
-        out = model(input_ids=ids, output_router_logits=True)
-    if out.router_logits is None:
-        raise RuntimeError(f"{model_id} returned no router_logits")
-    router_logits_per_layer = list(out.router_logits)
-    num_layers = len(router_logits_per_layer)
+    for i, rollout in enumerate(rollouts):
+        prompt_token_ids = rollout["prompt_token_ids"]
+        response_token_ids = rollout["response_token_ids"]
+        prompt_len = len(prompt_token_ids)
+        response_len = len(response_token_ids)
+        seed = int(rollout.get("seed", 1234))
+        prompt_text = rollout.get("prompt_text", "")
+        ids = torch.tensor(
+            [prompt_token_ids + response_token_ids],
+            dtype=torch.long,
+            device=f"cuda:{local_rank}",
+        )
+        ti = time.time()
+        with torch.no_grad():
+            out = model(input_ids=ids, output_router_logits=True)
+        if out.router_logits is None:
+            raise RuntimeError(f"{model_id} returned no router_logits")
+        router_logits_per_layer = list(out.router_logits)
+        num_layers = len(router_logits_per_layer)
+        positions = routed_position_indices(prompt_len, response_len)
+        expert_ids = _topk_experts_from_router_logits(router_logits_per_layer, positions, top_k)
+        if rank == 0:
+            payload = format_fsdp_router_payload(
+                model_id=model_id,
+                prompt_token_ids=prompt_token_ids,
+                response_token_ids=response_token_ids,
+                num_layers=num_layers,
+                num_experts=num_experts,
+                top_k=top_k,
+                expert_ids=expert_ids,
+                seed=seed,
+                world_size=world_size,
+                prompt_text=prompt_text,
+            )
+            # prompt_idx provenance lets pair_hermes_moe_reports join by index.
+            payload["prompt_idx"] = rollout.get("prompt_idx", i)
+            payloads.append(payload)
+            print(
+                f"[fsdp-moe] prompt {payload['prompt_idx']} forward in "
+                f"{time.time() - ti:.1f}s (num_tokens={len(expert_ids)}, "
+                f"num_layers={num_layers}, top_k={top_k})",
+                flush=True,
+            )
+
     if rank == 0:
+        if is_multi:
+            TRAINERS_PATH.write_text(json.dumps(payloads))
+            print(
+                f"[fsdp-moe] wrote {TRAINERS_PATH} ({len(payloads)} payload(s))",
+                flush=True,
+            )
+        else:
+            OUT_PATH.write_text(json.dumps(payloads[0]))
+            print(f"[fsdp-moe] wrote {OUT_PATH} (single-prompt mode)", flush=True)
         print(
-            f"[fsdp-moe] forward in {time.time()-t2:.1f}s "
-            f"(num_layers={num_layers}, num_experts={num_experts}, top_k={top_k})",
+            f"[fsdp-moe] forward pass total {time.time() - t2:.1f}s "
+            f"(grand total {time.time() - t0:.1f}s)",
             flush=True,
         )
-
-    positions = routed_position_indices(prompt_len, response_len)
-    expert_ids = _topk_experts_from_router_logits(
-        router_logits_per_layer, positions, top_k
-    )
-
-    if rank == 0:
-        payload = format_fsdp_router_payload(
-            model_id=model_id,
-            prompt_token_ids=prompt_token_ids,
-            response_token_ids=response_token_ids,
-            num_layers=num_layers,
-            num_experts=num_experts,
-            top_k=top_k,
-            expert_ids=expert_ids,
-            seed=seed,
-            world_size=world_size,
-            prompt_text=prompt_text,
-        )
-        OUT_PATH.write_text(json.dumps(payload))
-        print(
-            f"[fsdp-moe] wrote {OUT_PATH} "
-            f"(num_tokens={len(expert_ids)}, num_layers={num_layers}, "
-            f"top_k={top_k}, num_experts={num_experts})",
-            flush=True,
-        )
-        print(f"[fsdp-moe] total {time.time()-t0:.1f}s", flush=True)
 
     dist.barrier()
     dist.destroy_process_group()
