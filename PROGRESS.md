@@ -225,12 +225,20 @@ one response. Open candidates for follow-up iterations:
 
 ## Next work (post-Hermes)
 
-1. **n=30 hermes rollouts**. Current n=12 means individual
-   per-task signal is noisy. A larger task suite (or repeated runs)
-   would cut bar variance and let amber/green tiles emerge on the
-   noise-floor side.
+(Empty — see Research follow-ups below for completed items. The
+dashboard surface is currently at a steady state; new initiatives
+would come from `docs/future_research.md`.)
 
 ## Research follow-ups shipped (post-Hermes)
+
+- **n=30 hermes rollouts (2026-05-12)**. Added bf16_rep2 batches for
+  Dense (n=12) and MoE (n=9) and a replicate-aware pair script.
+  Dense tiles now pair against n=24 bf16 reference, MoE TP=4 path
+  against n=18 reference. The precision-vs-noise gap stabilises to
+  ~8-12pp across both models: Dense fp8 45% vs noise 37.5%; MoE
+  fp8(TP=4) 50% vs noise 33%. All tiles still mx-bad (under 50%
+  amber threshold) but the gradient communicates the marketplace
+  signal cleanly.
 
 - **Soft answer-match (2026-05-12)**. Added
   `final_answer_match_soft` alongside the strict field, computed via
