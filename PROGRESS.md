@@ -1,7 +1,52 @@
 # PROGRESS.md — Agent Handoff State
 
 ## Last updated
-2026-05-12 (cycle 3 v2 iter 2 setup-3 — pair_hermes_dense_reports shipped)
+2026-05-12 (cycle 3 v2 iter 2 setup-4 — probe sidecar merger shipped)
+
+## Cycle 3 v2 iter 2 — setup-4 commit (2026-05-12)
+
+`hermes_agent.dense_capture_then_fsdp` part (b)-bridge shipped on
+`research/hermes-probe-merger`:
+
+- `scripts/live/merge_probes_into_trajectories.py` defines the
+  load-bearing wire format between whatever component captures
+  rollout-side probes (a patched hermes-agent batch_runner, a local
+  proxy, or a vLLM logging hook) and our `AgentTrajectory` schema.
+  The contract is a JSONL sidecar keyed by `(prompt_index, turn_idx)`
+  carrying `prompt_token_ids` / `response_token_ids` /
+  `response_logprobs` / `response_routed_experts` per assistant turn.
+- The merger reads a hermes-agent ShareGPT JSONL + the probe sidecar,
+  injects the matching probes onto each `from=gpt` conv entry, and
+  adapts to `AgentTrajectory` via the existing
+  `adapt_hermes_sharegpt_trajectory` (which already threads sibling
+  probe fields onto AgentStep).
+- 8 new offline tests (`index_probes` grouping + dedup, partial
+  probe coverage tolerated, CLI round-trip with probes surviving the
+  full pipeline). 418 passing (+8 from 410).
+
+Cycle 3 v2 iter 2 setup is now complete code-side. The remaining
+operational gap is **producing the sidecar JSONL on the spot**.
+Three credible paths, ranked by friction:
+
+  1. **Proxy interceptor (laptop)** — write a small OpenAI proxy on
+     the laptop that injects `logprobs=True, top_logprobs=1` into every
+     chat-completions request, captures the upstream response, and
+     writes one sidecar line per turn. hermes-agent on the spot stays
+     unchanged. Adds one Python process to the loop but doesn't touch
+     hermes-agent internals. Likely the cleanest next iteration.
+  2. **Patched batch_runner** — apply a small diff to hermes-agent's
+     `agent/auxiliary_client.py` chat-completions builder to always
+     pass `logprobs=True, top_logprobs=1` plus a tap that writes the
+     sidecar. Requires re-installing hermes-agent on the spot and
+     maintaining a fork.
+  3. **vLLM logging hook** — vLLM has request/response logging hooks
+     in some configs; investigate whether they expose enough.
+
+Operator preference among (1)/(2)/(3) is the next operator input
+needed. The autonomous loop can ship the proxy (option 1) without
+additional permission since it doesn't touch the spot.
+
+## Cycle 3 v2 iter 2 — setup-3 commit (2026-05-12)
 
 ## Cycle 3 v2 iter 2 — setup-3 commit (2026-05-12)
 
