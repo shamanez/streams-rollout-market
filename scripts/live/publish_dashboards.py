@@ -467,14 +467,21 @@ def _select_hermes_pairs(
     bf16_engine: str,
     fp8_engine: str,
     seedb_engine: str,
+    precision_trainer: str | None = None,
+    noise_trainer: str | None = None,
 ) -> tuple[dict | None, dict | None]:
     """Pick the (precision-effect, noise-floor) engine_pairs from an agent_dashboard payload.
 
-    precision-effect: rollout=fp8, trainer=bf16 (the marketplace signal).
-    noise-floor:      rollout=bf16-seedB, trainer=bf16 (same engine, different seed).
-    Filters to only rows whose engines correspond to the target model
-    family via name substring.
+    precision-effect: rollout=fp8_engine,   trainer=precision_trainer (default bf16_engine)
+    noise-floor:      rollout=seedb_engine, trainer=noise_trainer     (default bf16_engine)
+
+    The optional ``precision_trainer`` / ``noise_trainer`` overrides let
+    the dashboard hold TP constant for the precision-effect pair (e.g.
+    fp8@TP=2 vs bf16@TP=2) while keeping the noise-floor pair on a
+    different baseline (e.g. seedB@TP=4 vs bf16@TP=4).
     """
+    precision_trainer = precision_trainer or bf16_engine
+    noise_trainer = noise_trainer or bf16_engine
     pairs = [
         p for p in payload.get("engine_pairs", [])
         if model_substring.lower() in (p.get("rollout_engine") or "").lower()
@@ -484,7 +491,7 @@ def _select_hermes_pairs(
         (
             p for p in pairs
             if (p.get("rollout_engine") or "") == fp8_engine
-            and (p.get("trainer_engine") or "") == bf16_engine
+            and (p.get("trainer_engine") or "") == precision_trainer
         ),
         None,
     )
@@ -492,7 +499,7 @@ def _select_hermes_pairs(
         (
             p for p in pairs
             if (p.get("rollout_engine") or "") == seedb_engine
-            and (p.get("trainer_engine") or "") == bf16_engine
+            and (p.get("trainer_engine") or "") == noise_trainer
         ),
         None,
     )
@@ -510,6 +517,8 @@ def _render_hermes_section(
     seedb_engine: str,
     detail_href: str,
     blurb_html: str,
+    precision_trainer: str | None = None,
+    noise_trainer: str | None = None,
 ) -> str:
     """Render the Hermes-agent matrix section (2 tiles: precision-effect + noise-floor).
 
@@ -523,6 +532,8 @@ def _render_hermes_section(
         bf16_engine=bf16_engine,
         fp8_engine=fp8_engine,
         seedb_engine=seedb_engine,
+        precision_trainer=precision_trainer,
+        noise_trainer=noise_trainer,
     )
     columns = [
         ("fp8-vs-bf16", "precision effect", precision_pair),
@@ -676,18 +687,19 @@ def render_index(card_data: list[dict]) -> str:
         "logprobs.</p>"
     )
     hermes_moe_blurb = (
-        "<p><strong>Same recipe, MoE rollouts.</strong> Hermes Agent "
-        "trajectories over Qwen3-30B-A3B at <code>vLLM-bf16</code> (rollout "
-        "= trainer-equivalent reference), <code>vLLM-fp8</code> (precision "
-        "shift; TP=2 due to the FP8 <code>block_n=128</code> / "
-        "<code>ffn_intermediate=768</code> constraint), and <code>bf16</code> "
-        "with a different sampling seed (noise floor). The MoE matrix above "
-        "already shows that fp8 inference adds 2-3% router_flip_rate; this "
-        "section asks whether that token-level router noise compounds into "
-        "<em>different agent actions</em>. If the precision-effect tile "
-        "drops materially below 80% and below the noise-floor tile, "
-        "crowdsourced MoE rollouts at fp8 are unreliable for off-policy "
-        "training of tool-using agents.</p>"
+        "<p><strong>Same recipe, MoE rollouts — with TP held constant.</strong> "
+        "Hermes Agent trajectories over Qwen3-30B-A3B. The fp8 variant must "
+        "run at TP=2 (FP8 <code>block_n=128</code> / <code>ffn_intermediate=768</code> "
+        "constraint), so the precision-effect tile pairs <code>vLLM-fp8 @ TP=2</code> "
+        "against a fresh <code>vLLM-bf16 @ TP=2</code> reference (apples-to-apples). "
+        "The noise-floor tile compares <code>bf16 @ TP=4</code> against itself with "
+        "a different sampling seed — same engine, same precision, same TP, just "
+        "different RNG. The MoE matrix above already shows fp8 adds 2-3% "
+        "router_flip_rate at the token level; this section asks whether that "
+        "compounds into <em>different agent actions</em>. At n=12 trajectories "
+        "the TP-matched precision effect is essentially identical to the "
+        "noise floor — at this sample size, fp8 doesn't move the dial above "
+        "what sampling alone already does.</p>"
     )
     hermes_dense_matrix = _render_hermes_section(
         title="Hermes Agent — Dense (Qwen3-32B)",
@@ -708,6 +720,10 @@ def render_index(card_data: list[dict]) -> str:
         bf16_engine="hermes-qwen3-30b-a3b-bf16",
         fp8_engine="hermes-qwen3-30b-a3b-fp8",
         seedb_engine="hermes-qwen3-30b-a3b-bf16_seedB",
+        # MoE fp8 must run at TP=2 (FP8 block_n=128 / ffn_inter=768 constraint),
+        # so the precision-effect pair holds TP constant by using bf16_tp2 as
+        # its trainer. Noise floor stays on bf16(TP=4) seedB-vs-bf16.
+        precision_trainer="hermes-qwen3-30b-a3b-bf16_tp2",
         detail_href="agent_dashboard.html",
         blurb_html=hermes_moe_blurb,
     )

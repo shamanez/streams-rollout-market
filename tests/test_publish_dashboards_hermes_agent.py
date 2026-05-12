@@ -133,7 +133,7 @@ def _agent_payload_full_matrix() -> dict:
             },
             {
                 "rollout_engine": "hermes-qwen3-30b-a3b-fp8",
-                "trainer_engine": "hermes-qwen3-30b-a3b-bf16",
+                "trainer_engine": "hermes-qwen3-30b-a3b-bf16_tp2",
                 "count": 12,
                 "mean_first_divergence_step": 1.1,
                 "fully_matched_count": 7,

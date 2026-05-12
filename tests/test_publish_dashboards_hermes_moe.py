@@ -55,9 +55,11 @@ def test_moe_section_has_two_tiles_with_numeric_values() -> None:
         assert cls in {"good", "warn", "bad"}
 
 
-def test_moe_precision_effect_pair_resolves_correctly() -> None:
-    """The fp8-vs-bf16 pair for the MoE model must be picked from the
-    aggregated agent_dashboard payload."""
+def test_moe_precision_effect_pair_resolves_via_tp_matched_trainer() -> None:
+    """The fp8-vs-bf16 pair for the MoE model holds TP constant by using
+    bf16_tp2 as the precision-effect trainer (fp8 must run at TP=2 per the
+    FP8 block_n constraint). Noise-floor pair keeps the bf16(TP=4) baseline.
+    """
     payload = _agent_payload_full_matrix()
     p, n = publish_dashboards._select_hermes_pairs(
         payload,
@@ -65,9 +67,11 @@ def test_moe_precision_effect_pair_resolves_correctly() -> None:
         bf16_engine="hermes-qwen3-30b-a3b-bf16",
         fp8_engine="hermes-qwen3-30b-a3b-fp8",
         seedb_engine="hermes-qwen3-30b-a3b-bf16_seedB",
+        precision_trainer="hermes-qwen3-30b-a3b-bf16_tp2",
     )
     assert p is not None
     assert p["rollout_engine"] == "hermes-qwen3-30b-a3b-fp8"
+    assert p["trainer_engine"] == "hermes-qwen3-30b-a3b-bf16_tp2"
     assert n is not None
     assert n["rollout_engine"] == "hermes-qwen3-30b-a3b-bf16_seedB"
 
