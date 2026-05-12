@@ -229,10 +229,6 @@ one response. Open candidates for follow-up iterations:
    per-task signal is noisy. A larger task suite (or repeated runs)
    would cut bar variance and let amber/green tiles emerge on the
    noise-floor side.
-2. **MoE seedB at TP=4**. The MoE seedB run used the same serve as
-   bf16 (TP=4) but the fp8 run had to use TP=2. The TP difference
-   could affect inference behaviour slightly; a TP=2 noise-floor run
-   would isolate that variable.
 
 ## Research follow-ups shipped (post-Hermes)
 
@@ -242,6 +238,16 @@ one response. Open candidates for follow-up iterations:
   rendering uses the soft rate; first AMBER Hermes tile (MoE fp8
   5/9 = 56%) emerged. Strict field preserved for back-compat.
   415 tests passing (+8 unit tests for the soft matcher).
+
+- **MoE bf16 @ TP=2 noise floor (2026-05-12)**. Added a fresh
+  Qwen3-30B-A3B bf16 serve at TP=2 (matching fp8's required TP).
+  publish_dashboards.py now takes precision_trainer / noise_trainer
+  overrides so the MoE precision-effect tile pairs fp8 @ TP=2
+  against bf16 @ TP=2 (apples-to-apples) while the noise-floor pair
+  stays on bf16 @ TP=4 seedB-vs-bf16. New tile values: precision
+  5/11 (45.5%) vs noise 4/9 (44.4%) — statistically
+  indistinguishable at n=12. The earlier amber tile (5/9, 56%) was
+  the TP=4→TP=2 confound, not a fp8 effect.
 
 ## Reproducibility
 Live runs use the env-driven runbook in `scripts/live/`:
