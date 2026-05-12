@@ -5,6 +5,34 @@ talking to our spot-instance vLLM at 131 K context. Followed verbatim on
 2026-05-12 and confirmed working with both `Qwen/Qwen3-32B` (Dense, bf16)
 and `Qwen/Qwen3-30B-A3B` (MoE, bf16).
 
+## Topology (the actual working setup)
+
+**Everything runs on the spot host.** The laptop is only an SSH
+terminal — no laptop-side install, no SSH port forwarding for the data
+path.
+
+```
+                    ┌─────────────────────────────────────────────┐
+                    │  spot host  my-vllm-spot-instance           │
+   laptop  ─ssh─→   │                                             │
+   (terminal        │   Hermes-Agent ── http://localhost:8001 ──→ │
+   only)            │   (~/.local/bin/hermes)         │           │
+                    │                                 ▼           │
+                    │                       logprob_capture_proxy │
+                    │                       (scripts/live/...py)  │
+                    │                                 │           │
+                    │                                 ▼           │
+                    │                       http://localhost:8000 │
+                    │                       vLLM serve            │
+                    │                       (Qwen3-32B / 30B-A3B) │
+                    └─────────────────────────────────────────────┘
+```
+
+Without the proxy (smoke-test path), Hermes points directly at
+`localhost:8000`. With the proxy (cycle-3-v2 probe capture path),
+Hermes points at `localhost:8001` and the proxy forwards to vLLM on
+`:8000`, writing per-turn probes to a sidecar JSONL file on the spot.
+
 ## 0. Clean slate (only if a previous install exists)
 
 ```bash
@@ -154,10 +182,11 @@ Hermes-Agent does not currently thread that field through to vLLM.
 Putting `/no_think` in the user message body is **not** equivalent —
 Qwen3 reads it as plain user text. Two workable options for our pipeline:
 
-1. **Use the laptop-side capture proxy.** `scripts/live/logprob_capture_proxy.py`
+1. **Use the on-spot capture proxy.** `scripts/live/logprob_capture_proxy.py`
    already rewrites every outbound `/v1/chat/completions` body for logprob
    capture; extending it to also set `chat_template_kwargs.enable_thinking=false`
-   is one extra `setdefault` and keeps Hermes unchanged.
+   is one extra `setdefault` and keeps Hermes unchanged. Proxy runs on the
+   spot host (`localhost:8001`), forwards to vLLM (`localhost:8000`).
 2. **Serve-side override.** Add `--chat-template-content-format
    string` (or a custom chat-template file) on the vLLM `serve` line that
    strips the thinking-mode prefix unconditionally.
@@ -168,32 +197,45 @@ threading `enable_thinking=false` through it costs nothing.
 
 ## 5. Where the cycle-3-v2 probe capture plugs in
 
-The Hermes-Agent CLI does **not** forward `logprobs=True` or `extra_body`
-options through to the upstream endpoint by default. To capture per-token
-logprobs and (on MoE) per-(token, layer) `routed_experts`, run
-`scripts/live/logprob_capture_proxy.py` on the laptop between Hermes and
-vLLM:
-
-```
-hermes ── http://localhost:8001/v1 (proxy on laptop) ── ssh tunnel ──
-   http://localhost:8000/v1 (vLLM on spot)
-```
-
-The proxy rewrites every outbound `/v1/chat/completions` body to set
-`logprobs=True, top_logprobs=1,
-extra_body.return_tokens_as_token_ids=True,
-extra_body.return_routed_experts=True`, then writes the captured response
-metadata to a JSONL sidecar keyed by `(prompt_index, turn_idx)` — both
-auto-derived from the request body so no Hermes patching is needed.
-
-Pointing Hermes at the proxy:
+The Hermes-Agent CLI does **not** forward `logprobs=True` or
+`chat_template_kwargs` through to the upstream endpoint by default.
+To capture per-token logprobs and (on MoE) per-(token, layer)
+`routed_experts`, run `scripts/live/logprob_capture_proxy.py` **on the
+spot**, between Hermes and vLLM (all three processes on the same host):
 
 ```bash
+# 1. vLLM already up on localhost:8000 (per step 3)
+# 2. start the proxy on localhost:8001, sidecar on /tmp/hermes_probes_*.jsonl:
+ssh my-vllm-spot-instance
+cd ~/streams-rollout-market
+python scripts/live/logprob_capture_proxy.py \
+    --upstream http://localhost:8000 \
+    --port 8001 \
+    --sidecar /tmp/hermes_probes_dense_bf16.jsonl \
+    --host 127.0.0.1 &
+
+# 3. point Hermes at the proxy:
 hermes config set model.base_url 'http://localhost:8001/v1'
 ```
 
-Full downstream pipeline is in `scripts/live/README.md` (proxy → merger
-→ filler → builder → trainer-side teacher-force → pair).
+The proxy rewrites every outbound `/v1/chat/completions` body to set
+`logprobs=True, top_logprobs=1, return_token_ids=True` (and once the
+`hermes_agent.proxy_enable_thinking_off` patch lands,
+`chat_template_kwargs.enable_thinking=False`). It then writes the
+captured response metadata to a JSONL sidecar keyed by
+`(prompt_index, turn_idx)` — both auto-derived from the request body
+so no Hermes patching is needed.
+
+`routed_experts` capture is server-side only — the
+`--enable-return-routed-experts` flag on `vllm serve`
+(`serve_for_capture.sh` already sets it for MoE models). The proxy
+just lifts the resulting `prompt_routed_experts` /
+`choices[i].routed_experts` fields off the response body.
+
+Full downstream pipeline is in `scripts/live/README.md` (proxy →
+merger → filler → builder → trainer-side teacher-force → pair). All
+steps after the proxy also run on the spot; the laptop is only used
+for SSH and (optionally) for re-rendering the dashboard locally.
 
 ## 6. Troubleshooting
 

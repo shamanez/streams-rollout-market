@@ -19,12 +19,28 @@ relative to the trainer's forward pass?
 ### Where the work is right now
 - **Cycle 3 v2 (probe-at-rollout)** is the active design. vLLM emits all
   signals at rollout time; nothing is ever refed through vLLM.
-- The **code side is fully shipped** (475 tests pass, end-to-end pipeline
+- The **code side is fully shipped** (474 tests pass, end-to-end pipeline
   exercised in fixtures). The dashboard renders both Hermes-Agent matrices
   (Dense + MoE) and the legacy single-prompt matrices.
 - 5 `.claude/feature-results.json` entries remain at `passes: false`. They
   all need **the live spot rollout** to populate the proxy sidecar + the
   trainer-side teacher-force outputs.
+
+### Topology — where each process actually runs (confirmed 2026-05-12)
+- **Hermes-Agent**: on the spot, installed at `~/.local/bin/hermes` via
+  the official `curl … | bash` (see `scripts/live/HERMES_INSTALL.md`).
+- **vLLM**: on the spot, port 8000.
+- **`logprob_capture_proxy.py`**: on the spot, port 8001 (between
+  Hermes and vLLM). Sidecar JSONL lives on the spot at
+  `/tmp/hermes_probes_*.jsonl`.
+- **Merger / filler / builder / trainer-side teacher-force / pair**:
+  all on the spot.
+- **Laptop**: SSH terminal only, plus optional dashboard re-render
+  (`publish_dashboards.py`) after `rsync`ing `runs/` back.
+
+There is **no SSH port forwarding** for the data path. The earlier docs
+that showed a laptop-side proxy were aspirational; the working setup we
+just validated keeps everything on a single host.
 
 ### The one thing blocking the live rollout
 Qwen3-MoE in its default reasoning mode (`<think>...</think>` blocks) writes
@@ -90,12 +106,16 @@ proxy is the right hook point.
      the manually-computed expected value.
 
 4. **`hermes_agent.dense_capture_then_fsdp`** (existing
-   `feature-results.json` entry; the live operational run):
-   - One operator-driven run with: the patched proxy on the laptop,
-     vLLM-Qwen3-32B-bf16 serve on the spot at 131K, hermes-agent
-     summarize-repo (and the 12 tasks in `agent_tasks_hermes.json`),
-     merge, fill_prompt_token_ids, build, scp, torchrun
-     run_fsdp_reference, pair, publish_dashboards. Step-by-step in
+   `feature-results.json` entry; first live operational run, **all on
+   the spot**):
+   - tmux session A: vLLM-Qwen3-32B-bf16 at 131K (`serve_for_capture.sh`).
+   - tmux session B: patched `logprob_capture_proxy.py` on `localhost:8001`.
+   - hermes-agent (`~/.local/bin/hermes` on spot) configured with
+     `base_url=http://localhost:8001/v1`; runs the 12 tasks in
+     `scripts/live/agent_tasks_hermes.json`.
+   - merge → fill → build → tear down vLLM+proxy to free GPUs →
+     torchrun `run_fsdp_reference.py` → pair → `publish_dashboards.py`.
+   - Step-by-step (single-host, no laptop in data path) in
      `scripts/live/README.md` + `scripts/live/HERMES_INSTALL.md`.
 
 5. **`hermes_agent.moe_capture_then_fsdp_router`** (existing entry,
