@@ -1,7 +1,34 @@
 # PROGRESS.md — Agent Handoff State
 
 ## Last updated
-2026-05-12 (cycle 3 v2 iter 2 setup-7 — partial-capture branch in extractor)
+2026-05-12 (cycle 3 v2 iter 2 setup-8 — prompt-token-id filler shipped)
+
+## Cycle 3 v2 iter 2 — setup-8 commit (2026-05-12)
+
+`scripts/live/fill_prompt_token_ids.py` closes the last
+proxy→builder seam:
+
+- Walks an `AgentTrajectory` directory; for each assistant step that
+  has `response_token_ids` set but `prompt_token_ids=None` (the
+  realistic proxy-captured shape), re-derives the prompt via
+  chat-template encoding of the trajectory's own accumulated history.
+- Captured `response_token_ids` survives untouched — vLLM emitted
+  those exact tokens, re-encoding would yield different IDs.
+- Trajectories with NO turns needing fill are not written back at
+  all (byte-identical disk state).
+- Dry-run mode for sanity checks.
+- 6 new tests; **439 passing (+6 from 433)**.
+
+Now the proxy-captured pipeline is end-to-end whole on the laptop
+side:
+
+  ... -> proxy writes sidecar -> merger stitches sidecar onto
+  ShareGPT -> **fill_prompt_token_ids fills missing prompt IDs** ->
+  build_hermes_dense_input flattens -> scp to spot -> torchrun
+  run_fsdp_reference.py -> scp back -> pair_hermes_dense_reports ->
+  publish_dashboards.
+
+## Cycle 3 v2 iter 2 — setup-7 commit (2026-05-12)
 
 ## Cycle 3 v2 iter 2 — setup-7 commit (2026-05-12)
 
