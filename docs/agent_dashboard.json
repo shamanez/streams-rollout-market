@@ -1,33 +1,33 @@
 {
-  "num_runs": 52,
+  "num_runs": 93,
   "engine_pairs": [
     {
       "rollout_engine": "hermes-qwen3-30b-a3b-bf16_seedB",
       "trainer_engine": "hermes-qwen3-30b-a3b-bf16",
-      "count": 9,
-      "mean_first_divergence_step": 0.2222222222222222,
+      "count": 18,
+      "mean_first_divergence_step": 0.2777777777777778,
       "fully_matched_count": 0,
-      "diverged_count": 9,
-      "mean_tool_choice_disagreement_rate": 0.2777777777777778,
-      "mean_tool_call_jaccard": 0.48055555555555557,
+      "diverged_count": 18,
+      "mean_tool_choice_disagreement_rate": 0.2685185185185185,
+      "mean_tool_call_jaccard": 0.44166666666666665,
       "final_answer_match_rate": 0.1111111111111111,
-      "final_answer_match_soft_rate": 0.4444444444444444,
-      "mean_rollout_steps": 2.3333333333333335,
-      "mean_trainer_steps": 1.7777777777777777
+      "final_answer_match_soft_rate": 0.3333333333333333,
+      "mean_rollout_steps": 2.388888888888889,
+      "mean_trainer_steps": 1.9444444444444444
     },
     {
       "rollout_engine": "hermes-qwen3-30b-a3b-fp8",
       "trainer_engine": "hermes-qwen3-30b-a3b-bf16",
-      "count": 9,
-      "mean_first_divergence_step": 0.1111111111111111,
+      "count": 18,
+      "mean_first_divergence_step": 0.2222222222222222,
       "fully_matched_count": 0,
-      "diverged_count": 9,
-      "mean_tool_choice_disagreement_rate": 0.2777777777777778,
-      "mean_tool_call_jaccard": 0.3862433862433863,
+      "diverged_count": 18,
+      "mean_tool_choice_disagreement_rate": 0.2222222222222222,
+      "mean_tool_call_jaccard": 0.4001322751322751,
       "final_answer_match_rate": 0.1111111111111111,
-      "final_answer_match_soft_rate": 0.5555555555555556,
-      "mean_rollout_steps": 1.7777777777777777,
-      "mean_trainer_steps": 1.7777777777777777
+      "final_answer_match_soft_rate": 0.5,
+      "mean_rollout_steps": 1.8333333333333333,
+      "mean_trainer_steps": 1.9444444444444444
     },
     {
       "rollout_engine": "hermes-qwen3-30b-a3b-fp8",
@@ -46,33 +46,49 @@
     {
       "rollout_engine": "hermes-qwen3-32b-bf16_seedB",
       "trainer_engine": "hermes-qwen3-32b-bf16",
-      "count": 12,
+      "count": 24,
       "mean_first_divergence_step": 0.18181818181818182,
-      "fully_matched_count": 1,
-      "diverged_count": 11,
-      "mean_tool_choice_disagreement_rate": 0.24722222222222223,
-      "mean_tool_call_jaccard": 0.29375,
-      "final_answer_match_rate": 0.0,
-      "final_answer_match_soft_rate": 0.25,
+      "fully_matched_count": 2,
+      "diverged_count": 22,
+      "mean_tool_choice_disagreement_rate": 0.28680555555555554,
+      "mean_tool_call_jaccard": 0.33338293650793654,
+      "final_answer_match_rate": 0.08333333333333333,
+      "final_answer_match_soft_rate": 0.375,
       "mean_rollout_steps": 2.4166666666666665,
-      "mean_trainer_steps": 2.4166666666666665
+      "mean_trainer_steps": 2.125
     },
     {
       "rollout_engine": "hermes-qwen3-32b-fp8",
       "trainer_engine": "hermes-qwen3-32b-bf16",
-      "count": 11,
+      "count": 22,
       "mean_first_divergence_step": 0.2,
-      "fully_matched_count": 1,
-      "diverged_count": 10,
-      "mean_tool_choice_disagreement_rate": 0.3151515151515152,
-      "mean_tool_call_jaccard": 0.32045454545454544,
-      "final_answer_match_rate": 0.0,
-      "final_answer_match_soft_rate": 0.36363636363636365,
+      "fully_matched_count": 2,
+      "diverged_count": 20,
+      "mean_tool_choice_disagreement_rate": 0.25984848484848483,
+      "mean_tool_call_jaccard": 0.32732683982683985,
+      "final_answer_match_rate": 0.045454545454545456,
+      "final_answer_match_soft_rate": 0.45454545454545453,
       "mean_rollout_steps": 2.1818181818181817,
-      "mean_trainer_steps": 2.3636363636363638
+      "mean_trainer_steps": 2.1363636363636362
     }
   ],
   "rows": [
+    {
+      "run_id": "hermes-qwen3-30b-a3b-bf16_seedB-code-fix-factorial-vs-hermes-qwen3-30b-a3b-bf16-code-fix-factorial",
+      "task_id": "code-fix-factorial",
+      "model_id": "Qwen/Qwen3-30B-A3B",
+      "rollout_engine": "hermes-qwen3-30b-a3b-bf16_seedB",
+      "trainer_engine": "hermes-qwen3-30b-a3b-bf16",
+      "rollout_steps": 3,
+      "trainer_steps": 3,
+      "first_divergence_step": 1,
+      "first_divergence_kind": "tool_args",
+      "tool_choice_disagreement_rate": 0.0,
+      "tool_call_jaccard": 0.3333333333333333,
+      "final_answer_match": false,
+      "final_answer_match_soft": true,
+      "created_at": "2026-05-12T04:17:48.095581+00:00"
+    },
     {
       "run_id": "hermes-qwen3-30b-a3b-bf16_seedB-code-fix-fibonacci-vs-hermes-qwen3-30b-a3b-bf16-code-fix-fibonacci",
       "task_id": "code-fix-fibonacci",
@@ -87,7 +103,23 @@
       "tool_call_jaccard": 0.125,
       "final_answer_match": false,
       "final_answer_match_soft": false,
-      "created_at": "2026-05-12T04:00:39.302331+00:00"
+      "created_at": "2026-05-12T04:17:48.224161+00:00"
+    },
+    {
+      "run_id": "hermes-qwen3-30b-a3b-bf16_seedB-code-fix-fibonacci-vs-hermes-qwen3-30b-a3b-bf16-code-fix-fibonacci",
+      "task_id": "code-fix-fibonacci",
+      "model_id": "Qwen/Qwen3-30B-A3B",
+      "rollout_engine": "hermes-qwen3-30b-a3b-bf16_seedB",
+      "trainer_engine": "hermes-qwen3-30b-a3b-bf16",
+      "rollout_steps": 6,
+      "trainer_steps": 3,
+      "first_divergence_step": 1,
+      "first_divergence_kind": "tool_choice",
+      "tool_choice_disagreement_rate": 0.6666666666666666,
+      "tool_call_jaccard": 0.125,
+      "final_answer_match": false,
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T04:17:48.350304+00:00"
     },
     {
       "run_id": "hermes-qwen3-30b-a3b-bf16_seedB-code-read-then-modify-vs-hermes-qwen3-30b-a3b-bf16-code-read-then-modify",
@@ -103,7 +135,39 @@
       "tool_call_jaccard": 0.2,
       "final_answer_match": false,
       "final_answer_match_soft": false,
-      "created_at": "2026-05-12T04:00:39.430223+00:00"
+      "created_at": "2026-05-12T04:17:48.477987+00:00"
+    },
+    {
+      "run_id": "hermes-qwen3-30b-a3b-bf16_seedB-code-read-then-modify-vs-hermes-qwen3-30b-a3b-bf16-code-read-then-modify",
+      "task_id": "code-read-then-modify",
+      "model_id": "Qwen/Qwen3-30B-A3B",
+      "rollout_engine": "hermes-qwen3-30b-a3b-bf16_seedB",
+      "trainer_engine": "hermes-qwen3-30b-a3b-bf16",
+      "rollout_steps": 3,
+      "trainer_steps": 5,
+      "first_divergence_step": 1,
+      "first_divergence_kind": "tool_choice",
+      "tool_choice_disagreement_rate": 0.6666666666666666,
+      "tool_call_jaccard": 0.16666666666666666,
+      "final_answer_match": false,
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T04:17:48.605445+00:00"
+    },
+    {
+      "run_id": "hermes-qwen3-30b-a3b-bf16_seedB-math-bf16-vram-budget-vs-hermes-qwen3-30b-a3b-bf16-math-bf16-vram-budget",
+      "task_id": "math-bf16-vram-budget",
+      "model_id": "Qwen/Qwen3-30B-A3B",
+      "rollout_engine": "hermes-qwen3-30b-a3b-bf16_seedB",
+      "trainer_engine": "hermes-qwen3-30b-a3b-bf16",
+      "rollout_steps": 2,
+      "trainer_steps": 2,
+      "first_divergence_step": 0,
+      "first_divergence_kind": "tool_args",
+      "tool_choice_disagreement_rate": 0.0,
+      "tool_call_jaccard": 0.0,
+      "final_answer_match": false,
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T04:17:48.855891+00:00"
     },
     {
       "run_id": "hermes-qwen3-30b-a3b-bf16_seedB-math-bf16-vram-budget-vs-hermes-qwen3-30b-a3b-bf16-math-bf16-vram-budget",
@@ -119,7 +183,7 @@
       "tool_call_jaccard": 0.0,
       "final_answer_match": false,
       "final_answer_match_soft": true,
-      "created_at": "2026-05-12T04:00:39.555628+00:00"
+      "created_at": "2026-05-12T04:17:48.730761+00:00"
     },
     {
       "run_id": "hermes-qwen3-30b-a3b-bf16_seedB-math-tokens-per-gpu-day-vs-hermes-qwen3-30b-a3b-bf16-math-tokens-per-gpu-day",
@@ -135,7 +199,7 @@
       "tool_call_jaccard": 1.0,
       "final_answer_match": false,
       "final_answer_match_soft": true,
-      "created_at": "2026-05-12T04:00:39.681663+00:00"
+      "created_at": "2026-05-12T04:17:48.981010+00:00"
     },
     {
       "run_id": "hermes-qwen3-30b-a3b-bf16_seedB-mixed-research-and-math-vs-hermes-qwen3-30b-a3b-bf16-mixed-research-and-math",
@@ -151,7 +215,39 @@
       "tool_call_jaccard": 1.0,
       "final_answer_match": false,
       "final_answer_match_soft": false,
-      "created_at": "2026-05-12T04:00:39.807264+00:00"
+      "created_at": "2026-05-12T04:17:49.107385+00:00"
+    },
+    {
+      "run_id": "hermes-qwen3-30b-a3b-bf16_seedB-mixed-research-and-math-vs-hermes-qwen3-30b-a3b-bf16-mixed-research-and-math",
+      "task_id": "mixed-research-and-math",
+      "model_id": "Qwen/Qwen3-30B-A3B",
+      "rollout_engine": "hermes-qwen3-30b-a3b-bf16_seedB",
+      "trainer_engine": "hermes-qwen3-30b-a3b-bf16",
+      "rollout_steps": 1,
+      "trainer_steps": 1,
+      "first_divergence_step": 0,
+      "first_divergence_kind": "content",
+      "tool_choice_disagreement_rate": 0.0,
+      "tool_call_jaccard": 1.0,
+      "final_answer_match": false,
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T04:17:49.232053+00:00"
+    },
+    {
+      "run_id": "hermes-qwen3-30b-a3b-bf16_seedB-multi-tool-with-irrelevant-result-vs-hermes-qwen3-30b-a3b-bf16-multi-tool-with-irrelevant-result",
+      "task_id": "multi-tool-with-irrelevant-result",
+      "model_id": "Qwen/Qwen3-30B-A3B",
+      "rollout_engine": "hermes-qwen3-30b-a3b-bf16_seedB",
+      "trainer_engine": "hermes-qwen3-30b-a3b-bf16",
+      "rollout_steps": 2,
+      "trainer_steps": 2,
+      "first_divergence_step": 0,
+      "first_divergence_kind": "tool_args",
+      "tool_choice_disagreement_rate": 0.0,
+      "tool_call_jaccard": 0.0,
+      "final_answer_match": false,
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T04:17:49.482784+00:00"
     },
     {
       "run_id": "hermes-qwen3-30b-a3b-bf16_seedB-multi-tool-with-irrelevant-result-vs-hermes-qwen3-30b-a3b-bf16-multi-tool-with-irrelevant-result",
@@ -167,7 +263,7 @@
       "tool_call_jaccard": 0.0,
       "final_answer_match": false,
       "final_answer_match_soft": true,
-      "created_at": "2026-05-12T04:00:39.935291+00:00"
+      "created_at": "2026-05-12T04:17:49.357343+00:00"
     },
     {
       "run_id": "hermes-qwen3-30b-a3b-bf16_seedB-no-op-trivia-vs-hermes-qwen3-30b-a3b-bf16-no-op-trivia",
@@ -183,7 +279,39 @@
       "tool_call_jaccard": 1.0,
       "final_answer_match": true,
       "final_answer_match_soft": true,
-      "created_at": "2026-05-12T04:00:40.061921+00:00"
+      "created_at": "2026-05-12T04:17:49.735515+00:00"
+    },
+    {
+      "run_id": "hermes-qwen3-30b-a3b-bf16_seedB-no-op-trivia-vs-hermes-qwen3-30b-a3b-bf16-no-op-trivia",
+      "task_id": "no-op-trivia",
+      "model_id": "Qwen/Qwen3-30B-A3B",
+      "rollout_engine": "hermes-qwen3-30b-a3b-bf16_seedB",
+      "trainer_engine": "hermes-qwen3-30b-a3b-bf16",
+      "rollout_steps": 1,
+      "trainer_steps": 1,
+      "first_divergence_step": 0,
+      "first_divergence_kind": "content",
+      "tool_choice_disagreement_rate": 0.0,
+      "tool_call_jaccard": 1.0,
+      "final_answer_match": true,
+      "final_answer_match_soft": true,
+      "created_at": "2026-05-12T04:17:49.609911+00:00"
+    },
+    {
+      "run_id": "hermes-qwen3-30b-a3b-bf16_seedB-plan-3step-experiment-vs-hermes-qwen3-30b-a3b-bf16-plan-3step-experiment",
+      "task_id": "plan-3step-experiment",
+      "model_id": "Qwen/Qwen3-30B-A3B",
+      "rollout_engine": "hermes-qwen3-30b-a3b-bf16_seedB",
+      "trainer_engine": "hermes-qwen3-30b-a3b-bf16",
+      "rollout_steps": 3,
+      "trainer_steps": 1,
+      "first_divergence_step": 0,
+      "first_divergence_kind": "tool_choice",
+      "tool_choice_disagreement_rate": 1.0,
+      "tool_call_jaccard": 0.0,
+      "final_answer_match": false,
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T04:17:49.990659+00:00"
     },
     {
       "run_id": "hermes-qwen3-30b-a3b-bf16_seedB-plan-3step-experiment-vs-hermes-qwen3-30b-a3b-bf16-plan-3step-experiment",
@@ -199,7 +327,7 @@
       "tool_call_jaccard": 0.0,
       "final_answer_match": false,
       "final_answer_match_soft": false,
-      "created_at": "2026-05-12T04:00:40.189562+00:00"
+      "created_at": "2026-05-12T04:17:49.863287+00:00"
     },
     {
       "run_id": "hermes-qwen3-30b-a3b-bf16_seedB-research-vllm-then-sglang-vs-hermes-qwen3-30b-a3b-bf16-research-vllm-then-sglang",
@@ -215,7 +343,39 @@
       "tool_call_jaccard": 1.0,
       "final_answer_match": false,
       "final_answer_match_soft": false,
-      "created_at": "2026-05-12T04:00:40.315524+00:00"
+      "created_at": "2026-05-12T04:17:50.117127+00:00"
+    },
+    {
+      "run_id": "hermes-qwen3-30b-a3b-bf16_seedB-research-vllm-then-sglang-vs-hermes-qwen3-30b-a3b-bf16-research-vllm-then-sglang",
+      "task_id": "research-vllm-then-sglang",
+      "model_id": "Qwen/Qwen3-30B-A3B",
+      "rollout_engine": "hermes-qwen3-30b-a3b-bf16_seedB",
+      "trainer_engine": "hermes-qwen3-30b-a3b-bf16",
+      "rollout_steps": 1,
+      "trainer_steps": 1,
+      "first_divergence_step": 0,
+      "first_divergence_kind": "content",
+      "tool_choice_disagreement_rate": 0.0,
+      "tool_call_jaccard": 1.0,
+      "final_answer_match": false,
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T04:17:50.243278+00:00"
+    },
+    {
+      "run_id": "hermes-qwen3-30b-a3b-fp8-code-fix-factorial-vs-hermes-qwen3-30b-a3b-bf16-code-fix-factorial",
+      "task_id": "code-fix-factorial",
+      "model_id": "Qwen/Qwen3-30B-A3B",
+      "rollout_engine": "hermes-qwen3-30b-a3b-fp8",
+      "trainer_engine": "hermes-qwen3-30b-a3b-bf16",
+      "rollout_steps": 3,
+      "trainer_steps": 3,
+      "first_divergence_step": 1,
+      "first_divergence_kind": "tool_args",
+      "tool_choice_disagreement_rate": 0.0,
+      "tool_call_jaccard": 0.3333333333333333,
+      "final_answer_match": false,
+      "final_answer_match_soft": true,
+      "created_at": "2026-05-12T04:17:45.817415+00:00"
     },
     {
       "run_id": "hermes-qwen3-30b-a3b-fp8-code-fix-fibonacci-vs-hermes-qwen3-30b-a3b-bf16-code-fix-fibonacci",
@@ -231,7 +391,23 @@
       "tool_call_jaccard": 0.14285714285714285,
       "final_answer_match": false,
       "final_answer_match_soft": false,
-      "created_at": "2026-05-12T04:00:38.159211+00:00"
+      "created_at": "2026-05-12T04:17:45.943784+00:00"
+    },
+    {
+      "run_id": "hermes-qwen3-30b-a3b-fp8-code-fix-fibonacci-vs-hermes-qwen3-30b-a3b-bf16-code-fix-fibonacci",
+      "task_id": "code-fix-fibonacci",
+      "model_id": "Qwen/Qwen3-30B-A3B",
+      "rollout_engine": "hermes-qwen3-30b-a3b-fp8",
+      "trainer_engine": "hermes-qwen3-30b-a3b-bf16",
+      "rollout_steps": 3,
+      "trainer_steps": 3,
+      "first_divergence_step": 1,
+      "first_divergence_kind": "tool_args",
+      "tool_choice_disagreement_rate": 0.0,
+      "tool_call_jaccard": 0.14285714285714285,
+      "final_answer_match": false,
+      "final_answer_match_soft": true,
+      "created_at": "2026-05-12T04:17:46.070119+00:00"
     },
     {
       "run_id": "hermes-qwen3-30b-a3b-fp8-code-read-then-modify-vs-hermes-qwen3-30b-a3b-bf16-code-read-then-modify",
@@ -247,7 +423,23 @@
       "tool_call_jaccard": 0.3333333333333333,
       "final_answer_match": false,
       "final_answer_match_soft": false,
-      "created_at": "2026-05-12T04:00:38.286001+00:00"
+      "created_at": "2026-05-12T04:17:46.197218+00:00"
+    },
+    {
+      "run_id": "hermes-qwen3-30b-a3b-fp8-code-read-then-modify-vs-hermes-qwen3-30b-a3b-bf16-code-read-then-modify",
+      "task_id": "code-read-then-modify",
+      "model_id": "Qwen/Qwen3-30B-A3B",
+      "rollout_engine": "hermes-qwen3-30b-a3b-fp8",
+      "trainer_engine": "hermes-qwen3-30b-a3b-bf16",
+      "rollout_steps": 2,
+      "trainer_steps": 5,
+      "first_divergence_step": 1,
+      "first_divergence_kind": "tool_choice",
+      "tool_choice_disagreement_rate": 0.5,
+      "tool_call_jaccard": 0.25,
+      "final_answer_match": false,
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T04:17:46.323670+00:00"
     },
     {
       "run_id": "hermes-qwen3-30b-a3b-fp8-math-bf16-vram-budget-vs-hermes-qwen3-30b-a3b-bf16-math-bf16-vram-budget",
@@ -263,7 +455,23 @@
       "tool_call_jaccard": 0.0,
       "final_answer_match": false,
       "final_answer_match_soft": true,
-      "created_at": "2026-05-12T04:00:38.411812+00:00"
+      "created_at": "2026-05-12T04:17:46.576102+00:00"
+    },
+    {
+      "run_id": "hermes-qwen3-30b-a3b-fp8-math-bf16-vram-budget-vs-hermes-qwen3-30b-a3b-bf16-math-bf16-vram-budget",
+      "task_id": "math-bf16-vram-budget",
+      "model_id": "Qwen/Qwen3-30B-A3B",
+      "rollout_engine": "hermes-qwen3-30b-a3b-fp8",
+      "trainer_engine": "hermes-qwen3-30b-a3b-bf16",
+      "rollout_steps": 2,
+      "trainer_steps": 2,
+      "first_divergence_step": 0,
+      "first_divergence_kind": "tool_args",
+      "tool_choice_disagreement_rate": 0.0,
+      "tool_call_jaccard": 0.0,
+      "final_answer_match": false,
+      "final_answer_match_soft": true,
+      "created_at": "2026-05-12T04:17:46.449553+00:00"
     },
     {
       "run_id": "hermes-qwen3-30b-a3b-fp8-math-tokens-per-gpu-day-vs-hermes-qwen3-30b-a3b-bf16-math-tokens-per-gpu-day",
@@ -279,7 +487,7 @@
       "tool_call_jaccard": 0.0,
       "final_answer_match": false,
       "final_answer_match_soft": true,
-      "created_at": "2026-05-12T04:00:38.538952+00:00"
+      "created_at": "2026-05-12T04:17:46.704427+00:00"
     },
     {
       "run_id": "hermes-qwen3-30b-a3b-fp8-mixed-research-and-math-vs-hermes-qwen3-30b-a3b-bf16-mixed-research-and-math",
@@ -295,7 +503,23 @@
       "tool_call_jaccard": 1.0,
       "final_answer_match": false,
       "final_answer_match_soft": false,
-      "created_at": "2026-05-12T04:00:38.665992+00:00"
+      "created_at": "2026-05-12T04:17:46.830367+00:00"
+    },
+    {
+      "run_id": "hermes-qwen3-30b-a3b-fp8-mixed-research-and-math-vs-hermes-qwen3-30b-a3b-bf16-mixed-research-and-math",
+      "task_id": "mixed-research-and-math",
+      "model_id": "Qwen/Qwen3-30B-A3B",
+      "rollout_engine": "hermes-qwen3-30b-a3b-fp8",
+      "trainer_engine": "hermes-qwen3-30b-a3b-bf16",
+      "rollout_steps": 1,
+      "trainer_steps": 1,
+      "first_divergence_step": 0,
+      "first_divergence_kind": "content",
+      "tool_choice_disagreement_rate": 0.0,
+      "tool_call_jaccard": 1.0,
+      "final_answer_match": false,
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T04:17:46.955583+00:00"
     },
     {
       "run_id": "hermes-qwen3-30b-a3b-fp8-multi-tool-with-irrelevant-result-vs-hermes-qwen3-30b-a3b-bf16-multi-tool-with-irrelevant-result",
@@ -311,7 +535,23 @@
       "tool_call_jaccard": 0.0,
       "final_answer_match": false,
       "final_answer_match_soft": true,
-      "created_at": "2026-05-12T04:00:38.792028+00:00"
+      "created_at": "2026-05-12T04:17:47.082487+00:00"
+    },
+    {
+      "run_id": "hermes-qwen3-30b-a3b-fp8-multi-tool-with-irrelevant-result-vs-hermes-qwen3-30b-a3b-bf16-multi-tool-with-irrelevant-result",
+      "task_id": "multi-tool-with-irrelevant-result",
+      "model_id": "Qwen/Qwen3-30B-A3B",
+      "rollout_engine": "hermes-qwen3-30b-a3b-fp8",
+      "trainer_engine": "hermes-qwen3-30b-a3b-bf16",
+      "rollout_steps": 2,
+      "trainer_steps": 2,
+      "first_divergence_step": 0,
+      "first_divergence_kind": "tool_args",
+      "tool_choice_disagreement_rate": 0.0,
+      "tool_call_jaccard": 0.0,
+      "final_answer_match": false,
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T04:17:47.208439+00:00"
     },
     {
       "run_id": "hermes-qwen3-30b-a3b-fp8-no-op-trivia-vs-hermes-qwen3-30b-a3b-bf16-no-op-trivia",
@@ -327,7 +567,39 @@
       "tool_call_jaccard": 1.0,
       "final_answer_match": true,
       "final_answer_match_soft": true,
-      "created_at": "2026-05-12T04:00:38.921555+00:00"
+      "created_at": "2026-05-12T04:17:47.335490+00:00"
+    },
+    {
+      "run_id": "hermes-qwen3-30b-a3b-fp8-no-op-trivia-vs-hermes-qwen3-30b-a3b-bf16-no-op-trivia",
+      "task_id": "no-op-trivia",
+      "model_id": "Qwen/Qwen3-30B-A3B",
+      "rollout_engine": "hermes-qwen3-30b-a3b-fp8",
+      "trainer_engine": "hermes-qwen3-30b-a3b-bf16",
+      "rollout_steps": 1,
+      "trainer_steps": 1,
+      "first_divergence_step": 0,
+      "first_divergence_kind": "content",
+      "tool_choice_disagreement_rate": 0.0,
+      "tool_call_jaccard": 1.0,
+      "final_answer_match": true,
+      "final_answer_match_soft": true,
+      "created_at": "2026-05-12T04:17:47.460764+00:00"
+    },
+    {
+      "run_id": "hermes-qwen3-30b-a3b-fp8-plan-3step-experiment-vs-hermes-qwen3-30b-a3b-bf16-plan-3step-experiment",
+      "task_id": "plan-3step-experiment",
+      "model_id": "Qwen/Qwen3-30B-A3B",
+      "rollout_engine": "hermes-qwen3-30b-a3b-fp8",
+      "trainer_engine": "hermes-qwen3-30b-a3b-bf16",
+      "rollout_steps": 2,
+      "trainer_steps": 1,
+      "first_divergence_step": 0,
+      "first_divergence_kind": "tool_choice",
+      "tool_choice_disagreement_rate": 1.0,
+      "tool_call_jaccard": 0.0,
+      "final_answer_match": false,
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T04:17:47.713929+00:00"
     },
     {
       "run_id": "hermes-qwen3-30b-a3b-fp8-plan-3step-experiment-vs-hermes-qwen3-30b-a3b-bf16-plan-3step-experiment",
@@ -343,7 +615,7 @@
       "tool_call_jaccard": 0.0,
       "final_answer_match": false,
       "final_answer_match_soft": true,
-      "created_at": "2026-05-12T04:00:39.048407+00:00"
+      "created_at": "2026-05-12T04:17:47.586398+00:00"
     },
     {
       "run_id": "hermes-qwen3-30b-a3b-fp8-research-vllm-then-sglang-vs-hermes-qwen3-30b-a3b-bf16-research-vllm-then-sglang",
@@ -359,7 +631,23 @@
       "tool_call_jaccard": 1.0,
       "final_answer_match": false,
       "final_answer_match_soft": false,
-      "created_at": "2026-05-12T04:00:39.175721+00:00"
+      "created_at": "2026-05-12T04:17:47.840936+00:00"
+    },
+    {
+      "run_id": "hermes-qwen3-30b-a3b-fp8-research-vllm-then-sglang-vs-hermes-qwen3-30b-a3b-bf16-research-vllm-then-sglang",
+      "task_id": "research-vllm-then-sglang",
+      "model_id": "Qwen/Qwen3-30B-A3B",
+      "rollout_engine": "hermes-qwen3-30b-a3b-fp8",
+      "trainer_engine": "hermes-qwen3-30b-a3b-bf16",
+      "rollout_steps": 1,
+      "trainer_steps": 1,
+      "first_divergence_step": 0,
+      "first_divergence_kind": "content",
+      "tool_choice_disagreement_rate": 0.0,
+      "tool_call_jaccard": 1.0,
+      "final_answer_match": false,
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T04:17:47.966828+00:00"
     },
     {
       "run_id": "hermes-qwen3-30b-a3b-fp8-code-fix-factorial-vs-hermes-qwen3-30b-a3b-bf16_tp2-code-fix-factorial",
@@ -375,7 +663,7 @@
       "tool_call_jaccard": 0.25,
       "final_answer_match": false,
       "final_answer_match_soft": true,
-      "created_at": "2026-05-12T04:00:40.652454+00:00"
+      "created_at": "2026-05-12T04:17:50.579808+00:00"
     },
     {
       "run_id": "hermes-qwen3-30b-a3b-fp8-code-fix-fibonacci-vs-hermes-qwen3-30b-a3b-bf16_tp2-code-fix-fibonacci",
@@ -391,7 +679,7 @@
       "tool_call_jaccard": 0.125,
       "final_answer_match": false,
       "final_answer_match_soft": true,
-      "created_at": "2026-05-12T04:00:40.779499+00:00"
+      "created_at": "2026-05-12T04:17:50.707099+00:00"
     },
     {
       "run_id": "hermes-qwen3-30b-a3b-fp8-code-read-then-modify-vs-hermes-qwen3-30b-a3b-bf16_tp2-code-read-then-modify",
@@ -407,7 +695,7 @@
       "tool_call_jaccard": 0.2,
       "final_answer_match": false,
       "final_answer_match_soft": false,
-      "created_at": "2026-05-12T04:00:40.911112+00:00"
+      "created_at": "2026-05-12T04:17:50.832390+00:00"
     },
     {
       "run_id": "hermes-qwen3-30b-a3b-fp8-math-bf16-vram-budget-vs-hermes-qwen3-30b-a3b-bf16_tp2-math-bf16-vram-budget",
@@ -423,7 +711,7 @@
       "tool_call_jaccard": 0.0,
       "final_answer_match": false,
       "final_answer_match_soft": false,
-      "created_at": "2026-05-12T04:00:41.040458+00:00"
+      "created_at": "2026-05-12T04:17:50.960405+00:00"
     },
     {
       "run_id": "hermes-qwen3-30b-a3b-fp8-math-tokens-per-gpu-day-vs-hermes-qwen3-30b-a3b-bf16_tp2-math-tokens-per-gpu-day",
@@ -439,7 +727,7 @@
       "tool_call_jaccard": 0.0,
       "final_answer_match": true,
       "final_answer_match_soft": true,
-      "created_at": "2026-05-12T04:00:41.167795+00:00"
+      "created_at": "2026-05-12T04:17:51.087345+00:00"
     },
     {
       "run_id": "hermes-qwen3-30b-a3b-fp8-mixed-research-and-math-vs-hermes-qwen3-30b-a3b-bf16_tp2-mixed-research-and-math",
@@ -455,7 +743,7 @@
       "tool_call_jaccard": 1.0,
       "final_answer_match": false,
       "final_answer_match_soft": false,
-      "created_at": "2026-05-12T04:00:41.294342+00:00"
+      "created_at": "2026-05-12T04:17:51.212583+00:00"
     },
     {
       "run_id": "hermes-qwen3-30b-a3b-fp8-multi-tool-with-irrelevant-result-vs-hermes-qwen3-30b-a3b-bf16_tp2-multi-tool-with-irrelevant-result",
@@ -471,7 +759,7 @@
       "tool_call_jaccard": 1.0,
       "final_answer_match": true,
       "final_answer_match_soft": true,
-      "created_at": "2026-05-12T04:00:41.421559+00:00"
+      "created_at": "2026-05-12T04:17:51.339787+00:00"
     },
     {
       "run_id": "hermes-qwen3-30b-a3b-fp8-no-op-trivia-vs-hermes-qwen3-30b-a3b-bf16_tp2-no-op-trivia",
@@ -487,7 +775,7 @@
       "tool_call_jaccard": 1.0,
       "final_answer_match": false,
       "final_answer_match_soft": false,
-      "created_at": "2026-05-12T04:00:41.548197+00:00"
+      "created_at": "2026-05-12T04:17:51.464806+00:00"
     },
     {
       "run_id": "hermes-qwen3-30b-a3b-fp8-plan-3step-experiment-vs-hermes-qwen3-30b-a3b-bf16_tp2-plan-3step-experiment",
@@ -503,7 +791,7 @@
       "tool_call_jaccard": 0.0,
       "final_answer_match": false,
       "final_answer_match_soft": true,
-      "created_at": "2026-05-12T04:00:41.674350+00:00"
+      "created_at": "2026-05-12T04:17:51.590531+00:00"
     },
     {
       "run_id": "hermes-qwen3-30b-a3b-fp8-plan-then-budget-vs-hermes-qwen3-30b-a3b-bf16_tp2-plan-then-budget",
@@ -519,7 +807,7 @@
       "tool_call_jaccard": 0.0,
       "final_answer_match": false,
       "final_answer_match_soft": false,
-      "created_at": "2026-05-12T04:00:41.802078+00:00"
+      "created_at": "2026-05-12T04:17:51.719352+00:00"
     },
     {
       "run_id": "hermes-qwen3-30b-a3b-fp8-research-vllm-then-sglang-vs-hermes-qwen3-30b-a3b-bf16_tp2-research-vllm-then-sglang",
@@ -535,7 +823,7 @@
       "tool_call_jaccard": 1.0,
       "final_answer_match": false,
       "final_answer_match_soft": false,
-      "created_at": "2026-05-12T04:00:41.931095+00:00"
+      "created_at": "2026-05-12T04:17:51.845128+00:00"
     },
     {
       "run_id": "hermes-qwen3-32b-bf16_seedB-code-fix-factorial-vs-hermes-qwen3-32b-bf16-code-fix-factorial",
@@ -551,7 +839,39 @@
       "tool_call_jaccard": 1.0,
       "final_answer_match": false,
       "final_answer_match_soft": false,
-      "created_at": "2026-05-12T04:00:36.428744+00:00"
+      "created_at": "2026-05-12T04:17:42.699419+00:00"
+    },
+    {
+      "run_id": "hermes-qwen3-32b-bf16_seedB-code-fix-factorial-vs-hermes-qwen3-32b-bf16-code-fix-factorial",
+      "task_id": "code-fix-factorial",
+      "model_id": "Qwen/Qwen3-32B",
+      "rollout_engine": "hermes-qwen3-32b-bf16_seedB",
+      "trainer_engine": "hermes-qwen3-32b-bf16",
+      "rollout_steps": 1,
+      "trainer_steps": 1,
+      "first_divergence_step": null,
+      "first_divergence_kind": null,
+      "tool_choice_disagreement_rate": 0.0,
+      "tool_call_jaccard": 1.0,
+      "final_answer_match": false,
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T04:17:42.572488+00:00"
+    },
+    {
+      "run_id": "hermes-qwen3-32b-bf16_seedB-code-fix-fibonacci-vs-hermes-qwen3-32b-bf16-code-fix-fibonacci",
+      "task_id": "code-fix-fibonacci",
+      "model_id": "Qwen/Qwen3-32B",
+      "rollout_engine": "hermes-qwen3-32b-bf16_seedB",
+      "trainer_engine": "hermes-qwen3-32b-bf16",
+      "rollout_steps": 4,
+      "trainer_steps": 1,
+      "first_divergence_step": 1,
+      "first_divergence_kind": "termination",
+      "tool_choice_disagreement_rate": 0.0,
+      "tool_call_jaccard": 0.3333333333333333,
+      "final_answer_match": false,
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T04:17:42.951655+00:00"
     },
     {
       "run_id": "hermes-qwen3-32b-bf16_seedB-code-fix-fibonacci-vs-hermes-qwen3-32b-bf16-code-fix-fibonacci",
@@ -567,7 +887,7 @@
       "tool_call_jaccard": 0.2,
       "final_answer_match": false,
       "final_answer_match_soft": false,
-      "created_at": "2026-05-12T04:00:36.556267+00:00"
+      "created_at": "2026-05-12T04:17:42.826038+00:00"
     },
     {
       "run_id": "hermes-qwen3-32b-bf16_seedB-code-read-then-modify-vs-hermes-qwen3-32b-bf16-code-read-then-modify",
@@ -583,7 +903,23 @@
       "tool_call_jaccard": 0.2,
       "final_answer_match": false,
       "final_answer_match_soft": true,
-      "created_at": "2026-05-12T04:00:36.682761+00:00"
+      "created_at": "2026-05-12T04:17:43.076661+00:00"
+    },
+    {
+      "run_id": "hermes-qwen3-32b-bf16_seedB-code-read-then-modify-vs-hermes-qwen3-32b-bf16-code-read-then-modify",
+      "task_id": "code-read-then-modify",
+      "model_id": "Qwen/Qwen3-32B",
+      "rollout_engine": "hermes-qwen3-32b-bf16_seedB",
+      "trainer_engine": "hermes-qwen3-32b-bf16",
+      "rollout_steps": 4,
+      "trainer_steps": 3,
+      "first_divergence_step": 1,
+      "first_divergence_kind": "tool_choice",
+      "tool_choice_disagreement_rate": 0.6666666666666666,
+      "tool_call_jaccard": 1.0,
+      "final_answer_match": false,
+      "final_answer_match_soft": true,
+      "created_at": "2026-05-12T04:17:43.202024+00:00"
     },
     {
       "run_id": "hermes-qwen3-32b-bf16_seedB-four-tool-sequence-vs-hermes-qwen3-32b-bf16-four-tool-sequence",
@@ -599,7 +935,39 @@
       "tool_call_jaccard": 0.125,
       "final_answer_match": false,
       "final_answer_match_soft": false,
-      "created_at": "2026-05-12T04:00:36.809462+00:00"
+      "created_at": "2026-05-12T04:17:43.329361+00:00"
+    },
+    {
+      "run_id": "hermes-qwen3-32b-bf16_seedB-four-tool-sequence-vs-hermes-qwen3-32b-bf16-four-tool-sequence",
+      "task_id": "four-tool-sequence",
+      "model_id": "Qwen/Qwen3-32B",
+      "rollout_engine": "hermes-qwen3-32b-bf16_seedB",
+      "trainer_engine": "hermes-qwen3-32b-bf16",
+      "rollout_steps": 5,
+      "trainer_steps": 5,
+      "first_divergence_step": 0,
+      "first_divergence_kind": "tool_choice",
+      "tool_choice_disagreement_rate": 0.25,
+      "tool_call_jaccard": 0.14285714285714285,
+      "final_answer_match": false,
+      "final_answer_match_soft": true,
+      "created_at": "2026-05-12T04:17:43.454725+00:00"
+    },
+    {
+      "run_id": "hermes-qwen3-32b-bf16_seedB-math-bf16-vram-budget-vs-hermes-qwen3-32b-bf16-math-bf16-vram-budget",
+      "task_id": "math-bf16-vram-budget",
+      "model_id": "Qwen/Qwen3-32B",
+      "rollout_engine": "hermes-qwen3-32b-bf16_seedB",
+      "trainer_engine": "hermes-qwen3-32b-bf16",
+      "rollout_steps": 2,
+      "trainer_steps": 2,
+      "first_divergence_step": 0,
+      "first_divergence_kind": "tool_args",
+      "tool_choice_disagreement_rate": 0.0,
+      "tool_call_jaccard": 0.0,
+      "final_answer_match": false,
+      "final_answer_match_soft": true,
+      "created_at": "2026-05-12T04:17:43.707547+00:00"
     },
     {
       "run_id": "hermes-qwen3-32b-bf16_seedB-math-bf16-vram-budget-vs-hermes-qwen3-32b-bf16-math-bf16-vram-budget",
@@ -615,7 +983,23 @@
       "tool_call_jaccard": 0.0,
       "final_answer_match": false,
       "final_answer_match_soft": false,
-      "created_at": "2026-05-12T04:00:36.934518+00:00"
+      "created_at": "2026-05-12T04:17:43.580653+00:00"
+    },
+    {
+      "run_id": "hermes-qwen3-32b-bf16_seedB-math-tokens-per-gpu-day-vs-hermes-qwen3-32b-bf16-math-tokens-per-gpu-day",
+      "task_id": "math-tokens-per-gpu-day",
+      "model_id": "Qwen/Qwen3-32B",
+      "rollout_engine": "hermes-qwen3-32b-bf16_seedB",
+      "trainer_engine": "hermes-qwen3-32b-bf16",
+      "rollout_steps": 2,
+      "trainer_steps": 2,
+      "first_divergence_step": 0,
+      "first_divergence_kind": "tool_args",
+      "tool_choice_disagreement_rate": 0.0,
+      "tool_call_jaccard": 0.0,
+      "final_answer_match": true,
+      "final_answer_match_soft": true,
+      "created_at": "2026-05-12T04:17:43.958603+00:00"
     },
     {
       "run_id": "hermes-qwen3-32b-bf16_seedB-math-tokens-per-gpu-day-vs-hermes-qwen3-32b-bf16-math-tokens-per-gpu-day",
@@ -631,7 +1015,7 @@
       "tool_call_jaccard": 0.0,
       "final_answer_match": false,
       "final_answer_match_soft": true,
-      "created_at": "2026-05-12T04:00:37.060314+00:00"
+      "created_at": "2026-05-12T04:17:43.832866+00:00"
     },
     {
       "run_id": "hermes-qwen3-32b-bf16_seedB-mixed-research-and-math-vs-hermes-qwen3-32b-bf16-mixed-research-and-math",
@@ -647,7 +1031,23 @@
       "tool_call_jaccard": 0.0,
       "final_answer_match": false,
       "final_answer_match_soft": false,
-      "created_at": "2026-05-12T04:00:37.188112+00:00"
+      "created_at": "2026-05-12T04:17:44.086752+00:00"
+    },
+    {
+      "run_id": "hermes-qwen3-32b-bf16_seedB-mixed-research-and-math-vs-hermes-qwen3-32b-bf16-mixed-research-and-math",
+      "task_id": "mixed-research-and-math",
+      "model_id": "Qwen/Qwen3-32B",
+      "rollout_engine": "hermes-qwen3-32b-bf16_seedB",
+      "trainer_engine": "hermes-qwen3-32b-bf16",
+      "rollout_steps": 3,
+      "trainer_steps": 1,
+      "first_divergence_step": 0,
+      "first_divergence_kind": "tool_choice",
+      "tool_choice_disagreement_rate": 1.0,
+      "tool_call_jaccard": 0.0,
+      "final_answer_match": false,
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T04:17:44.213678+00:00"
     },
     {
       "run_id": "hermes-qwen3-32b-bf16_seedB-multi-tool-with-irrelevant-result-vs-hermes-qwen3-32b-bf16-multi-tool-with-irrelevant-result",
@@ -663,7 +1063,23 @@
       "tool_call_jaccard": 0.0,
       "final_answer_match": false,
       "final_answer_match_soft": true,
-      "created_at": "2026-05-12T04:00:37.314293+00:00"
+      "created_at": "2026-05-12T04:17:44.468393+00:00"
+    },
+    {
+      "run_id": "hermes-qwen3-32b-bf16_seedB-multi-tool-with-irrelevant-result-vs-hermes-qwen3-32b-bf16-multi-tool-with-irrelevant-result",
+      "task_id": "multi-tool-with-irrelevant-result",
+      "model_id": "Qwen/Qwen3-32B",
+      "rollout_engine": "hermes-qwen3-32b-bf16_seedB",
+      "trainer_engine": "hermes-qwen3-32b-bf16",
+      "rollout_steps": 2,
+      "trainer_steps": 2,
+      "first_divergence_step": 0,
+      "first_divergence_kind": "tool_args",
+      "tool_choice_disagreement_rate": 0.0,
+      "tool_call_jaccard": 0.0,
+      "final_answer_match": false,
+      "final_answer_match_soft": true,
+      "created_at": "2026-05-12T04:17:44.341659+00:00"
     },
     {
       "run_id": "hermes-qwen3-32b-bf16_seedB-no-op-trivia-vs-hermes-qwen3-32b-bf16-no-op-trivia",
@@ -679,7 +1095,23 @@
       "tool_call_jaccard": 1.0,
       "final_answer_match": false,
       "final_answer_match_soft": false,
-      "created_at": "2026-05-12T04:00:37.441392+00:00"
+      "created_at": "2026-05-12T04:17:44.595101+00:00"
+    },
+    {
+      "run_id": "hermes-qwen3-32b-bf16_seedB-no-op-trivia-vs-hermes-qwen3-32b-bf16-no-op-trivia",
+      "task_id": "no-op-trivia",
+      "model_id": "Qwen/Qwen3-32B",
+      "rollout_engine": "hermes-qwen3-32b-bf16_seedB",
+      "trainer_engine": "hermes-qwen3-32b-bf16",
+      "rollout_steps": 1,
+      "trainer_steps": 1,
+      "first_divergence_step": 0,
+      "first_divergence_kind": "content",
+      "tool_choice_disagreement_rate": 0.0,
+      "tool_call_jaccard": 1.0,
+      "final_answer_match": true,
+      "final_answer_match_soft": true,
+      "created_at": "2026-05-12T04:17:44.722820+00:00"
     },
     {
       "run_id": "hermes-qwen3-32b-bf16_seedB-plan-3step-experiment-vs-hermes-qwen3-32b-bf16-plan-3step-experiment",
@@ -695,7 +1127,23 @@
       "tool_call_jaccard": 0.0,
       "final_answer_match": false,
       "final_answer_match_soft": false,
-      "created_at": "2026-05-12T04:00:37.568914+00:00"
+      "created_at": "2026-05-12T04:17:44.848633+00:00"
+    },
+    {
+      "run_id": "hermes-qwen3-32b-bf16_seedB-plan-3step-experiment-vs-hermes-qwen3-32b-bf16-plan-3step-experiment",
+      "task_id": "plan-3step-experiment",
+      "model_id": "Qwen/Qwen3-32B",
+      "rollout_engine": "hermes-qwen3-32b-bf16_seedB",
+      "trainer_engine": "hermes-qwen3-32b-bf16",
+      "rollout_steps": 2,
+      "trainer_steps": 2,
+      "first_divergence_step": 0,
+      "first_divergence_kind": "tool_choice",
+      "tool_choice_disagreement_rate": 1.0,
+      "tool_call_jaccard": 0.0,
+      "final_answer_match": false,
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T04:17:44.974875+00:00"
     },
     {
       "run_id": "hermes-qwen3-32b-bf16_seedB-plan-then-budget-vs-hermes-qwen3-32b-bf16-plan-then-budget",
@@ -711,7 +1159,23 @@
       "tool_call_jaccard": 0.0,
       "final_answer_match": false,
       "final_answer_match_soft": false,
-      "created_at": "2026-05-12T04:00:37.694907+00:00"
+      "created_at": "2026-05-12T04:17:45.101357+00:00"
+    },
+    {
+      "run_id": "hermes-qwen3-32b-bf16_seedB-plan-then-budget-vs-hermes-qwen3-32b-bf16-plan-then-budget",
+      "task_id": "plan-then-budget",
+      "model_id": "Qwen/Qwen3-32B",
+      "rollout_engine": "hermes-qwen3-32b-bf16_seedB",
+      "trainer_engine": "hermes-qwen3-32b-bf16",
+      "rollout_steps": 2,
+      "trainer_steps": 1,
+      "first_divergence_step": 0,
+      "first_divergence_kind": "tool_choice",
+      "tool_choice_disagreement_rate": 1.0,
+      "tool_call_jaccard": 0.0,
+      "final_answer_match": false,
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T04:17:45.227615+00:00"
     },
     {
       "run_id": "hermes-qwen3-32b-bf16_seedB-research-vllm-then-sglang-vs-hermes-qwen3-32b-bf16-research-vllm-then-sglang",
@@ -727,7 +1191,23 @@
       "tool_call_jaccard": 1.0,
       "final_answer_match": false,
       "final_answer_match_soft": false,
-      "created_at": "2026-05-12T04:00:37.820735+00:00"
+      "created_at": "2026-05-12T04:17:45.478759+00:00"
+    },
+    {
+      "run_id": "hermes-qwen3-32b-bf16_seedB-research-vllm-then-sglang-vs-hermes-qwen3-32b-bf16-research-vllm-then-sglang",
+      "task_id": "research-vllm-then-sglang",
+      "model_id": "Qwen/Qwen3-32B",
+      "rollout_engine": "hermes-qwen3-32b-bf16_seedB",
+      "trainer_engine": "hermes-qwen3-32b-bf16",
+      "rollout_steps": 1,
+      "trainer_steps": 1,
+      "first_divergence_step": 0,
+      "first_divergence_kind": "content",
+      "tool_choice_disagreement_rate": 0.0,
+      "tool_call_jaccard": 1.0,
+      "final_answer_match": false,
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T04:17:45.354042+00:00"
     },
     {
       "run_id": "hermes-qwen3-32b-fp8-code-fix-factorial-vs-hermes-qwen3-32b-bf16-code-fix-factorial",
@@ -743,7 +1223,39 @@
       "tool_call_jaccard": 1.0,
       "final_answer_match": false,
       "final_answer_match_soft": false,
-      "created_at": "2026-05-12T04:00:35.036632+00:00"
+      "created_at": "2026-05-12T04:17:39.792416+00:00"
+    },
+    {
+      "run_id": "hermes-qwen3-32b-fp8-code-fix-factorial-vs-hermes-qwen3-32b-bf16-code-fix-factorial",
+      "task_id": "code-fix-factorial",
+      "model_id": "Qwen/Qwen3-32B",
+      "rollout_engine": "hermes-qwen3-32b-fp8",
+      "trainer_engine": "hermes-qwen3-32b-bf16",
+      "rollout_steps": 1,
+      "trainer_steps": 1,
+      "first_divergence_step": null,
+      "first_divergence_kind": null,
+      "tool_choice_disagreement_rate": 0.0,
+      "tool_call_jaccard": 1.0,
+      "final_answer_match": false,
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T04:17:39.918221+00:00"
+    },
+    {
+      "run_id": "hermes-qwen3-32b-fp8-code-fix-fibonacci-vs-hermes-qwen3-32b-bf16-code-fix-fibonacci",
+      "task_id": "code-fix-fibonacci",
+      "model_id": "Qwen/Qwen3-32B",
+      "rollout_engine": "hermes-qwen3-32b-fp8",
+      "trainer_engine": "hermes-qwen3-32b-bf16",
+      "rollout_steps": 3,
+      "trainer_steps": 1,
+      "first_divergence_step": 1,
+      "first_divergence_kind": "termination",
+      "tool_choice_disagreement_rate": 0.0,
+      "tool_call_jaccard": 0.3333333333333333,
+      "final_answer_match": false,
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T04:17:40.174332+00:00"
     },
     {
       "run_id": "hermes-qwen3-32b-fp8-code-fix-fibonacci-vs-hermes-qwen3-32b-bf16-code-fix-fibonacci",
@@ -759,7 +1271,7 @@
       "tool_call_jaccard": 0.2,
       "final_answer_match": false,
       "final_answer_match_soft": true,
-      "created_at": "2026-05-12T04:00:35.162810+00:00"
+      "created_at": "2026-05-12T04:17:40.045976+00:00"
     },
     {
       "run_id": "hermes-qwen3-32b-fp8-code-read-then-modify-vs-hermes-qwen3-32b-bf16-code-read-then-modify",
@@ -775,7 +1287,23 @@
       "tool_call_jaccard": 0.2,
       "final_answer_match": false,
       "final_answer_match_soft": true,
-      "created_at": "2026-05-12T04:00:35.288357+00:00"
+      "created_at": "2026-05-12T04:17:40.302410+00:00"
+    },
+    {
+      "run_id": "hermes-qwen3-32b-fp8-code-read-then-modify-vs-hermes-qwen3-32b-bf16-code-read-then-modify",
+      "task_id": "code-read-then-modify",
+      "model_id": "Qwen/Qwen3-32B",
+      "rollout_engine": "hermes-qwen3-32b-fp8",
+      "trainer_engine": "hermes-qwen3-32b-bf16",
+      "rollout_steps": 3,
+      "trainer_steps": 3,
+      "first_divergence_step": 1,
+      "first_divergence_kind": "tool_args",
+      "tool_choice_disagreement_rate": 0.0,
+      "tool_call_jaccard": 0.2,
+      "final_answer_match": false,
+      "final_answer_match_soft": true,
+      "created_at": "2026-05-12T04:17:40.427702+00:00"
     },
     {
       "run_id": "hermes-qwen3-32b-fp8-four-tool-sequence-vs-hermes-qwen3-32b-bf16-four-tool-sequence",
@@ -791,7 +1319,23 @@
       "tool_call_jaccard": 0.125,
       "final_answer_match": false,
       "final_answer_match_soft": false,
-      "created_at": "2026-05-12T04:00:35.416152+00:00"
+      "created_at": "2026-05-12T04:17:40.554441+00:00"
+    },
+    {
+      "run_id": "hermes-qwen3-32b-fp8-four-tool-sequence-vs-hermes-qwen3-32b-bf16-four-tool-sequence",
+      "task_id": "four-tool-sequence",
+      "model_id": "Qwen/Qwen3-32B",
+      "rollout_engine": "hermes-qwen3-32b-fp8",
+      "trainer_engine": "hermes-qwen3-32b-bf16",
+      "rollout_steps": 5,
+      "trainer_steps": 5,
+      "first_divergence_step": 0,
+      "first_divergence_kind": "tool_choice",
+      "tool_choice_disagreement_rate": 0.25,
+      "tool_call_jaccard": 0.14285714285714285,
+      "final_answer_match": false,
+      "final_answer_match_soft": true,
+      "created_at": "2026-05-12T04:17:40.679932+00:00"
     },
     {
       "run_id": "hermes-qwen3-32b-fp8-math-bf16-vram-budget-vs-hermes-qwen3-32b-bf16-math-bf16-vram-budget",
@@ -807,7 +1351,23 @@
       "tool_call_jaccard": 0.0,
       "final_answer_match": false,
       "final_answer_match_soft": false,
-      "created_at": "2026-05-12T04:00:35.542783+00:00"
+      "created_at": "2026-05-12T04:17:40.806319+00:00"
+    },
+    {
+      "run_id": "hermes-qwen3-32b-fp8-math-bf16-vram-budget-vs-hermes-qwen3-32b-bf16-math-bf16-vram-budget",
+      "task_id": "math-bf16-vram-budget",
+      "model_id": "Qwen/Qwen3-32B",
+      "rollout_engine": "hermes-qwen3-32b-fp8",
+      "trainer_engine": "hermes-qwen3-32b-bf16",
+      "rollout_steps": 2,
+      "trainer_steps": 2,
+      "first_divergence_step": 0,
+      "first_divergence_kind": "tool_args",
+      "tool_choice_disagreement_rate": 0.0,
+      "tool_call_jaccard": 0.0,
+      "final_answer_match": false,
+      "final_answer_match_soft": true,
+      "created_at": "2026-05-12T04:17:40.932770+00:00"
     },
     {
       "run_id": "hermes-qwen3-32b-fp8-math-tokens-per-gpu-day-vs-hermes-qwen3-32b-bf16-math-tokens-per-gpu-day",
@@ -823,7 +1383,39 @@
       "tool_call_jaccard": 0.0,
       "final_answer_match": false,
       "final_answer_match_soft": true,
-      "created_at": "2026-05-12T04:00:35.668920+00:00"
+      "created_at": "2026-05-12T04:17:41.058797+00:00"
+    },
+    {
+      "run_id": "hermes-qwen3-32b-fp8-math-tokens-per-gpu-day-vs-hermes-qwen3-32b-bf16-math-tokens-per-gpu-day",
+      "task_id": "math-tokens-per-gpu-day",
+      "model_id": "Qwen/Qwen3-32B",
+      "rollout_engine": "hermes-qwen3-32b-fp8",
+      "trainer_engine": "hermes-qwen3-32b-bf16",
+      "rollout_steps": 2,
+      "trainer_steps": 2,
+      "first_divergence_step": 0,
+      "first_divergence_kind": "tool_args",
+      "tool_choice_disagreement_rate": 0.0,
+      "tool_call_jaccard": 0.0,
+      "final_answer_match": true,
+      "final_answer_match_soft": true,
+      "created_at": "2026-05-12T04:17:41.183465+00:00"
+    },
+    {
+      "run_id": "hermes-qwen3-32b-fp8-mixed-research-and-math-vs-hermes-qwen3-32b-bf16-mixed-research-and-math",
+      "task_id": "mixed-research-and-math",
+      "model_id": "Qwen/Qwen3-32B",
+      "rollout_engine": "hermes-qwen3-32b-fp8",
+      "trainer_engine": "hermes-qwen3-32b-bf16",
+      "rollout_steps": 3,
+      "trainer_steps": 1,
+      "first_divergence_step": 0,
+      "first_divergence_kind": "tool_choice",
+      "tool_choice_disagreement_rate": 1.0,
+      "tool_call_jaccard": 0.0,
+      "final_answer_match": false,
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T04:17:41.436610+00:00"
     },
     {
       "run_id": "hermes-qwen3-32b-fp8-mixed-research-and-math-vs-hermes-qwen3-32b-bf16-mixed-research-and-math",
@@ -839,7 +1431,7 @@
       "tool_call_jaccard": 0.0,
       "final_answer_match": false,
       "final_answer_match_soft": false,
-      "created_at": "2026-05-12T04:00:35.796152+00:00"
+      "created_at": "2026-05-12T04:17:41.310509+00:00"
     },
     {
       "run_id": "hermes-qwen3-32b-fp8-multi-tool-with-irrelevant-result-vs-hermes-qwen3-32b-bf16-multi-tool-with-irrelevant-result",
@@ -855,7 +1447,23 @@
       "tool_call_jaccard": 0.0,
       "final_answer_match": false,
       "final_answer_match_soft": true,
-      "created_at": "2026-05-12T04:00:35.922010+00:00"
+      "created_at": "2026-05-12T04:17:41.562560+00:00"
+    },
+    {
+      "run_id": "hermes-qwen3-32b-fp8-multi-tool-with-irrelevant-result-vs-hermes-qwen3-32b-bf16-multi-tool-with-irrelevant-result",
+      "task_id": "multi-tool-with-irrelevant-result",
+      "model_id": "Qwen/Qwen3-32B",
+      "rollout_engine": "hermes-qwen3-32b-fp8",
+      "trainer_engine": "hermes-qwen3-32b-bf16",
+      "rollout_steps": 2,
+      "trainer_steps": 2,
+      "first_divergence_step": 0,
+      "first_divergence_kind": "tool_args",
+      "tool_choice_disagreement_rate": 0.0,
+      "tool_call_jaccard": 0.0,
+      "final_answer_match": false,
+      "final_answer_match_soft": true,
+      "created_at": "2026-05-12T04:17:41.688965+00:00"
     },
     {
       "run_id": "hermes-qwen3-32b-fp8-no-op-trivia-vs-hermes-qwen3-32b-bf16-no-op-trivia",
@@ -871,7 +1479,23 @@
       "tool_call_jaccard": 1.0,
       "final_answer_match": false,
       "final_answer_match_soft": false,
-      "created_at": "2026-05-12T04:00:36.047540+00:00"
+      "created_at": "2026-05-12T04:17:41.814107+00:00"
+    },
+    {
+      "run_id": "hermes-qwen3-32b-fp8-no-op-trivia-vs-hermes-qwen3-32b-bf16-no-op-trivia",
+      "task_id": "no-op-trivia",
+      "model_id": "Qwen/Qwen3-32B",
+      "rollout_engine": "hermes-qwen3-32b-fp8",
+      "trainer_engine": "hermes-qwen3-32b-bf16",
+      "rollout_steps": 1,
+      "trainer_steps": 1,
+      "first_divergence_step": 0,
+      "first_divergence_kind": "content",
+      "tool_choice_disagreement_rate": 0.0,
+      "tool_call_jaccard": 1.0,
+      "final_answer_match": false,
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T04:17:41.939537+00:00"
     },
     {
       "run_id": "hermes-qwen3-32b-fp8-plan-3step-experiment-vs-hermes-qwen3-32b-bf16-plan-3step-experiment",
@@ -887,7 +1511,23 @@
       "tool_call_jaccard": 0.0,
       "final_answer_match": false,
       "final_answer_match_soft": false,
-      "created_at": "2026-05-12T04:00:36.174739+00:00"
+      "created_at": "2026-05-12T04:17:42.067651+00:00"
+    },
+    {
+      "run_id": "hermes-qwen3-32b-fp8-plan-3step-experiment-vs-hermes-qwen3-32b-bf16-plan-3step-experiment",
+      "task_id": "plan-3step-experiment",
+      "model_id": "Qwen/Qwen3-32B",
+      "rollout_engine": "hermes-qwen3-32b-fp8",
+      "trainer_engine": "hermes-qwen3-32b-bf16",
+      "rollout_steps": 1,
+      "trainer_steps": 2,
+      "first_divergence_step": 0,
+      "first_divergence_kind": "tool_choice",
+      "tool_choice_disagreement_rate": 1.0,
+      "tool_call_jaccard": 0.0,
+      "final_answer_match": false,
+      "final_answer_match_soft": true,
+      "created_at": "2026-05-12T04:17:42.193295+00:00"
     },
     {
       "run_id": "hermes-qwen3-32b-fp8-research-vllm-then-sglang-vs-hermes-qwen3-32b-bf16-research-vllm-then-sglang",
@@ -903,7 +1543,23 @@
       "tool_call_jaccard": 1.0,
       "final_answer_match": false,
       "final_answer_match_soft": false,
-      "created_at": "2026-05-12T04:00:36.300462+00:00"
+      "created_at": "2026-05-12T04:17:42.445333+00:00"
+    },
+    {
+      "run_id": "hermes-qwen3-32b-fp8-research-vllm-then-sglang-vs-hermes-qwen3-32b-bf16-research-vllm-then-sglang",
+      "task_id": "research-vllm-then-sglang",
+      "model_id": "Qwen/Qwen3-32B",
+      "rollout_engine": "hermes-qwen3-32b-fp8",
+      "trainer_engine": "hermes-qwen3-32b-bf16",
+      "rollout_steps": 1,
+      "trainer_steps": 1,
+      "first_divergence_step": 0,
+      "first_divergence_kind": "content",
+      "tool_choice_disagreement_rate": 0.0,
+      "tool_call_jaccard": 1.0,
+      "final_answer_match": false,
+      "final_answer_match_soft": false,
+      "created_at": "2026-05-12T04:17:42.319565+00:00"
     }
   ]
 }
