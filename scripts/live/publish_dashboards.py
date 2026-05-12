@@ -392,6 +392,158 @@ def _render_matrix(
     )
 
 
+def _hermes_pair_tile(
+    *,
+    label: str,
+    pair: dict | None,
+    href: str,
+    column_label: str,
+    subtitle: str,
+) -> str:
+    """Render a single Hermes-agent traffic-light tile.
+
+    The colour gate (locked in STEER.md):
+      green if final_answer_match_rate >= 0.80
+      amber if 0.50 <= final_answer_match_rate < 0.80
+      red   otherwise
+    Bar width = mean_tool_call_jaccard.
+    """
+    if pair is None:
+        return (
+            f'<a class="mx-tile mx-empty-tile" href="{_html.escape(href)}" '
+            f'data-trainer="{_html.escape(label)}" data-column="{_html.escape(column_label)}">'
+            f"<div class='mx-col'>{_html.escape(column_label)}</div>"
+            f"<div class='mx-empty'>no data</div>"
+            f"</a>"
+        )
+    fam = float(pair.get("final_answer_match_rate") or 0.0)
+    jaccard = float(pair.get("mean_tool_call_jaccard") or 0.0)
+    first_div = pair.get("mean_first_divergence_step")
+    answered = int(pair.get("fully_matched_count") or 0)
+    n = int(pair.get("count") or 0)
+    if fam >= 0.80:
+        kind_class = "good"
+    elif fam >= 0.50:
+        kind_class = "warn"
+    else:
+        kind_class = "bad"
+    display = f"{fam * 100:.0f}%"
+    bar_pct = min(max(jaccard, 0.0), 1.0) * 100
+    div_str = (
+        f"first-div mean step {first_div:.1f}"
+        if isinstance(first_div, (int, float)) and first_div is not None
+        else "first-div n/a"
+    )
+    sub = f"n={n} tasks · {div_str} · {answered}-of-{n} answered"
+    return (
+        f'<a class="mx-tile mx-{kind_class}" href="{_html.escape(href)}" '
+        f'data-chart="hermes-tile" data-trainer="{_html.escape(label)}" '
+        f'data-column="{_html.escape(column_label)}">'
+        f"<div class='mx-col'>{_html.escape(column_label)}</div>"
+        f"<div class='mx-value'>{_html.escape(display)}</div>"
+        f"<div class='mx-bar'><div class='mx-bar-fill' style='width:{bar_pct:.1f}%'></div></div>"
+        f"<div class='mx-sub'>{_html.escape(sub)}</div>"
+        f"</a>"
+    )
+
+
+def _select_hermes_pairs(
+    payload: dict,
+    *,
+    model_substring: str,
+    bf16_engine: str,
+    fp8_engine: str,
+    seedb_engine: str,
+) -> tuple[dict | None, dict | None]:
+    """Pick the (precision-effect, noise-floor) engine_pairs from an agent_dashboard payload.
+
+    precision-effect: rollout=fp8, trainer=bf16 (the marketplace signal).
+    noise-floor:      rollout=bf16-seedB, trainer=bf16 (same engine, different seed).
+    Filters to only rows whose engines correspond to the target model
+    family via name substring.
+    """
+    pairs = [
+        p for p in payload.get("engine_pairs", [])
+        if model_substring.lower() in (p.get("rollout_engine") or "").lower()
+        or model_substring.lower() in (p.get("trainer_engine") or "").lower()
+    ]
+    precision = next(
+        (
+            p for p in pairs
+            if (p.get("rollout_engine") or "") == fp8_engine
+            and (p.get("trainer_engine") or "") == bf16_engine
+        ),
+        None,
+    )
+    noise = next(
+        (
+            p for p in pairs
+            if (p.get("rollout_engine") or "") == seedb_engine
+            and (p.get("trainer_engine") or "") == bf16_engine
+        ),
+        None,
+    )
+    return precision, noise
+
+
+def _render_hermes_section(
+    *,
+    title: str,
+    section_slug: str,
+    payload: dict,
+    model_substring: str,
+    bf16_engine: str,
+    fp8_engine: str,
+    seedb_engine: str,
+    detail_href: str,
+    blurb_html: str,
+) -> str:
+    """Render the Hermes-agent matrix section (2 tiles: precision-effect + noise-floor).
+
+    Layout mirrors the dense + MoE matrices: one row, two tiles. Tiles
+    are anchored to the existing chart markup so the dashboard's CSS
+    grid + traffic-light rules apply unchanged.
+    """
+    precision_pair, noise_pair = _select_hermes_pairs(
+        payload,
+        model_substring=model_substring,
+        bf16_engine=bf16_engine,
+        fp8_engine=fp8_engine,
+        seedb_engine=seedb_engine,
+    )
+    columns = [
+        ("fp8-vs-bf16", "precision effect", precision_pair),
+        ("bf16_seedB-vs-bf16", "noise floor (bf16 vs bf16, different seed)", noise_pair),
+    ]
+    grid_html = ["<div class='mx-grid'>"]
+    grid_html.append("<div class='mx-grid-head'>")
+    grid_html.append("<div class='mx-trainer-head'>comparison</div>")
+    for col, _label, _ in columns:
+        grid_html.append(f"<div class='mx-col-head'>{_html.escape(col)}</div>")
+    grid_html.append("</div>")
+    grid_html.append("<div class='mx-row'>")
+    grid_html.append("<div class='mx-trainer'>HERMES</div>")
+    for col, descr, pair in columns:
+        grid_html.append(
+            _hermes_pair_tile(
+                label=descr,
+                pair=pair,
+                href=detail_href,
+                column_label=col,
+                subtitle=descr,
+            )
+        )
+    grid_html.append("</div>")
+    grid_html.append("</div>")
+    return (
+        f'<section class="mx-section" data-section="{section_slug}">'
+        f"<h2>{_html.escape(title)}</h2>"
+        f"<div class='mx-blurb'>{blurb_html}</div>"
+        f"{''.join(grid_html)}"
+        f"</section>"
+    )
+
+
 _MATRIX_STYLES = """
 .mx-section{background:var(--surface);border:1px solid var(--border);border-radius:14px;
 padding:1.25rem 1.5rem;margin:1rem 0;box-shadow:0 1px 2px rgba(15,23,42,.04)}
@@ -489,6 +641,63 @@ def render_index(card_data: list[dict]) -> str:
         model_substring="Qwen3-30B-A3B",
         blurb_html=moe_blurb,
     )
+    agent_payload = (by_slug.get("agent") or {}).get("payload") or {}
+    hermes_dense_blurb = (
+        "<p><strong>What this measures.</strong> Real "
+        "<a href='https://github.com/NousResearch/hermes-agent'>Nous Hermes "
+        "Agent</a> multi-turn trajectories against the same vLLM serves used "
+        "by the dense + MoE matrices above. Each task in our 12-prompt suite "
+        "is run once at <code>bf16</code> (the trainer-equivalent reference), "
+        "once at <code>fp8</code> (the precision-shifted rollout), and a "
+        "second time at <code>bf16</code> with a different sampling seed "
+        "(the noise floor). The left tile compares fp8-vs-bf16 — the "
+        "load-bearing marketplace signal. The right tile compares "
+        "bf16-vs-bf16-different-seed — what divergence we get from sampling "
+        "alone, with no engine/precision change. The tile's headline "
+        "metric is <strong>final_answer_match</strong> (k-of-12 tasks where "
+        "rollout and trainer landed on the same final answer); the bar "
+        "shows mean <strong>tool_call_jaccard</strong>. Green ≥80%, amber "
+        "50-80%, red &lt;50%. If the precision-effect tile is materially "
+        "more divergent than the noise-floor tile, fp8 inference changes "
+        "what the agent <em>actually does</em>, not just its per-token "
+        "logprobs.</p>"
+    )
+    hermes_moe_blurb = (
+        "<p><strong>Same recipe, MoE rollouts.</strong> Hermes Agent "
+        "trajectories over Qwen3-30B-A3B at <code>vLLM-bf16</code> (rollout "
+        "= trainer-equivalent reference), <code>vLLM-fp8</code> (precision "
+        "shift; TP=2 due to the FP8 <code>block_n=128</code> / "
+        "<code>ffn_intermediate=768</code> constraint), and <code>bf16</code> "
+        "with a different sampling seed (noise floor). The MoE matrix above "
+        "already shows that fp8 inference adds 2-3% router_flip_rate; this "
+        "section asks whether that token-level router noise compounds into "
+        "<em>different agent actions</em>. If the precision-effect tile "
+        "drops materially below 80% and below the noise-floor tile, "
+        "crowdsourced MoE rollouts at fp8 are unreliable for off-policy "
+        "training of tool-using agents.</p>"
+    )
+    hermes_dense_matrix = _render_hermes_section(
+        title="Hermes Agent — Dense (Qwen3-32B)",
+        section_slug="hermes-agent-dense-matrix",
+        payload=agent_payload,
+        model_substring="Qwen3-32B",
+        bf16_engine="hermes-qwen3-32b-bf16",
+        fp8_engine="hermes-qwen3-32b-fp8",
+        seedb_engine="hermes-qwen3-32b-bf16-seedB",
+        detail_href="agent_dashboard.html",
+        blurb_html=hermes_dense_blurb,
+    )
+    hermes_moe_matrix = _render_hermes_section(
+        title="Hermes Agent — MoE (Qwen3-30B-A3B)",
+        section_slug="hermes-agent-moe-matrix",
+        payload=agent_payload,
+        model_substring="Qwen3-30B-A3B",
+        bf16_engine="hermes-qwen3-30b-a3b-bf16",
+        fp8_engine="hermes-qwen3-30b-a3b-fp8",
+        seedb_engine="hermes-qwen3-30b-a3b-bf16-seedB",
+        detail_href="agent_dashboard.html",
+        blurb_html=hermes_moe_blurb,
+    )
     cards_html = []
     for c in card_data:
         title = _html.escape(c["title"])
@@ -555,7 +764,7 @@ def render_index(card_data: list[dict]) -> str:
         "<a href='https://github.com/shamanez/streams-rollout-market' style='color:var(--accent);text-decoration:none;font-size:.92rem'>📂 Source code</a>"
         "</p>"
         "</header>"
-        f"{dense_matrix}{moe_matrix}"
+        f"{dense_matrix}{moe_matrix}{hermes_dense_matrix}{hermes_moe_matrix}"
         f"<div class='grid'>{''.join(cards_html)}</div>"
         "<footer>Generated from runs/live/. Each dashboard is regenerated by running the "
         "lab + dashboard CLIs in the source repo. <a href='glossary.html' "
