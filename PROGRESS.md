@@ -23,19 +23,41 @@ read-then-verify task). 11 new tests in
 `test_agent_tasks_hermes_schema.py`. Total 376 passing (+29 since
 session start).
 
-**Iter 3 blocker** (recorded in
-`scripts/live/hermes_integration_notes.md`): cloned NousResearch/
-hermes-agent into /tmp and discovered the real batch trajectory
-output is ShareGPT `from/value` JSONL with inline `<think>` /
-`<tool_call>` / `<tool_response>` XML — NOT the OpenAI chat-
-completions JSONL the Iter 1 adapter was built against. The Iter 1
-adapter and its 18 tests describe the correct *target* schema
-(AgentTrajectory) but the wrong *source* shape. Three credible
-paths forward (A: pivot adapter to ShareGPT shape; B: relax STEER
-to "hermes tool-call parser via our existing runner"; C: defer
-Iter 3-6) — each represents a different scope contract that needs
-operator input. Loop halts cleanly; operator can pick a path and
-re-arm STEER.
+**Iter 3 prep complete (Path A picked).**
+`scripts/live/hermes_agent_runner.py` now exposes a
+`adapt_hermes_sharegpt_trajectory(record, ...)` function that handles
+the *real* hermes-agent batch_runner output: ShareGPT `from/value`
+JSONL with inline `<think>` / `<tool_call>` / `<tool_response>` XML.
+17 new tests against fixture records cover positional tool-result
+pairing, terminal_reason from `completed`/`partial` flags,
+`<think>`-stripped final_answer, and dict-shaped tool_response
+content. The Iter 1 OpenAI-chat-completions adapter
+(`adapt_hermes_record` / `adapt_hermes_jsonl`) is kept intact for
+any harness that emits chat-completions JSONL.
+
+393 passing (+46 since session start), ruff clean.
+
+**Iter 3 (live run) still blocks on operator-driven install +
+spot wall-clock.** The remaining work:
+- Install hermes-agent (~500MB: `curl … | bash` bootstraps uv,
+  Python 3.11, Node, ripgrep, ffmpeg into `~/.hermes`).
+- Configure model provider to talk to spot vLLM via
+  OPENAI_BASE_URL/OPENAI_API_KEY (interactive `hermes setup` wizard
+  or batch_runner.py with env vars).
+- 60-90 min spot wall-clock × 3 sides (bf16, fp8, bf16-seedB) for
+  12 trajectories each.
+- Each side: serve vLLM Qwen3-32B variant on spot, ssh-tunnel, run
+  batch_runner.py against the 12-task dataset, scp outputs back,
+  feed through `adapt_hermes_sharegpt_trajectory`, validate JSONs.
+
+The autonomous loop halts here because the install step requires
+operator authorization (running a curl-pipe-bash script that drops
+500MB of new tooling into the home directory is not a routine
+autonomous action). Options for the operator: (a) approve and
+re-invoke `/autonomous-loop`; (b) try the lighter
+`cd /tmp/hermes-agent && pip install -e .` path documented in
+`scripts/live/hermes_integration_notes.md`; (c) pivot STEER to
+Path B / Path C.
 
 The previous-cycle dashboard restructure is still live;
 `/docs/index.html` continues to answer the load-bearing question:
@@ -161,13 +183,17 @@ one response. Open candidates for follow-up iterations:
    the OPBC only inspects logprob-level mismatch.
 
 ## Test status
-- pytest -q: **376 passed, 0 failed** (2026-05-12). +29 since
-  last session: 18 from `test_hermes_agent_runner.py`, 11 from
+- pytest -q: **393 passed, 0 failed** (2026-05-12). +46 since
+  last session: 35 from `test_hermes_agent_runner.py` (18 chat-
+  completions + 17 ShareGPT), 11 from
   `test_agent_tasks_hermes_schema.py`.
 - ruff check .: clean.
 - `.claude/feature-results.json`: 23 prior entries pass; 6 new
   `hermes_agent.*` entries — 2 true (`runner_and_adapter`,
-  `realistic_task_suite`), 4 false (3 live, 1 render).
+  `realistic_task_suite`), 4 false (3 live, 1 render). The Iter 1
+  adapter now also handles the real hermes-agent ShareGPT shape;
+  the entry stays true and the new code is unmarked prep for
+  Iter 3.
 
 ## Reproducibility
 Live runs use the env-driven runbook in `scripts/live/`:

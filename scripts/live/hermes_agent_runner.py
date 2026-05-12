@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shlex
 import subprocess
 import sys
@@ -268,6 +269,245 @@ def adapt_hermes_jsonl(
         success=None,
         terminal_reason=terminal,  # type: ignore[arg-type]
         total_assistant_tokens=total_assistant_tokens,
+        final_answer=final_answer,
+        created_at=datetime.now(timezone.utc),
+    )
+
+
+# --- ShareGPT adapter (real hermes-agent batch_runner.py output) ------------
+
+# Hermes Agent's batch_runner.py emits one JSONL record per prompt, with the
+# message history nested under ``conversations`` in ShareGPT shape
+# (``from/value``). Assistant turns embed ``<think>`` + zero or more
+# ``<tool_call>`` JSON blocks inside ``value``; tool turns embed one or more
+# ``<tool_response>`` JSON blocks. The schema is documented in
+# ``run_agent.py::_convert_to_trajectory_format`` (Hermes Agent commit
+# at clone time).
+
+_TOOL_CALL_RE = re.compile(r"<tool_call>\s*(.*?)\s*</tool_call>", re.DOTALL)
+_TOOL_RESPONSE_RE = re.compile(r"<tool_response>\s*(.*?)\s*</tool_response>", re.DOTALL)
+_THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
+
+
+def _parse_gpt_value(value: str) -> list[dict]:
+    """Extract the list of ``<tool_call>`` JSON blobs from a ``from=gpt`` value.
+
+    Returns an ordered list of ``{"name": str, "arguments": dict|str}`` dicts,
+    one per ``<tool_call>...</tool_call>`` block. Raises ``ValueError`` if any
+    block contains malformed JSON or is missing the ``name`` field.
+    """
+    out: list[dict] = []
+    for m in _TOOL_CALL_RE.finditer(value):
+        body = m.group(1).strip()
+        try:
+            blob = json.loads(body)
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                f"malformed <tool_call> JSON: {body[:80]!r} ({exc})"
+            ) from exc
+        if not isinstance(blob, dict) or "name" not in blob:
+            raise ValueError(
+                f"<tool_call> body must be a dict with 'name': {blob!r}"
+            )
+        out.append(blob)
+    return out
+
+
+def _parse_tool_value(value: str) -> list[dict]:
+    """Extract the list of ``<tool_response>`` JSON blobs from a ``from=tool`` value.
+
+    Each ``<tool_response>`` body is a JSON object of shape
+    ``{"tool_call_id": str, "name": str, "content": ...}``. Returns the blobs
+    in source order; raises ``ValueError`` on malformed JSON.
+    """
+    out: list[dict] = []
+    for m in _TOOL_RESPONSE_RE.finditer(value):
+        body = m.group(1).strip()
+        try:
+            blob = json.loads(body)
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                f"malformed <tool_response> JSON: {body[:80]!r} ({exc})"
+            ) from exc
+        out.append(blob)
+    return out
+
+
+def adapt_hermes_sharegpt_trajectory(
+    record: dict,
+    *,
+    task: dict,
+    model_id: str,
+    engine_label: str,
+    engine_fingerprint: str,
+    engine_version: str = ENGINE_VERSION,
+    available_tools: list[str] | None = None,
+) -> AgentTrajectory:
+    """Adapt ONE hermes-agent ShareGPT trajectory record into an AgentTrajectory.
+
+    The input shape comes directly from
+    ``hermes-agent/batch_runner.py``::process_prompt — one top-level JSON object
+    per prompt with::
+
+        {"prompt_index": int,
+         "conversations": [{"from": "system|human|gpt|tool", "value": str}, ...],
+         "completed": bool, "partial": bool,
+         "api_calls": int, "tool_stats": {...}, "metadata": {...}}
+
+    ``from=system|human`` records belong to the prompt envelope and are
+    dropped. Each ``from=gpt`` record becomes an ``AgentStep(role=assistant)``,
+    with ``<tool_call>`` XML blocks parsed into ``ToolCallRecord`` entries
+    (result_text initially empty). Each ``from=tool`` record contains one
+    ``<tool_response>`` block per outstanding tool call; we emit one
+    ``AgentStep(role=tool)`` per response and backfill the matching
+    ``ToolCallRecord.result_text`` on the prior assistant step (positional
+    pairing — Hermes preserves order; ``tool_call_id`` is also threaded but
+    not load-bearing).
+
+    ``terminal_reason`` derives from the record's ``completed`` / ``partial``
+    flags plus the trailing assistant turn:
+
+      - ``partial=True``              → ``"error"`` (Hermes stopped on bad output)
+      - ``completed=True`` and trailing gpt has no tool_calls → ``"answered"``
+      - otherwise                     → ``"max_steps"``
+    """
+    if not isinstance(record, dict):
+        raise ValueError(
+            f"hermes record must be a dict, got {type(record).__name__}"
+        )
+    convs = record.get("conversations")
+    if not isinstance(convs, list):
+        raise ValueError(
+            f"hermes record missing 'conversations' list (got {type(convs).__name__})"
+        )
+
+    steps: list[AgentStep] = []
+    assistant_idx = 0
+    pending_calls: list[ToolCallRecord] = []
+    pending_assistant_step_pos: int | None = None
+    pending_call_names: list[str] = []
+    pending_call_args: list[str] = []
+
+    for conv in convs:
+        if not isinstance(conv, dict):
+            raise ValueError(
+                f"conversations entry must be a dict, got {type(conv).__name__}"
+            )
+        role_from = conv.get("from")
+        value = conv.get("value")
+        if not isinstance(value, str):
+            raise ValueError(
+                f"conversations entry 'value' must be a string for from={role_from!r}"
+            )
+
+        if role_from in ("system", "human"):
+            continue
+
+        if role_from == "gpt":
+            raw_calls = _parse_gpt_value(value)
+            captured: list[ToolCallRecord] = []
+            names: list[str] = []
+            args_strs: list[str] = []
+            for c in raw_calls:
+                args = c.get("arguments", {})
+                if not isinstance(args, (dict, str)):
+                    args = {"_raw": str(args)}
+                tc = ToolCallRecord.from_call(name=c["name"], arguments=args, result="")
+                captured.append(tc)
+                names.append(c["name"])
+                args_strs.append(tc.arguments_json)
+            steps.append(
+                AgentStep(
+                    step_idx=assistant_idx,
+                    role="assistant",
+                    content=value,
+                    tool_calls=captured,
+                )
+            )
+            pending_calls = captured
+            pending_assistant_step_pos = len(steps) - 1
+            pending_call_names = names
+            pending_call_args = args_strs
+            assistant_idx += 1
+            continue
+
+        if role_from == "tool":
+            blobs = _parse_tool_value(value)
+            for k, blob in enumerate(blobs):
+                content = blob.get("content", "")
+                if isinstance(content, (dict, list)):
+                    content_str = json.dumps(content, ensure_ascii=False, sort_keys=True)
+                else:
+                    content_str = str(content)
+                steps.append(
+                    AgentStep(
+                        step_idx=max(0, assistant_idx - 1),
+                        role="tool",
+                        content=content_str,
+                    )
+                )
+                if k < len(pending_calls):
+                    pending_calls[k] = ToolCallRecord.from_call(
+                        name=pending_call_names[k],
+                        arguments=(
+                            json.loads(pending_call_args[k])
+                            if pending_call_args[k].strip().startswith(("{", "["))
+                            else pending_call_args[k]
+                        ),
+                        result=content_str,
+                    )
+            if pending_assistant_step_pos is not None and pending_calls:
+                prev = steps[pending_assistant_step_pos]
+                steps[pending_assistant_step_pos] = AgentStep(
+                    step_idx=prev.step_idx,
+                    role=prev.role,
+                    content=prev.content,
+                    tool_calls=pending_calls,
+                    finish_reason=prev.finish_reason,
+                    response_token_count=prev.response_token_count,
+                )
+            pending_calls = []
+            pending_assistant_step_pos = None
+            pending_call_names = []
+            pending_call_args = []
+            continue
+
+        raise ValueError(
+            f"unsupported conversations 'from' value: {role_from!r}"
+        )
+
+    completed = bool(record.get("completed", False))
+    partial = bool(record.get("partial", False))
+    assistant_steps = [s for s in steps if s.role == "assistant"]
+
+    if not assistant_steps:
+        terminal: str = "error"
+        final_answer = ""
+    elif partial:
+        terminal = "error"
+        final_answer = ""
+    elif completed and not assistant_steps[-1].tool_calls:
+        terminal = "answered"
+        final_answer = _THINK_RE.sub("", assistant_steps[-1].content).strip()
+    else:
+        terminal = "max_steps"
+        final_answer = ""
+
+    return AgentTrajectory(
+        run_id=f"{engine_label}-{task['task_id']}",
+        task_id=task["task_id"],
+        task_text=task["task_text"],
+        model_id=model_id,
+        rollout_engine=EngineFingerprint(
+            name=engine_label,
+            version=engine_version,
+            fingerprint=engine_fingerprint,
+        ),
+        available_tools=list(available_tools or []),
+        steps=steps,
+        success=None,
+        terminal_reason=terminal,  # type: ignore[arg-type]
+        total_assistant_tokens=0,
         final_answer=final_answer,
         created_at=datetime.now(timezone.utc),
     )
