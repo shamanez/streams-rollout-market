@@ -1,437 +1,70 @@
-# Live-run scripts
+# scripts/live/ — live-experiment runbook
 
-Drives a real end-to-end Phase 2.1 / 2.2 run: free-tier endpoint probes,
-then a real Qwen3-32B dense mismatch comparison between vLLM (rollout) and
-HF transformers (reference forward) on the spot instance, then exercises
-the full marketplace stack (validators + OPBC + LiveStore + TrainerClient
-+ FeedbackAggregator) against the resulting SampleGroup.
+Cycle 3 v2 — **probe-at-rollout**. The architecture is intentionally
+simple: one agent, one rollout engine (vLLM), two precisions per
+model, two models, two trainer references. **vLLM is rollout only.**
+No refeed.
 
-The scripts are intentionally minimal — they are operations recipes, not
-reusable code. Each one is self-contained.
-
-## Phase 2.1: free-tier endpoint probes (local)
-
-```bash
-set -a; source .env; set +a
-for prov in groq nvidia cerebras openrouter; do
-  python -m rollout_market.cli.endpoint_probe \
-    --provider "$prov" \
-    --base-url ... --model ... \
-    --api-key-env "${prov^^}_API_KEY" \
-    --out-root "runs/live/$prov"
-done
-python -m rollout_market.cli.endpoint_dashboard \
-  --reports-glob 'runs/live/*/*/endpoint_contract_report.json' \
-  --out-dir runs/live/endpoint_dashboard
+```
+Hermes Agent ── vLLM-hosted Qwen3 (bf16 | fp8)
+                     │
+                     ├── per-token logprobs                        (Dense)
+                     └── per-(token, layer) routed_experts          (MoE)
+                                ↓
+                  AgentTrajectory JSON on disk
+                                ↓
+       captured (prompt_token_ids, response_token_ids)
+                                ↓
+              FSDP teacher-force ─┐
+                                  ├─→ DenseMismatchReport / RouterMismatchReport
+              Megatron teacher-force ─┘
+                                ↓
+                       Hermes-only dashboard
 ```
 
-Findings from the first live round live in `PROGRESS.md` ("Live findings").
+## Inventory
 
-## Phase 2.2: Qwen3-32B dense mismatch on the spot instance
+| File | Role |
+|------|------|
+| `hermes_agent_runner.py` | Driver. Generates trajectories via the real Hermes Agent CLI against a vLLM OpenAI-compatible endpoint; captures per-token logprobs (and per-(token, layer) routed_experts on MoE) onto each `AgentStep`. |
+| `hermes_token_extraction.py` | Pure helper: lifts `(prompt_token_ids, response_token_ids)` pairs from each `AgentStep` (preferred — exact IDs vLLM saw) or falls back to chat-template re-encoding for legacy trajectories. |
+| `agent_tasks_hermes.json` | Task fixtures the Hermes Agent CLI consumes (12 multi-turn tool-using tasks). |
+| `run_fsdp_reference.py` | Trainer-side teacher-force, Dense (FSDP-bf16). Reads `/tmp/rollouts.json` (one entry per assistant turn), writes per-token `trainer_logprobs`. |
+| `run_fsdp_moe_reference.py` | Same, MoE. Emits FSDP-side router decisions. |
+| `run_megatron_reference.py` + `megatron_reference_launch.sh` | Megatron-bf16 Dense teacher-force inside `slimerl/slime` docker. |
+| `run_megatron_moe_reference.py` + `megatron_moe_reference_launch.sh` | Megatron-MoE-bf16 teacher-force. |
+| `publish_dashboards.py` | Re-renders `docs/index.html` from `runs/live/*` reports. |
+| `serve_dashboards.py` | One-command local server for the rendered dashboards. |
+| `marketplace_real.py` | Marketplace-stack integration runner (validators + OPBC + LiveStore + TrainerClient). Independent of the cycle-3 mismatch flow. |
+| `megatron_qwen3_32b_launch.sh` / `megatron_qwen3_32b_runner.sh` | Megatron HF→torch-dist conversion (one-time setup; see `megatron_convert_qwen3_moe.md`). |
+| `serve_qwen_for_agent.sh` / `serve_qwen_for_agent_sglang.sh` / `serve_on_spot.sh` | Bring up the vLLM OpenAI endpoint the Hermes Agent calls into. |
 
-Three stages, all keyed off `~/hf-cache` on the spot host (Qwen3-32B is
-already cached there).
+## Cells (the marketplace matrix)
 
-### 1. vLLM rollout — produces `/tmp/rollout.json`
-
-```bash
-scp scripts/live/run_vllm_rollout.py my-vllm-spot-instance:~/
-ssh my-vllm-spot-instance \
-  'source ~/rmenv/bin/activate && export HF_HOME=/home/ubuntu/hf-cache && \
-   python ~/run_vllm_rollout.py'
+```
+            │  bf16     │  fp8
+────────────┼───────────┼──────────
+FSDP        │   tile    │   tile
+Megatron    │   tile    │   tile
 ```
 
-Loads Qwen3-32B in vLLM 0.20+ with TP=4 across 4× L40S, generates one
-prompt with `temperature=0.7, top_p=0.95, seed=1234, max_tokens=128,
-logprobs=1`, saves `prompt_token_ids`, `response_token_ids`, and
-sampled-token logprobs to `/tmp/rollout.json`.
+…one such 2×2 per model (Dense Qwen3-32B + MoE Qwen3-30B-A3B). Each
+tile is `mean(ESS)` (Dense) or `mean(router_flip_rate)` (MoE)
+computed over the agent's response tokens, aggregated across all
+assistant turns in the trajectory suite.
 
-### 2. HF reference forward — produces `/tmp/trainer.json`
+## Extending to other models / devices (future)
 
-```bash
-scp scripts/live/run_hf_reference.py my-vllm-spot-instance:~/
-ssh my-vllm-spot-instance \
-  'source ~/rmenv/bin/activate && export HF_HOME=/home/ubuntu/hf-cache && \
-   python ~/run_hf_reference.py'
-```
+The design generalises by adding cells: a new (model, precision)
+just runs the same `hermes_agent_runner.py` against a different
+vLLM-hosted endpoint and the trainer-side teacher-force scripts pick
+up the new `runs/live/agent/hermes/<model_slug>/<precision>/`
+directory automatically. No core code changes required.
 
-Loads Qwen3-32B in transformers (`bfloat16`, `attn_implementation=sdpa`,
-`device_map=auto`), teacher-forces the (prompt + response) tokens,
-extracts the trainer-side logprob for each response token from the
-preceding-position logits, saves to `/tmp/trainer.json`.
+See also:
 
-### 3. Pair into a dense_mismatch fixture and run the lab — produces the
-report
-
-```bash
-scp my-vllm-spot-instance:/tmp/rollout.json /tmp/
-scp my-vllm-spot-instance:/tmp/trainer.json /tmp/
-python scripts/live/build_dense_input.py
-python -m rollout_market.cli.dense_mismatch_lab \
-  --input /tmp/dense_mismatch_input.json \
-  --out-root runs/live/dense
-python -m rollout_market.cli.dense_dashboard \
-  --reports-glob 'runs/live/dense/*/dense_mismatch_report.json' \
-  --out-dir runs/live/dense_dashboard
-```
-
-## Cross-precision: FP8 vs bf16
-
-The same scripts drive a quantized rollout via env vars. Both
-`Qwen3-32B-FP8` and `Qwen3-30B-A3B-FP8` are pre-cached on the spot.
-
-```bash
-# 1. FP8 vLLM rollout, bf16 HF reference (the realistic case where the
-#    worker is quantized to fit on fewer GPUs but the trainer keeps full
-#    precision).
-ssh my-vllm-spot-instance \
-  'source ~/rmenv/bin/activate && export HF_HOME=/home/ubuntu/hf-cache && \
-   MODEL=Qwen/Qwen3-32B-FP8 \
-   ROLLOUT_LABEL=vllm-fp8 \
-   TRAINER_REFERENCE=Qwen/Qwen3-32B \
-   python ~/run_vllm_rollout.py'
-ssh my-vllm-spot-instance \
-  'source ~/rmenv/bin/activate && export HF_HOME=/home/ubuntu/hf-cache && \
-   python ~/run_hf_reference.py'
-
-# 2. Pull, build the FP8-flavoured fixture, and run the lab.
-scp my-vllm-spot-instance:/tmp/rollout.json /tmp/rollout_vllm-fp8.json
-scp my-vllm-spot-instance:/tmp/trainer.json /tmp/trainer_vllm-fp8.json
-python scripts/live/build_dense_input.py --variant vllm-fp8
-python -m rollout_market.cli.dense_mismatch_lab \
-  --input /tmp/dense_mismatch_input_vllm-fp8.json \
-  --out-root runs/live/dense
-python -m rollout_market.cli.dense_dashboard \
-  --reports-glob 'runs/live/dense/*/dense_mismatch_report.json' \
-  --out-dir runs/live/dense_dashboard
-```
-
-The dashboard then carries one row per (rollout_engine,
-trainer_engine) pair — `vllm -> hf-transformers` and
-`vllm-fp8 -> hf-transformers` — and the per-pair ESS / clipped /
-worst-max-log-ratio columns make the precision drift directly visible.
-
-## sglang as a second rollout engine
-
-A separate venv (`~/sglenv`) keeps sglang's CUDA toolchain isolated
-from vLLM. sglang needs nvcc + CUDA libs; the spot host already has a
-CUDA-13 toolchain at
-`/opt/pytorch/lib/python3.13/site-packages/nvidia/cu13`, so the runner
-points `CUDA_HOME` there. sglang's CUDA-graph capture and FlashInfer
-JIT both fail without that, so the script also passes
-`disable_cuda_graph=True, attention_backend="triton"` (triton has its
-own JIT and works without nvcc as long as the linker can find cu13
-runtime libs).
-
-```bash
-ssh my-vllm-spot-instance \
-  'export CUDA_HOME=/opt/pytorch/lib/python3.13/site-packages/nvidia/cu13
-   export PATH=$CUDA_HOME/bin:$PATH
-   source ~/sglenv/bin/activate
-   export HF_HOME=/home/ubuntu/hf-cache
-   MODEL=Qwen/Qwen3-32B-FP8 \
-   ROLLOUT_LABEL=sglang-fp8 \
-   TRAINER_REFERENCE=Qwen/Qwen3-32B \
-   python ~/run_sglang_rollout.py'
-ssh my-vllm-spot-instance \
-  'source ~/rmenv/bin/activate && export HF_HOME=/home/ubuntu/hf-cache && \
-   python ~/run_hf_reference.py'
-
-scp my-vllm-spot-instance:/tmp/rollout.json /tmp/rollout_sglang-fp8.json
-scp my-vllm-spot-instance:/tmp/trainer.json /tmp/trainer_sglang-fp8.json
-# (also do bf16 in the same shape: /tmp/rollout_sglang-bf16.json, …)
-python scripts/live/build_dense_input.py --variant sglang-bf16
-python scripts/live/build_dense_input.py --variant sglang-fp8
-python -m rollout_market.cli.dense_mismatch_lab \
-  --input /tmp/dense_mismatch_input_sglang-bf16.json \
-  --out-root runs/live/dense_sglang_bf16
-python -m rollout_market.cli.dense_mismatch_lab \
-  --input /tmp/dense_mismatch_input_sglang-fp8.json \
-  --out-root runs/live/dense_sglang_fp8
-python -m rollout_market.cli.dense_dashboard \
-  --reports-glob 'runs/live/dense*/*/dense_mismatch_report.json' \
-  --out-dir runs/live/dense_dashboard
-```
-
-The dashboard then carries four `(rollout_engine, trainer_engine)`
-rows: `vllm`, `vllm-fp8`, `sglang`, `sglang-fp8`, all paired with
-`hf-transformers`. The per-pair ESS / mean |Δlogp| / worst max
-\|log_ratio\| columns let a reviewer see at a glance which engine ×
-precision combinations stay closest to the trainer's logprob view.
-
-## Multi-prompt matrix (8 prompts × 4 engine cells)
-
-The same scripts batch when `PROMPTS_FILE` points at a JSON list of
-strings. `scripts/live/prompts.json` carries 8 reasoning + coding +
-translation + meta prompts. Single-prompt mode (no `PROMPTS_FILE`)
-still works and writes the legacy `/tmp/rollout.json` flat schema.
-
-```bash
-# 1. Run each engine cell. Each emits /tmp/rollouts.json + /tmp/trainers.json
-#    on the spot, which we pull labelled.
-for cell in vllm-bf16 vllm-fp8 sglang-bf16 sglang-fp8; do
-    case "$cell" in
-        vllm-bf16)   ENV="MODEL=Qwen/Qwen3-32B ROLLOUT_LABEL=vllm-bf16 TRAINER_REFERENCE=Qwen/Qwen3-32B" RUNNER=run_vllm_rollout.py PREP="" ;;
-        vllm-fp8)    ENV="MODEL=Qwen/Qwen3-32B-FP8 ROLLOUT_LABEL=vllm-fp8 TRAINER_REFERENCE=Qwen/Qwen3-32B" RUNNER=run_vllm_rollout.py PREP="" ;;
-        sglang-bf16) ENV="MODEL=Qwen/Qwen3-32B ROLLOUT_LABEL=sglang-bf16 TRAINER_REFERENCE=Qwen/Qwen3-32B" RUNNER=run_sglang_rollout.py PREP="export CUDA_HOME=/opt/pytorch/lib/python3.13/site-packages/nvidia/cu13; export PATH=\$CUDA_HOME/bin:\$PATH;" ;;
-        sglang-fp8)  ENV="MODEL=Qwen/Qwen3-32B-FP8 ROLLOUT_LABEL=sglang-fp8 TRAINER_REFERENCE=Qwen/Qwen3-32B" RUNNER=run_sglang_rollout.py PREP="export CUDA_HOME=/opt/pytorch/lib/python3.13/site-packages/nvidia/cu13; export PATH=\$CUDA_HOME/bin:\$PATH;" ;;
-    esac
-    case "$RUNNER" in run_sglang_rollout.py) VENV=sglenv ;; *) VENV=rmenv ;; esac
-    ssh my-vllm-spot-instance "$PREP source ~/$VENV/bin/activate && export HF_HOME=/home/ubuntu/hf-cache && cd ~ && PROMPTS_FILE=/home/ubuntu/prompts.json $ENV python $RUNNER"
-    ssh my-vllm-spot-instance "source ~/rmenv/bin/activate && export HF_HOME=/home/ubuntu/hf-cache && cd ~ && python run_hf_reference.py"
-    scp my-vllm-spot-instance:/tmp/rollouts.json "/tmp/rollouts.$cell.json"
-    scp my-vllm-spot-instance:/tmp/trainers.json "/tmp/trainers.$cell.json"
-done
-
-# 2. Build 32 fixtures (4 cells × 8 prompts), one per (engine, prompt) pair.
-for cell in vllm-bf16 vllm-fp8 sglang-bf16 sglang-fp8; do
-    python scripts/live/build_dense_matrix.py \
-        --label "$cell" \
-        --rollouts "/tmp/rollouts.$cell.json" \
-        --trainers "/tmp/trainers.$cell.json" \
-        --out-dir "/tmp/fixtures/$cell"
-done
-
-# 3. Run the lab on every fixture, then aggregate.
-for f in /tmp/fixtures/*/*.json; do
-    python -m rollout_market.cli.dense_mismatch_lab --input "$f" --out-root runs/live/dense
-done
-python -m rollout_market.cli.dense_dashboard \
-    --reports-glob 'runs/live/dense/*/dense_mismatch_report.json' \
-    --out-dir runs/live/dense_dashboard
-```
-
-The dashboard's per-pair aggregates now reflect means across 8 prompts
-× 128 tokens = 1024 tokens per cell, so the per-cell ESS / clipped /
-worst max\|log_ratio\| numbers carry actual statistical weight rather
-than a single-prompt point estimate.
-
-## MoE router live run (Qwen3-30B-A3B FP8 vs bf16)
-
-The router-mismatch lab needs per-(token, layer, top_k) expert IDs
-from both sides. vLLM's chat-completions API does not surface the
-router's per-layer decisions, so this run uses HF transformers for
-both sides.
-
-`scripts/live/run_moe_router.py` does three stages:
-
-  1. Generate one response from the bf16 checkpoint with sampling
-     (temperature 0.7, top_p 0.95, seed 1234) and save the resulting
-     prompt + response token IDs.
-  2. Teacher-force the (prompt + response) tokens through the bf16
-     checkpoint with `output_router_logits=True`, then take top-k of
-     the router logits at each MoE layer for every response position.
-     This is the *trainer-side* RouterTrace.
-  3. Same teacher-force through the FP8 checkpoint
-     (Qwen3-30B-A3B-FP8). This is the *rollout-side* RouterTrace.
-
-Spot-host setup notes:
-- `pip install -U kernels` is required for HF transformers to load
-  the FP8 finegrained MoE checkpoint.
-- The HF cache directory must be writable by the runner; on this host
-  we ran `sudo chown -R ubuntu:ubuntu ~/hf-cache` once after install.
-
-```bash
-scp scripts/live/run_moe_router.py my-vllm-spot-instance:~/
-ssh my-vllm-spot-instance \
-  'source ~/rmenv/bin/activate && export HF_HOME=/home/ubuntu/hf-cache && \
-   python ~/run_moe_router.py'
-scp my-vllm-spot-instance:/tmp/router.json /tmp/router.json
-python scripts/live/build_router_input.py
-python -m rollout_market.cli.router_mismatch_lab \
-  --input /tmp/router_mismatch_input.json --out-root runs/live/router
-python -m rollout_market.cli.router_dashboard \
-  --reports-glob 'runs/live/router/*/router_mismatch_report.json' \
-  --out-dir runs/live/router_dashboard
-```
-
-## Agent trajectory matrix (multi-step, tool-using)
-
-The trajectory-level lens for the mismatch story. vLLM-or-sglang serves
-Qwen3-32B with `--enable-auto-tool-choice`; the Mac orchestrator at
-`scripts/live/agent_runner.py` drives a hand-rolled agent loop
-(deterministic simulated tools — `web_search`, `calculator`,
-`python_eval`, `read_file`) and writes one `AgentTrajectory` JSON per
-task. The lab + dashboard from PR #27 do the rest.
-
-```bash
-# 1. Start vLLM (or sglang) on the spot with tool calling enabled.
-ssh my-vllm-spot-instance \
-  'MODEL=Qwen/Qwen3-32B nohup bash ~/serve_qwen_for_agent.sh \
-   > /tmp/vllm_serve.log 2>&1 &'
-# Wait for "Application startup complete" in the log, then open the
-# tunnel.
-ssh -f -N -L 8000:localhost:8000 my-vllm-spot-instance
-
-# 2. Run the agent matrix (one engine cell at a time — load each model
-#    once, drain all tasks against it).
-BASE_URL=http://localhost:8000/v1 \
-MODEL=Qwen/Qwen3-32B \
-MODEL_ID=Qwen/Qwen3-32B \
-ENGINE_LABEL=vllm-bf16 \
-ENGINE_FINGERPRINT=sha256:vllm-0.20.1-tp4-bf16-l40s \
-OUT_DIR=runs/live/agent/vllm-bf16 \
-python scripts/live/agent_runner.py
-# Tear down, swap to FP8 / sglang, and repeat.
-
-# 3. Build divergence reports against the bf16 reference.
-for engine in vllm-fp8 sglang-bf16 sglang-fp8; do
-    for task in $(jq -r '.[].task_id' scripts/live/agent_tasks.json); do
-        python -m rollout_market.cli.agent_trajectory_lab \
-            --rollout "runs/live/agent/$engine/$task.json" \
-            --trainer "runs/live/agent/vllm-bf16/$task.json" \
-            --out-root runs/live/agent_diff
-    done
-done
-
-# 4. Aggregate.
-python -m rollout_market.cli.agent_dashboard \
-    --reports-glob 'runs/live/agent_diff/*/agent_divergence_report.json' \
-    --out-dir runs/live/agent_dashboard
-```
-
-Two operational notes:
-- `MODEL_ID` is the *logical* checkpoint; `MODEL` is what the API
-  expects. Quantized variants (`Qwen/Qwen3-32B-FP8`) and bf16
-  reference (`Qwen/Qwen3-32B`) share `MODEL_ID=Qwen/Qwen3-32B` so the
-  divergence comparator treats them as the same checkpoint, different
-  engine.
-- Qwen3 has a "thinking mode" that interleaves chain-of-thought before
-  answering. The runner disables it
-  (`extra_body={"chat_template_kwargs": {"enable_thinking": False}}`)
-  so the 256-token budget is spent on tool calls + concise answers
-  instead of CoT.
-
-## Run the dashboard locally
-
-After any of the runs above, you can browse all of the dashboards in
-one place:
-
-```bash
-python scripts/live/serve_dashboards.py
-# Opens http://127.0.0.1:8765/live/index.html in your browser.
-# Each dashboard card carries a one-line headline pulled from the
-# corresponding JSON, plus a link into the full HTML view.
-```
-
-Use `--port 9000` to bind a different port, `--no-browser` to skip
-auto-opening, or `--write-only` to regenerate `runs/live/index.html`
-without starting a server.
-
-## Marketplace stack validation
-
-```bash
-python scripts/live/marketplace_real.py --variant bf16   # honest + 2 toxic
-python scripts/live/marketplace_real.py --variant fp8    # fp8 vs bf16 manifest + fp8 honest
-```
-
-Builds three SampleGroups from the same real rollout (one honest, two
-toxic) and pushes them through `validate_group_against_lease`,
-`compute_budget_report`, `decide_group`, `InMemoryLiveStore.submit`,
-`TrainerClient.fetch`, and `FeedbackAggregator.ingest`. Exits 0 when the
-honest group reaches `train` with `within_budget`, the toxic-tokenizer
-group is rejected with `tokenizer_mismatch`, and the toxic-no-logprobs
-group is rejected with `missing_logprobs`.
-
-## Spot instance setup notes
-
-- `python3.12-venv` and `python3.12-dev` must be installed (`sudo apt
-  install`). `python3.12-dev` provides `Python.h`, which Triton's CUDA
-  kernel JIT needs.
-- vLLM is installed into `~/rmenv` once and reused across runs:
-  `python3 -m venv ~/rmenv && source ~/rmenv/bin/activate && pip install
-  vllm transformers accelerate`.
-- The HF cache is pre-populated at `~/hf-cache`. Both Qwen3-32B and
-  Qwen3-30B-A3B (plus FP8 variants) are present.
-- Spot instances are reclaimable. Treat `/tmp/*.json` artefacts as
-  ephemeral; copy them off the host as soon as a run completes.
-
-
-## Device fingerprint env vars (STEER `dashboard.device_axis`)
-
-The mismatch-lab CLIs (`dense_mismatch_lab`, `router_mismatch_lab`,
-`agent_trajectory_lab`) pick up an optional `DeviceFingerprint` from
-the environment so every report carries the GPU + host it ran on.
-Backwards-compatible: with none of these set, the field is `None` and
-dashboards bucket the run as `L40S (g6e.12xlarge)` (the legacy spot
-instance).
-
-| Env var | Field | Example |
-| --- | --- | --- |
-| `DEVICE_VENDOR` | `vendor` | `NVIDIA` |
-| `DEVICE_FAMILY` | `family` | `L40S`, `H100`, `H200`, `MI300X` |
-| `DEVICE_CUDA_COMPUTE` | `cuda_compute` | `8.9`, `9.0` |
-| `DEVICE_VRAM_GB` | `vram_gb` | `24`, `80` |
-| `DEVICE_HOST_LABEL` | `host_label` | `g6e.12xlarge`, `p5.48xlarge` |
-
-Example::
-
-    DEVICE_VENDOR=NVIDIA \
-    DEVICE_FAMILY=H100 \
-    DEVICE_CUDA_COMPUTE=9.0 \
-    DEVICE_VRAM_GB=80 \
-    DEVICE_HOST_LABEL=p5.48xlarge \
-    python -m rollout_market.cli.dense_mismatch_lab \
-        --input /tmp/rollout.json \
-        --out-root runs/live/dense
-
-## `build_dense_input.py` consolidation (STEER `cleanup.consolidate_build_dense_input`)
-
-The three pre-cleanup scripts (`build_dense_input.py`,
-`build_dense_input_fp8.py`, `build_dense_input_sglang.py`) collapse
-into a single env-driven entry point: `scripts/live/build_dense_input.py`.
-
-Pick a variant with `--variant`:
-
-| variant         | reads                                                            | writes                                              |
-| --------------- | ---------------------------------------------------------------- | --------------------------------------------------- |
-| `vllm-bf16`     | `/tmp/rollout_vllm-bf16.json` + `/tmp/trainer_vllm-bf16.json` (falls back to `/tmp/rollout.json` + `/tmp/trainer.json` for back-compat) | `/tmp/dense_mismatch_input_vllm-bf16.json` plus the legacy mirror `/tmp/dense_mismatch_input.json` |
-| `vllm-fp8`      | `/tmp/rollout_vllm-fp8.json` + `/tmp/trainer_vllm-fp8.json`     | `/tmp/dense_mismatch_input_vllm-fp8.json`           |
-| `sglang-bf16`   | `/tmp/rollout_sglang-bf16.json` + `/tmp/trainer_sglang-bf16.json` | `/tmp/dense_mismatch_input_sglang-bf16.json`        |
-| `sglang-fp8`    | `/tmp/rollout_sglang-fp8.json` + `/tmp/trainer_sglang-fp8.json` | `/tmp/dense_mismatch_input_sglang-fp8.json`         |
-| `megatron-bf16` | `/tmp/rollout_megatron-bf16.json` + `/tmp/trainer_megatron-bf16.json` | `/tmp/dense_mismatch_input_megatron-bf16.json`      |
-
-The variant picks the right `rollout_engine`, `trainer_engine`,
-`precision_class`, and `quantization_class` for the
-`DenseMismatchReport` shape. Default is `vllm-bf16` (zero-argument
-invocation behaves like the original script).
-
-## Megatron-LM as a trainer-side reference (runbook)
-
-See `scripts/live/megatron_convert_qwen3_moe.md` for the self-contained
-runbook that converts `Qwen/Qwen3-30B-A3B` from HF to a Megatron
-torch-dist checkpoint on the spot instance, using the pinned
-`slimerl/slime:latest` docker image. Once the dist-ckpt is built, the
-existing live scripts pick it up via the `TRAINER_REFERENCE=megatron`
-env var (plus `MEGATRON_CKPT_DIR`) and feed it into
-`router_mismatch_lab` / `dense_mismatch_lab` without code changes.
-This is the path that fills the MEGATRON row on the two
-`/docs/index.html` matrices.
-
-### Dense Qwen3-32B variant (same image, dense MODEL_ARGS)
-
-`scripts/live/megatron_qwen3_32b_launch.sh` + `…_runner.sh` is the
-sibling runbook for the dense model. The launcher bind-mounts the
-existing `~/hf-cache/hub/models--Qwen--Qwen3-32B` repo (read-only) at
-`/root/Qwen3-32B-repo` and the runner picks the snapshot dir from
-inside the bind-mount so the snapshot's `../../blobs/...` relative
-symlinks resolve — the previous staging layout used host-absolute
-symlinks that the container could not follow and the tokenizer init
-crashed before any conversion could happen. Drop both files on the
-spot host under `~/megatron_conversion/` and invoke the launcher:
-
-```bash
-scp scripts/live/megatron_qwen3_32b_launch.sh \
-    my-vllm-spot-instance:~/megatron_conversion/launch_qwen3_32b.sh
-scp scripts/live/megatron_qwen3_32b_runner.sh \
-    my-vllm-spot-instance:~/megatron_conversion/runner_qwen3_32b.sh
-ssh my-vllm-spot-instance \
-  'chmod +x ~/megatron_conversion/{launch,runner}_qwen3_32b.sh && \
-   ~/megatron_conversion/launch_qwen3_32b.sh'
-```
-
-The launcher writes the docker stdout/stderr to
-`~/megatron_conversion/logs/qwen3_32b_convert.out` and the dist
-checkpoint lands under `~/megatron_conversion/qwen3_32b_torch_dist/`.
-Scp the `latest_checkpointed_iteration.txt` marker back as the
-evidence artefact.
+- `hermes_integration_notes.md` — design rationale for the Hermes
+  Agent integration.
+- `megatron_convert_qwen3_moe.md` — Megatron checkpoint conversion
+  runbook.
+- `../../CLAUDE.md` — project-level architecture + firewall rules.

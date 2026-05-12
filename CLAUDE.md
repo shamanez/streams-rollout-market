@@ -14,104 +14,75 @@ ruff format --check .                  # format check
 python examples/local_worker_demo.py   # smoke test
 ```
 
+## Architecture (one sentence)
+
+Hermes Agent generates multi-turn trajectories against vLLM-hosted
+Qwen3 models at two precisions (bf16, fp8) per model; vLLM emits
+per-token logprobs and (for MoE) per-(token, layer) routed_experts
+during generation; we then teacher-force the **exact same** captured
+`(prompt_token_ids, response_token_ids)` through FSDP and
+Megatron-LM to simulate a trainer's forward pass; the dashboard shows
+the resulting training-inference drift per `{trainer, precision}`
+tile. **vLLM is rollout only — no refeed anywhere.**
+
 ## How to run
 
 ### View the dashboard locally
 
 ```bash
-# 1. Re-render docs/index.html from the latest runs/live/*.json bundles.
-python scripts/live/publish_dashboards.py            # writes to docs/
-# 2. Serve docs/ and open the index in a browser.
+python scripts/live/publish_dashboards.py     # re-render docs/index.html
 python -m http.server -d docs 8000 &
 open http://localhost:8000/
 ```
 
 The shipped `docs/index.html` answers one question above the fold:
-*does engine + precision + device change inference-time behaviour
-enough to matter for crowdsourced MoE rollouts?* Two matrices (dense
-Qwen3-32B + MoE Qwen3-30B-A3B), four green/amber tiles each, traffic-
-light coloured against per-metric thresholds. Headline numbers come
-from `runs/live/{dense,router,agent}_dashboard.{html,json}`.
+*how big is the training-inference mismatch for an agent under each
+(trainer, precision) combination?* Two matrices (Hermes Agent Dense
+Qwen3-32B + Hermes Agent MoE Qwen3-30B-A3B), four traffic-light tiles
+each, computed over the response tokens of all assistant turns in
+the trajectory suite.
 
-### Dense matrix (Qwen3-32B) — vLLM rollout vs FSDP/Megatron reference
+### End-to-end pipeline (cycle 3 v2 — probe-at-rollout)
 
-Each cell is one `live(...)` commit. Env-driven, runs on
-`my-vllm-spot-instance`. Outputs land in `runs/live/dense/`.
+Driven entirely from `scripts/live/hermes_agent_runner.py`. Each
+assistant turn captures its own `(prompt_token_ids,
+response_token_ids, response_logprobs, response_routed_experts)`
+directly from the vLLM forward pass; no second rollout pass is ever
+needed.
 
 ```bash
-# vLLM-bf16 rollout (writes /tmp/rollout.json on the spot)
-ssh my-vllm-spot-instance 'cd ~ && VLLM_DTYPE=bfloat16 \
-  python scripts/live/run_vllm_rollout.py'
+# 1. Hermes Agent rollouts with probes (per model, per precision).
+ssh my-vllm-spot-instance 'cd ~ && \
+  MODEL=Qwen/Qwen3-32B PRECISION=bf16 \
+  OUT_DIR=runs/live/agent/hermes/qwen3-32b/bf16 \
+  python scripts/live/hermes_agent_runner.py'
+# (repeat with PRECISION=fp8 and MODEL=Qwen/Qwen3-30B-A3B for the
+#  four cells: dense × {bf16, fp8}, MoE × {bf16, fp8})
 
-# FSDP-bf16 teacher-force (writes /tmp/trainer.json)
+# 2. Trainer-side teacher-force on the captured token pairs.
 ssh my-vllm-spot-instance 'cd ~ && torchrun --nproc-per-node 4 \
-  scripts/live/run_fsdp_reference.py'
-
-# Megatron-bf16 teacher-force inside slimerl/slime container
+  scripts/live/run_fsdp_reference.py'          # Dense
+ssh my-vllm-spot-instance 'cd ~ && torchrun --nproc-per-node 4 \
+  scripts/live/run_fsdp_moe_reference.py'      # MoE
 ssh my-vllm-spot-instance 'bash scripts/live/megatron_reference_launch.sh'
-
-# Pair them into a DenseMismatchReport and render the tile.
-python scripts/live/build_dense_input.py --variant vllm-bf16 \
-  --out runs/live/dense/vllm-bf16-fsdp-bf16.json
-python -m rollout_market.cli.dense_dashboard \
-  --reports-glob 'runs/live/dense/*.json' \
-  --out-dir runs/live/dense_dashboard
-```
-
-Variants supported by `build_dense_input.py --variant`:
-`{vllm-bf16, vllm-fp8, sglang-bf16, sglang-fp8, megatron-bf16}`.
-Currently shipped tiles: 4 (FSDP × {bf16,fp8} + Megatron × {bf16,fp8}).
-
-### MoE matrix (Qwen3-30B-A3B) — router_flip_rate per (engine × precision)
-
-Mirror of the dense path but with router-trace emission. vLLM-fp8 MoE
-runs at TP=2 (TP=4 fails vLLM's FP8 `block_n=128` constraint).
-
-```bash
-# vLLM MoE rollout with router traces (writes /tmp/vllm_router.json)
-ssh my-vllm-spot-instance 'cd ~ && VLLM_DTYPE=bfloat16 \
-  python scripts/live/run_vllm_moe_rollout.py'
-
-# FSDP MoE reference (writes /tmp/fsdp_router.json)
-ssh my-vllm-spot-instance 'cd ~ && torchrun --nproc-per-node 4 \
-  scripts/live/run_fsdp_moe_reference.py'
-
-# Megatron MoE reference inside slimerl/slime container
 ssh my-vllm-spot-instance 'bash scripts/live/megatron_moe_reference_launch.sh'
 
-# Pair into a RouterMismatchReport; --variant picks one of four cells.
-python scripts/live/build_router_input_pair.py \
-  --rollout-input /tmp/vllm_router.json \
-  --trainer-input /tmp/fsdp_router.json \
-  --variant vllm-bf16-fsdp-bf16 \
-  --out runs/live/router/<variant>.json
-python -m rollout_market.cli.router_dashboard \
-  --reports-glob 'runs/live/router/*.json' \
-  --out-dir runs/live/router_dashboard
+# 3. Pair the captured rollout-side signals against trainer outputs
+#    into Dense/RouterMismatchReports, then re-render the dashboard.
+python scripts/live/publish_dashboards.py
 ```
 
-Variants: `{vllm-bf16, vllm-fp8} × {fsdp-bf16, megatron-bf16}` (4 cells).
+Extensibility: adding another vLLM-hosted model / device only adds
+new (model, precision) cells; the architecture above is unchanged.
 
 ### Autonomous loop
 
 ```bash
-/autonomous-loop              # picks up from PROGRESS.md "Next work"
+/autonomous-loop              # picks up from PROGRESS.md / STEER.md
 touch AGENT_STOP              # halt after current iteration
 rm AGENT_STOP                 # resume
 bash .claude/scripts/steer.sh "<directive>"   # re-arm STEER.md
 ```
-
-### Free-tier endpoint probes (legacy / appendix)
-
-```bash
-set -a; source .env; set +a
-python -m rollout_market.cli.endpoint_probe --provider groq \
-  --base-url https://api.groq.com/openai/v1 \
-  --model llama-3.3-70b-versatile --api-key-env GROQ_API_KEY \
-  --out-root runs/live/groq
-```
-
-`scripts/live/README.md` has the full per-provider matrix.
 
 ## Phase 1 constraint: FREE TIER ONLY (MANDATORY)
 

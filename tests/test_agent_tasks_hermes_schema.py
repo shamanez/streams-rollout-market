@@ -9,24 +9,11 @@ the run.
 
 from __future__ import annotations
 
-import importlib.util
 import json
 from pathlib import Path
-from types import ModuleType
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _TASKS_PATH = _REPO_ROOT / "scripts" / "live" / "agent_tasks_hermes.json"
-
-
-def _load_agent_runner() -> ModuleType:
-    spec = importlib.util.spec_from_file_location(
-        "agent_runner_module",
-        _REPO_ROOT / "scripts" / "live" / "agent_runner.py",
-    )
-    assert spec and spec.loader
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
 
 
 def _load_tasks() -> list[dict]:
@@ -61,17 +48,21 @@ def test_each_task_has_required_fields() -> None:
                 assert isinstance(tool, str) and tool
 
 
-# --- coverage against TOOL_SCHEMAS -------------------------------------------
+# --- coverage against the tool-name allowlist --------------------------------
+
+# The Hermes Agent CLI's stock tool surface. Pinned here so a task fixture
+# can't silently reference a tool the harness doesn't ship.
+_KNOWN_TOOL_NAMES = frozenset(
+    {"web_search", "read_file", "write_file", "python_eval", "calculator"}
+)
 
 
 def test_expected_tools_subset_of_tool_schemas() -> None:
-    mod = _load_agent_runner()
-    schema_names = {t["function"]["name"] for t in mod.TOOL_SCHEMAS}
     for t in _load_tasks():
         for tool in t.get("expected_tools", []):
-            assert tool in schema_names, (
+            assert tool in _KNOWN_TOOL_NAMES, (
                 f"task {t['task_id']!r} references unknown tool {tool!r}; "
-                f"known tools: {sorted(schema_names)}"
+                f"known tools: {sorted(_KNOWN_TOOL_NAMES)}"
             )
 
 
@@ -94,29 +85,6 @@ def test_at_least_one_task_has_empty_or_absent_expected_tools() -> None:
     assert no_tool_tasks, (
         "need >=1 task with empty or absent expected_tools (the no-op-trivia case)"
     )
-
-
-# --- _SIM_FILES new entries --------------------------------------------------
-
-
-def test_sim_files_contains_fib_and_clip() -> None:
-    """Tasks 5 and 9 reference /tmp/fib.py and /tmp/clip.py — both must be
-    canned in agent_runner.py::_SIM_FILES so the simulated read_file tool
-    returns deterministic content."""
-    mod = _load_agent_runner()
-    assert "/tmp/fib.py" in mod._SIM_FILES, "_SIM_FILES missing /tmp/fib.py"
-    assert "/tmp/clip.py" in mod._SIM_FILES, "_SIM_FILES missing /tmp/clip.py"
-    # The fib fixture must contain the off-by-one bug the task asks about.
-    fib_src = mod._SIM_FILES["/tmp/fib.py"]
-    assert "def fib" in fib_src and "return 1" in fib_src
-    clip_src = mod._SIM_FILES["/tmp/clip.py"]
-    assert "def clip" in clip_src and "return lo" in clip_src and "return hi" in clip_src
-
-
-def test_sim_files_factorial_still_present() -> None:
-    """Non-regression: don't accidentally drop the original factorial fixture."""
-    mod = _load_agent_runner()
-    assert "/tmp/factorial.py" in mod._SIM_FILES
 
 
 # --- specific task contracts (light) -----------------------------------------

@@ -7,9 +7,10 @@ import-safe) and exercises only the pure-Python helpers
 ``_build_megatron_argv``, ``_load_rollouts``).
 
 These four helpers carry the load-bearing invariants:
-  - Predicting positions: ``P - 1 + i`` (same as run_hf_reference.py).
-  - Output JSON shape matches the run_hf_reference / run_fsdp_reference
-    schema so ``build_dense_input.py --variant megatron-bf16`` ingests it.
+  - Predicting positions: ``P - 1 + i`` (the position of the (i+1)-th
+    response token in the [prompt|response] sequence).
+  - Output JSON shape matches the ``run_fsdp_reference.py`` trainer
+    payload schema so downstream pairers consume both interchangeably.
   - Megatron CLI args include the dense Qwen3-32B MODEL_ARGS plus the
     inference-only knobs (TP=4, --no-load-optim, --bf16).
   - Single-prompt /tmp/rollout.json fallback works.
@@ -47,7 +48,7 @@ def test_response_prediction_positions_matches_hf_reference_indexing() -> None:
 
 
 def test_format_trainer_payload_has_run_hf_reference_keys() -> None:
-    """The payload must carry the same key shape as run_hf_reference.py."""
+    """The payload must carry the same key shape as run_fsdp_reference.py."""
     mod = _load_script_module()
     payload = mod.format_trainer_payload(
         model_id="Qwen/Qwen3-32B",
