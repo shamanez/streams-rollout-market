@@ -1,9 +1,43 @@
 # PROGRESS.md — Agent Handoff State
 
 ## Last updated
-2026-05-12 (cycle 3 v2 iter 2 setup — adapter probe pass-through + MAX_STEPS bumped)
+2026-05-12 (cycle 3 v2 iter 2 setup-2 — build_hermes_dense_input builder shipped)
 
-## Cycle 3 v2 iter 2 — setup commit (2026-05-12)
+## Cycle 3 v2 iter 2 — setup-2 commit (2026-05-12)
+
+`hermes_agent.dense_capture_then_fsdp` part (c)-prep shipped on
+`research/hermes-dense-build-input`:
+
+- `scripts/live/build_hermes_dense_input.py` walks a Hermes trajectory
+  directory and flattens probe-bearing assistant turns into the
+  `/tmp/rollouts.json` shape `run_fsdp_reference.py` already consumes.
+  It also writes an index file `/tmp/hermes_dense_index_<precision>.json`
+  mapping `prompt_idx → (task_id, trajectory_run_id, assistant_turn_idx,
+  num_tokens, response_logprobs)` so the downstream pairing step can
+  join FSDP's `/tmp/trainers.json` outputs back to the originating turn
+  and to the rollout-side logprobs captured by vLLM.
+- Skips turns missing `prompt_token_ids` / `response_token_ids` /
+  `response_logprobs` (records the reason in `index["skipped"]`).
+- Rejects mixed `model_id` across input trajectories without an
+  explicit `--model-id-override`.
+- 10 new offline tests (synthetic AgentTrajectory fixtures). 403
+  passing (+10 from 393).
+
+Once the spot side captures the probes (part b — pending on
+hermes-agent batch_runner instrumentation), the pipeline becomes:
+
+  1. `python scripts/live/build_hermes_dense_input.py
+       --trajectory-dir runs/live/agent/hermes/qwen3-32b/bf16
+       --precision-class bf16`
+  2. scp /tmp/rollouts_hermes_bf16.json -> spot:/tmp/rollouts.json
+  3. ssh spot 'torchrun --nproc-per-node 4 run_fsdp_reference.py'
+  4. scp spot:/tmp/trainers.json -> /tmp/trainers_hermes_bf16.json
+  5. python scripts/live/pair_hermes_dense_reports.py  # next iter
+
+Spot reachable as of 2026-05-12T05:31Z. No hermes-agent install on
+spot currently — that re-setup is the next blocker for part (b).
+
+## Cycle 3 v2 iter 2 — setup-1 commit (2026-05-12)
 
 `hermes_agent.dense_capture_then_fsdp` part (a) shipped on
 `research/hermes-dense-capture-setup`:
