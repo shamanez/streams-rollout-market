@@ -139,12 +139,15 @@ dispatcher would price replay vs fresh.
 which is wiped on every script run. Move them under `runs/live/`
 (gitignored) so a session-spanning history is preserved.
 
-### 17. Dashboard "click through to detail"
-The agent dashboard rolls 4 engine pairs × 6 tasks into 24 cells.
-Each cell links to the full side-by-side trajectory diff that the
-existing `agent_trajectory_lab` produces — but the per-task pages
-aren't currently on the public site. Two-line change to surface
-them.
+### 17. ~~Dashboard "click through to detail"~~ **(shipped 2026-05-12, commit d27bf29)**
+`scripts/live/publish_dashboards.py::_copy_agent_diff_click_through`
+walks `runs/live/agent_diff/<pair-slug>/<ts-uuid>/agent_divergence_report.{json,html}`,
+picks the latest replicate per `(pair_slug, task_id)`, and emits
+`docs/agent_diff/<pair-slug>/<task-id>.html`. 54 pages currently live
+under `docs/agent_diff/` (5 pair slugs × ~11 tasks). The matrix tiles
+don't yet deep-link to these pages — that's a one-line href change
+on the next iteration. Follow-up: surface a per-pair task-list table
+in the agent dashboard with direct links.
 
 ### 18. `serve_on_spot.sh` should detect IP rotation
 The spot's public IP is dynamic across stop/start. The script

@@ -231,6 +231,13 @@ would come from `docs/future_research.md`.)
 
 ## Research follow-ups shipped (post-Hermes)
 
+- **Dashboard click-through pages (2026-05-12, future_research Q17)**.
+  `publish_dashboards.py` now copies the latest per-(pair, task)
+  `agent_divergence_report.html` to
+  `docs/agent_diff/<pair-slug>/<task-id>.html`. 54 stable URLs across
+  5 pair slugs. The matrix tiles don't yet deep link to them; one-line
+  href update is the next follow-up.
+
 - **n=30 hermes rollouts (2026-05-12)**. Added bf16_rep2 batches for
   Dense (n=12) and MoE (n=9) and a replicate-aware pair script.
   Dense tiles now pair against n=24 bf16 reference, MoE TP=4 path
