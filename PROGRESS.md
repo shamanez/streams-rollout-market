@@ -1,7 +1,30 @@
 # PROGRESS.md — Agent Handoff State
 
 ## Last updated
-2026-05-12 (cycle 3 v2 iter 2 setup-5 — logprob capture proxy shipped)
+2026-05-12 (cycle 3 v2 iter 2 setup-6 — end-to-end pipeline integration test shipped)
+
+## Cycle 3 v2 iter 2 — setup-6 commit (2026-05-12)
+
+`hermes_agent.dense_capture_then_fsdp` consolidation shipped on
+`research/hermes-dense-e2e-test`:
+
+- `tests/test_hermes_dense_pipeline_e2e.py` wires every cycle-3 v2
+  iter 2 setup component end-to-end through their pure-function
+  seams: `proxy.extract_probes` → `merger.merge_to_trajectories` →
+  `builder.build_rollouts_and_index` → fake trainer →
+  `pair.pair_reports` → `DenseMismatchReport`. Asserts both the
+  happy path (matched logprobs ⇒ ESS=1.0) AND the divergence path
+  (per-token variance ⇒ ESS<0.99) so internal contract drift
+  between components cannot silently break the pipeline.
+- 2 new tests; **431 passing (+2 from 429)**.
+
+This closes the code-side of cycle-3 v2 iter 2. The remaining gap is
+operational: an operator-driven session to install hermes-agent on
+the spot, point it at the logprob_capture_proxy, run the 12 Hermes
+tasks at bf16 + fp8, scp + torchrun the FSDP teacher-force, then
+re-render the dashboards.
+
+## Cycle 3 v2 iter 2 — setup-5 commit (2026-05-12)
 
 ## Cycle 3 v2 iter 2 — setup-5 commit (2026-05-12)
 
