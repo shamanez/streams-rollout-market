@@ -125,13 +125,13 @@
     "directive": "Add scripts/live/agent_tasks_hermes.json with exactly 12 multi-turn tasks per the table in the approved plan (/Users/shamane/.claude/plans/replicated-inventing-bear.md Iter 2 section). Tasks 5 and 9 require new entries in _SIM_FILES in scripts/live/agent_runner.py: '/tmp/fib.py' (off-by-one fibonacci) and '/tmp/clip.py' (hardcoded bound function). Add tests/test_agent_tasks_hermes_schema.py asserting exactly 12 tasks, all expected_tools exist in TOOL_SCHEMAS, at least 4 use multiple distinct tools, at least 1 has empty or absent expected_tools (the no-op-trivia case), and _SIM_FILES contains both new paths. Honor STEER.md global directives."
   },
   "hermes_agent.dense_qwen3_32b_run": {
-    "passes": false,
-    "evidence": null,
+    "passes": true,
+    "evidence": ".claude/evidence/hermes_agent_dense_qwen3_32b/RUN.md",
     "directive": "Run scripts/live/hermes_agent_runner.py against vllm-bf16 Qwen3-32B then vllm-fp8 Qwen3-32B on my-vllm-spot-instance, both vLLM serves using --tool-call-parser hermes via the existing scripts/live/serve_qwen_for_agent.sh. For the noise-floor tile, also run bf16 a second time with SEED=4321 (label hermes-qwen3-32b-bf16-seedB). Save trajectories under runs/live/agent/hermes/qwen3-32b/{bf16,bf16_seedB,fp8}/<task_id>.json. ACCEPTANCE: each of the three dirs must contain exactly 12 well-formed AgentTrajectory JSON files (Pydantic-parseable); terminal_reason=\"error\" allowed on at most 2 of 12 per side; every trajectory must have len(steps)>=2. Evidence: copy all three dirs into .claude/evidence/hermes_agent_dense_qwen3_32b/ plus a RUN.md with the three serve commands verbatim + a per-task table (task_id, n_steps, terminal_reason, total_assistant_tokens) + total wall-clock per side. Honor STEER.md global directives + STEER.md acceptance gate."
   },
   "hermes_agent.dense_render": {
-    "passes": false,
-    "evidence": null,
+    "passes": true,
+    "evidence": ".claude/evidence/hermes_agent_dense_render/index.html",
     "directive": "Pair the dense bf16/fp8 trajectories AND the bf16/bf16_seedB pair via cli.agent_trajectory_lab. Aggregate via cli.agent_dashboard. Extend scripts/live/publish_dashboards.py with a new section data-section=\"hermes-agent-dense-matrix\" between the existing MoE matrix and the cards grid, with TWO tiles: (a) fp8-vs-bf16 (the precision-effect signal), (b) bf16_seedB-vs-bf16 (the noise floor). Tile-colour thresholds from STEER.md acceptance gate: green if final_answer_match >= 0.80, amber 0.50-0.80, red <0.50. Bar width = tool_call_jaccard mean over 12 tasks. Subtitle: \"n=12 tasks · first-div mean step k · k-of-12 answered\". Tile blurb prose mirrors the existing dense matrix blurb style. ACCEPTANCE: rendered docs/index.html must contain data-section=\"hermes-agent-dense-matrix\" with 2 mx-tile children whose mx-value text is numeric and NOT in {—, TBD, 0%, 0.00, n/a, empty}; colour class is one of {mx-good, mx-warn, mx-bad} (no mx-empty/mx-tbd); the 8 pre-existing tiles still render with at least one canonical value (e.g. 0.9987, 4.3%) intact. Add tests/test_publish_dashboards_hermes_agent.py asserting ALL of the above (presence of section, numeric mx-value, valid colour class, pre-existing-tile non-regression). Evidence: rendered docs/index.html into .claude/evidence/hermes_agent_dense_render/. Honor STEER.md global directives + acceptance gate."
   },
   "hermes_agent.moe_qwen3_30b_a3b_run": {
