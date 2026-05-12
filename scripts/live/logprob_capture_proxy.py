@@ -86,11 +86,11 @@ def inject_logprobs(request_body: bytes) -> bytes:
     extra = body.setdefault("extra_body", {})
     if isinstance(extra, dict):
         extra.setdefault("return_tokens_as_token_ids", True)
-        # MoE forward-compat: ask vLLM to return per-(token, layer)
-        # routed_experts when the served model is MoE and the engine
-        # was launched with enable_return_routed_experts=True. Dense
-        # serves silently ignore the unknown extra.
-        extra.setdefault("return_routed_experts", True)
+    # routed_experts capture is engine-level (the vLLM serve must be
+    # launched with `--enable-return-routed-experts`). No request-side
+    # parameter is needed; vLLM stamps the routed_experts field on each
+    # choice automatically. See
+    # https://docs.vllm.ai/en/latest/training/routed_experts_replay/
     return json.dumps(body).encode("utf-8")
 
 
@@ -144,9 +144,7 @@ def extract_probes(
         return None
     response_logprobs: list[float] = []
     response_token_ids: list[int] = []
-    routed_experts: list[list[list[int]]] = []
     saw_any_token_id = False
-    saw_any_routed = False
     for entry in content:
         if not isinstance(entry, dict):
             return None
@@ -158,16 +156,6 @@ def extract_probes(
         if isinstance(tid, int):
             response_token_ids.append(tid)
             saw_any_token_id = True
-        # MoE forward-compat: vLLM stamps routed_experts per-token
-        # under choices[0].logprobs.content[*].routed_experts when
-        # the engine was launched with enable_return_routed_experts.
-        # Shape: [moe_layer][top_k] per token. We accept any nested
-        # list of ints and let the AgentStep validator enforce the
-        # length parity downstream.
-        re = entry.get("routed_experts")
-        if isinstance(re, list):
-            routed_experts.append(re)
-            saw_any_routed = True
     out: dict = {
         "prompt_index": prompt_index,
         "turn_idx": turn_idx,
@@ -175,8 +163,24 @@ def extract_probes(
     }
     if saw_any_token_id and len(response_token_ids) == len(response_logprobs):
         out["response_token_ids"] = response_token_ids
-    if saw_any_routed and len(routed_experts) == len(response_logprobs):
-        out["response_routed_experts"] = routed_experts
+    # MoE routed_experts: per the vLLM docs
+    # (https://docs.vllm.ai/en/latest/training/routed_experts_replay/),
+    # this is a TOP-LEVEL field on each choice, NOT a per-token field
+    # under logprobs.content[*]. Shape: ``[gen_len, num_moe_layers,
+    # top_k]`` of int16 expert IDs in ``[0, num_experts)``. JSON path:
+    # ``choices[0].routed_experts``. vLLM also stamps
+    # ``prompt_routed_experts`` at the response top level (shape
+    # ``[prompt_len, num_moe_layers, top_k]``) — captured here too so
+    # downstream router-pair scripts can build a full RouterTrace
+    # against the prompt+response concatenation if they want.
+    choice = choices[0] if isinstance(choices[0], dict) else None
+    if choice is not None:
+        routed = choice.get("routed_experts")
+        if isinstance(routed, list) and routed:
+            out["response_routed_experts"] = routed
+    prompt_routed = rsp.get("prompt_routed_experts")
+    if isinstance(prompt_routed, list) and prompt_routed:
+        out["prompt_routed_experts"] = prompt_routed
     return out
 
 

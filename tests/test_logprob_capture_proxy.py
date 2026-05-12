@@ -83,26 +83,20 @@ def test_inject_logprobs_passes_empty_body_through(proxy: ModuleType) -> None:
     assert proxy.inject_logprobs(b"") == b""
 
 
-def test_inject_logprobs_stamps_return_routed_experts(proxy: ModuleType) -> None:
-    """MoE forward-compat: every chat-completions request should also
-    ask for routed_experts via extra_body. Dense vLLM serves and
-    non-vLLM upstreams ignore the unknown extra."""
+def test_inject_logprobs_does_not_add_routed_experts_request_param(
+    proxy: ModuleType,
+) -> None:
+    """Per the vLLM docs, routed_experts capture is an engine-level
+    flag (``--enable-return-routed-experts``), NOT a per-request
+    parameter. The proxy must not invent an ``extra_body.return_routed_experts``
+    key — earlier versions did and that was a documentation-time bug."""
     body = json.dumps({"model": "Qwen/Qwen3-30B-A3B", "messages": []}).encode("utf-8")
     out = json.loads(proxy.inject_logprobs(body).decode())
-    assert out["extra_body"]["return_routed_experts"] is True
-
-
-def test_inject_logprobs_preserves_caller_extra_body(proxy: ModuleType) -> None:
-    """If the caller explicitly disabled routed_experts, the proxy
-    must not override (caller wins, same rule as logprobs)."""
-    body = json.dumps(
-        {
-            "model": "Qwen/Qwen3-30B-A3B",
-            "extra_body": {"return_routed_experts": False},
-        }
-    ).encode("utf-8")
-    out = json.loads(proxy.inject_logprobs(body).decode())
-    assert out["extra_body"]["return_routed_experts"] is False
+    extra = out.get("extra_body", {})
+    assert "return_routed_experts" not in extra
+    # token_ids extra is still injected — that one IS a real vLLM
+    # request-side opt-in.
+    assert extra.get("return_tokens_as_token_ids") is True
 
 
 # --- derive_turn_idx --------------------------------------------------------
@@ -260,38 +254,44 @@ def test_extract_probes_openai_shape_no_token_ids(proxy: ModuleType) -> None:
 def test_extract_probes_captures_routed_experts_when_present(
     proxy: ModuleType,
 ) -> None:
-    """When vLLM stamps routed_experts under each content entry, the
-    extractor should surface them as response_routed_experts in the
-    sidecar record."""
+    """vLLM stamps ``routed_experts`` as a TOP-LEVEL field on each
+    choice (NOT under logprobs.content[*]) — shape
+    ``[gen_len, num_moe_layers, top_k]``. See
+    https://docs.vllm.ai/en/latest/training/routed_experts_replay/.
+    """
     rsp = json.dumps(
         {
+            "prompt_routed_experts": [
+                [[7, 6], [5, 4], [3, 2]],
+                [[6, 7], [4, 5], [2, 3]],
+            ],
             "choices": [
                 {
                     "logprobs": {
                         "content": [
-                            {
-                                "token": "A",
-                                "logprob": -0.1,
-                                "token_id": 100,
-                                "routed_experts": [[0, 1], [2, 3], [4, 5]],
-                            },
-                            {
-                                "token": "B",
-                                "logprob": -0.2,
-                                "token_id": 101,
-                                "routed_experts": [[1, 0], [3, 2], [5, 4]],
-                            },
+                            {"token": "A", "logprob": -0.1, "token_id": 100},
+                            {"token": "B", "logprob": -0.2, "token_id": 101},
                         ]
-                    }
+                    },
+                    "routed_experts": [
+                        [[0, 1], [2, 3], [4, 5]],
+                        [[1, 0], [3, 2], [5, 4]],
+                    ],
                 }
-            ]
+            ],
         }
     ).encode()
     out = proxy.extract_probes(b"{}", rsp, prompt_index=0, turn_idx=0)
     assert out is not None
+    # Per-choice routed_experts -> response_routed_experts on the sidecar.
     assert out["response_routed_experts"] == [
         [[0, 1], [2, 3], [4, 5]],
         [[1, 0], [3, 2], [5, 4]],
+    ]
+    # Top-level prompt_routed_experts -> prompt_routed_experts on the sidecar.
+    assert out["prompt_routed_experts"] == [
+        [[7, 6], [5, 4], [3, 2]],
+        [[6, 7], [4, 5], [2, 3]],
     ]
     assert out["response_token_ids"] == [100, 101]
 

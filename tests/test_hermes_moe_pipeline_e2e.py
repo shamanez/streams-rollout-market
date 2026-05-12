@@ -111,16 +111,15 @@ _TOP_K = 1
 def _vllm_response_with_routed(
     tokens: list[tuple[str, int, float, list[list[int]]]],
 ) -> bytes:
-    """Build a synthetic vLLM response with routed_experts per token."""
-    content = [
-        {
-            "token": tok,
-            "logprob": lp,
-            "token_id": tid,
-            "routed_experts": re,
-        }
-        for tok, tid, lp, re in tokens
-    ]
+    """Build a synthetic vLLM response matching the documented shape.
+
+    Per https://docs.vllm.ai/en/latest/training/routed_experts_replay/,
+    routed_experts is a TOP-LEVEL field on each choice with shape
+    ``[gen_len, num_moe_layers, top_k]`` — the per-token list is the
+    OUTER axis of one ``choices[0].routed_experts`` array.
+    """
+    content = [{"token": tok, "logprob": lp, "token_id": tid} for tok, tid, lp, _ in tokens]
+    routed_experts = [re for _, _, _, re in tokens]
     return json.dumps(
         {
             "id": "chatcmpl-moe-e2e",
@@ -129,6 +128,7 @@ def _vllm_response_with_routed(
                     "index": 0,
                     "message": {"role": "assistant", "content": "answer"},
                     "logprobs": {"content": content},
+                    "routed_experts": routed_experts,
                     "finish_reason": "stop",
                 }
             ],
