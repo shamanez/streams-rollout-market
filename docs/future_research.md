@@ -84,6 +84,47 @@ log_ratio of 0.95" — is a single-step downstream of the existing
 code. Would let the agent dashboard click through into the dense
 view of the assistant turn that caused the divergence.
 
+### 9b. Probe vLLM at rollout-time — no refeed (cycle 3 redesign)
+**Status:** active design direction for cycle 3 (operator note,
+2026-05-12). Refeed is **off the table**: vLLM is rollout-only and
+we do **not** re-feed token sequences back through it after the fact.
+
+Rationale: vLLM generates the multi-turn / long-horizon trajectory
+exactly once. While it's doing so it has every signal we care about
+in memory — per-token logprobs, per-(token, layer) routed_experts.
+Throwing those away and re-feeding the same token IDs through vLLM
+again later is wasteful and introduces a second source of numerical
+drift (sampling-time logprobs vs teacher-force-time logprobs differ
+under vLLM's batched / cached forward path).
+
+Concrete plan:
+
+  * Extend the Hermes Agent harness (or its `batch_runner.py`
+    invocation) to request `logprobs=1` on every assistant turn —
+    OpenAI chat-completions surface that as one logprob per output
+    token; vLLM already returns it.
+  * For MoE rollouts, request `extra_body={"return_routed_experts":
+    true}` (vLLM 0.20+ supports this on the OpenAI shim) and persist
+    the per-(token, layer) expert IDs.
+  * Persist both on each `AgentStep` (extend the schema to add
+    `response_logprobs: list[float]` and `response_routed_experts:
+    list[list[list[int]]]`).
+  * Re-run the existing Hermes Agent rollouts on the spot with these
+    probes wired in (n=23 Dense + n=22 MoE).
+  * Trainer-side teacher-force (FSDP / Megatron) consumes the
+    captured `(prompt_token_ids, response_token_ids)` pairs and
+    computes the trainer-side counterparts.
+  * Pair rollout-captured signals against trainer-side
+    teacher-forced signals → `DenseMismatchReport` /
+    `RouterMismatchReport` — no second vLLM pass.
+
+Blocker the redesign has to navigate: the Hermes Agent CLI today
+goes through OpenAI chat-completions which loses some of vLLM's
+native return surface (notably `routed_experts`). Path A is to add a
+thin OpenAI→vLLM extra-body tunnel; path B is to patch hermes-agent
+to call vLLM's native `LLM.generate()` so we get the full
+`CompletionOutput` shape including the `routed_experts` ndarray.
+
 ## Open design questions
 
 ### 10. What is the right "trainable" threshold?

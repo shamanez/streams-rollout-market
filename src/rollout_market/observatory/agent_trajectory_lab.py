@@ -54,11 +54,9 @@ class ToolCallRecord(BaseModel):
     result_hash: str
 
     @classmethod
-    def from_call(
-        cls, *, name: str, arguments: dict | str, result: str
-    ) -> "ToolCallRecord":
-        args_str = arguments if isinstance(arguments, str) else json.dumps(
-            arguments, sort_keys=True
+    def from_call(cls, *, name: str, arguments: dict | str, result: str) -> "ToolCallRecord":
+        args_str = (
+            arguments if isinstance(arguments, str) else json.dumps(arguments, sort_keys=True)
         )
         return cls(
             name=name,
@@ -75,6 +73,25 @@ class AgentStep(BaseModel):
     role="assistant" carries the model's decision (content + optional
     tool_calls). role="tool" carries the result of one tool invocation
     fed back into the conversation.
+
+    The optional rollout-time probe fields (``prompt_token_ids``,
+    ``response_token_ids``, ``response_logprobs``,
+    ``response_routed_experts``) carry the per-token signals the
+    rollout engine (typically vLLM) observed *while generating* this
+    assistant turn. Capturing them at generation time is long-term
+    stable because:
+
+      * the token IDs are anchored to the tokenizer hash (which is
+        already a contract field downstream), so the trainer-side
+        teacher-force is shape-identical regardless of the chat
+        template's evolution;
+      * the rollout-side logprobs are exactly what vLLM emitted
+        (sampling-time, not refeed-time), so the ESS / log-ratio
+        metric measures genuine engine-vs-trainer divergence, not
+        sampling-vs-teacher-force drift in vLLM itself.
+
+    All four fields default to ``None`` so existing trajectory JSONs
+    (captured before the probes were wired up) load unchanged.
     """
 
     step_idx: int
@@ -88,10 +105,55 @@ class AgentStep(BaseModel):
     response_token_count: int = 0
     response_logprobs_hash: str | None = None
 
+    # --- Rollout-time probe surface (cycle-3) -------------------------------
+    # Populated by the rollout harness (hermes_agent_runner / vLLM probes)
+    # when generation-time signals are captured directly; left as None on
+    # tool-role steps and on older assistant steps captured before the
+    # probes existed.
+    prompt_token_ids: list[int] | None = None
+    response_token_ids: list[int] | None = None
+    response_logprobs: list[float] | None = None
+    # Shape: ``[response_token, moe_layer, top_k]``; MoE rollouts only.
+    response_routed_experts: list[list[list[int]]] | None = None
+
     @model_validator(mode="after")
     def _validate(self) -> "AgentStep":
         if self.role == "tool" and self.tool_calls:
             raise ValueError("tool-role steps cannot themselves emit tool_calls")
+        # If both response_token_ids and response_logprobs are present they
+        # must agree in length; the same is true for response_routed_experts.
+        # We do not require all three to be present together — a Dense
+        # rollout exposes logprobs but no router trace, an MoE rollout may
+        # expose both. None on either side opts that field out.
+        if (
+            self.response_token_ids is not None
+            and self.response_logprobs is not None
+            and len(self.response_token_ids) != len(self.response_logprobs)
+        ):
+            raise ValueError(
+                f"response_logprobs length {len(self.response_logprobs)} != "
+                f"response_token_ids length {len(self.response_token_ids)}"
+            )
+        if (
+            self.response_token_ids is not None
+            and self.response_routed_experts is not None
+            and len(self.response_token_ids) != len(self.response_routed_experts)
+        ):
+            raise ValueError(
+                f"response_routed_experts length {len(self.response_routed_experts)} "
+                f"!= response_token_ids length {len(self.response_token_ids)}"
+            )
+        if self.role == "tool" and (
+            self.prompt_token_ids
+            or self.response_token_ids
+            or self.response_logprobs
+            or self.response_routed_experts
+        ):
+            raise ValueError(
+                "tool-role steps must not carry rollout-side probe fields "
+                "(prompt_token_ids / response_token_ids / response_logprobs "
+                "/ response_routed_experts)"
+            )
         return self
 
 
@@ -150,9 +212,7 @@ class TrajectoryDivergenceReport(BaseModel):
     trainer_assistant_steps: int
 
     first_divergence_step: int | None
-    first_divergence_kind: (
-        Literal["tool_choice", "tool_args", "content", "termination"] | None
-    )
+    first_divergence_kind: Literal["tool_choice", "tool_args", "content", "termination"] | None
 
     tool_choice_disagreement_rate: float
     tool_call_jaccard: float
@@ -278,9 +338,7 @@ def compute_trajectory_divergence(
     pair_count = min(len(r_assist), len(t_assist))
 
     first_div: int | None = None
-    first_kind: (
-        Literal["tool_choice", "tool_args", "content", "termination"] | None
-    ) = None
+    first_kind: Literal["tool_choice", "tool_args", "content", "termination"] | None = None
     disagreement_steps = 0
     eligible_steps = 0
 
@@ -382,7 +440,9 @@ def _step_summary(step: AgentStep) -> str:
     return f"<code>assistant</code>: {_html.escape(text[:80])}"
 
 
-def render_trajectory_html(report: TrajectoryDivergenceReport, rollout: AgentTrajectory, trainer: AgentTrajectory) -> str:
+def render_trajectory_html(
+    report: TrajectoryDivergenceReport, rollout: AgentTrajectory, trainer: AgentTrajectory
+) -> str:
     """Render a side-by-side trajectory diff for one comparison."""
 
     r_assist = rollout.assistant_steps()
@@ -398,11 +458,7 @@ def render_trajectory_html(report: TrajectoryDivergenceReport, rollout: AgentTra
         klass = "div" if is_div else ("after" if is_after_div else "match")
         r_html = _step_summary(r_step) if r_step else "<em>—</em>"
         t_html = _step_summary(t_step) if t_step else "<em>—</em>"
-        rows.append(
-            f"<tr class='{klass}'><td>{i}</td>"
-            f"<td>{r_html}</td>"
-            f"<td>{t_html}</td></tr>"
-        )
+        rows.append(f"<tr class='{klass}'><td>{i}</td><td>{r_html}</td><td>{t_html}</td></tr>")
 
     summary_rows = "".join(
         f"<tr><th>{_html.escape(k)}</th><td>{_html.escape(str(v))}</td></tr>"
@@ -472,9 +528,7 @@ def write_trajectory_diff(
     json_path = out_path / "agent_divergence_report.json"
     html_path = out_path / "agent_divergence_report.html"
     json_path.write_text(report.model_dump_json(indent=2), encoding="utf-8")
-    html_path.write_text(
-        render_trajectory_html(report, rollout, trainer), encoding="utf-8"
-    )
+    html_path.write_text(render_trajectory_html(report, rollout, trainer), encoding="utf-8")
     return {"json": json_path, "html": html_path}
 
 
@@ -484,4 +538,5 @@ def load_trajectory(path: Path | str) -> AgentTrajectory:
 
 def load_trajectories_glob(pattern: str) -> list[AgentTrajectory]:
     import glob as _glob
+
     return [load_trajectory(p) for p in sorted(_glob.glob(pattern, recursive=True))]

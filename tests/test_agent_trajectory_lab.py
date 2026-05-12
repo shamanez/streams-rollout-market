@@ -84,6 +84,113 @@ def test_agent_step_rejects_tool_calls_on_tool_role():
         )
 
 
+# --- rollout-time probe fields (cycle-3) -----------------------------------
+
+
+def test_agent_step_accepts_rollout_probes_on_assistant():
+    step = AgentStep(
+        step_idx=0,
+        role="assistant",
+        content="hi",
+        prompt_token_ids=[1, 2, 3, 4],
+        response_token_ids=[10, 20, 30],
+        response_logprobs=[-0.1, -0.2, -0.3],
+        response_routed_experts=[
+            [[0, 1], [2, 3]],
+            [[4, 5], [6, 7]],
+            [[8, 9], [10, 11]],
+        ],
+    )
+    assert step.prompt_token_ids == [1, 2, 3, 4]
+    assert step.response_token_ids == [10, 20, 30]
+    assert step.response_logprobs == [-0.1, -0.2, -0.3]
+    assert len(step.response_routed_experts) == 3
+
+
+def test_agent_step_defaults_probes_to_none():
+    step = AgentStep(step_idx=0, role="assistant", content="hi")
+    assert step.prompt_token_ids is None
+    assert step.response_token_ids is None
+    assert step.response_logprobs is None
+    assert step.response_routed_experts is None
+
+
+def test_agent_step_rejects_logprob_length_mismatch():
+    with pytest.raises(Exception, match="response_logprobs length"):
+        AgentStep(
+            step_idx=0,
+            role="assistant",
+            content="hi",
+            response_token_ids=[10, 20, 30],
+            response_logprobs=[-0.1, -0.2],
+        )
+
+
+def test_agent_step_rejects_routed_experts_length_mismatch():
+    with pytest.raises(Exception, match="response_routed_experts length"):
+        AgentStep(
+            step_idx=0,
+            role="assistant",
+            content="hi",
+            response_token_ids=[10, 20],
+            response_routed_experts=[[[0]], [[1]], [[2]]],
+        )
+
+
+def test_agent_step_rejects_probes_on_tool_role():
+    with pytest.raises(Exception, match="tool-role steps must not carry"):
+        AgentStep(
+            step_idx=0,
+            role="tool",
+            content="result",
+            response_token_ids=[10, 20],
+        )
+    with pytest.raises(Exception, match="tool-role steps must not carry"):
+        AgentStep(
+            step_idx=0,
+            role="tool",
+            content="result",
+            response_logprobs=[-0.1, -0.2],
+        )
+
+
+def test_agent_step_round_trips_probes_through_json():
+    step = AgentStep(
+        step_idx=0,
+        role="assistant",
+        content="hi",
+        prompt_token_ids=[1, 2, 3],
+        response_token_ids=[10, 20],
+        response_logprobs=[-0.1, -0.2],
+        response_routed_experts=[[[0, 1]], [[2, 3]]],
+    )
+    js = step.model_dump_json()
+    revived = AgentStep.model_validate_json(js)
+    assert revived.prompt_token_ids == [1, 2, 3]
+    assert revived.response_token_ids == [10, 20]
+    assert revived.response_logprobs == [-0.1, -0.2]
+    assert revived.response_routed_experts == [[[0, 1]], [[2, 3]]]
+
+
+def test_agent_step_loads_legacy_json_without_probe_fields():
+    """A trajectory captured before the probes existed must validate.
+
+    The on-disk schema for cycle-2 hermes-agent rollouts had no
+    prompt_token_ids / response_token_ids / response_logprobs /
+    response_routed_experts keys at all. The new fields default to
+    None so model_validate_json on those legacy payloads still passes.
+    """
+    legacy_json = (
+        '{"step_idx": 0, "role": "assistant", "content": "hi", '
+        '"tool_calls": [], "finish_reason": null, '
+        '"response_token_count": 0, "response_logprobs_hash": null}'
+    )
+    revived = AgentStep.model_validate_json(legacy_json)
+    assert revived.role == "assistant"
+    assert revived.prompt_token_ids is None
+    assert revived.response_logprobs is None
+
+
 def test_agent_trajectory_assistant_steps_filters():
     t = _traj()
     assert len(t.assistant_steps()) == 2
@@ -117,7 +224,9 @@ def test_identical_trajectories_have_no_divergence():
 
 def test_soft_match_picks_up_same_number_different_phrasing():
     """Surface phrasing changes around the same number must soft-match."""
-    a = _traj(run_id="a", rollout="vllm-bf16", final_answer="The total is **8,294,400** tokens per day.")
+    a = _traj(
+        run_id="a", rollout="vllm-bf16", final_answer="The total is **8,294,400** tokens per day."
+    )
     b = _traj(run_id="b", rollout="vllm-fp8", final_answer="That comes to 8294400 tokens daily.")
     rep = compute_trajectory_divergence(a, b)
     assert rep.final_answer_match is False  # strict normalised-text equality fails
@@ -135,7 +244,9 @@ def test_soft_match_rejects_different_numbers():
 def test_soft_match_picks_up_substring():
     """The shorter answer is contained in the longer one."""
     a = _traj(run_id="a", rollout="vllm-bf16", final_answer="The answer is 42.")
-    b = _traj(run_id="b", rollout="vllm-fp8", final_answer="After careful analysis, the answer is 42.")
+    b = _traj(
+        run_id="b", rollout="vllm-fp8", final_answer="After careful analysis, the answer is 42."
+    )
     rep = compute_trajectory_divergence(a, b)
     assert rep.final_answer_match is False
     assert rep.final_answer_match_soft is True
@@ -152,11 +263,13 @@ def test_soft_match_strict_equality_still_implies_soft():
 def test_soft_match_handles_decimal_normalisation():
     """1.20 and 1.2 are the same number after canonicalisation."""
     from rollout_market.observatory.agent_trajectory_lab import _soft_content_match
+
     assert _soft_content_match("The ratio is 1.20.", "The ratio is 1.2.")
 
 
 def test_soft_match_handles_thousands_separator():
     from rollout_market.observatory.agent_trajectory_lab import _soft_content_match
+
     assert _soft_content_match("1,200,000 tokens", "1200000 tokens")
     assert _soft_content_match("1,200,000", "1200000")
 
@@ -207,33 +320,47 @@ def test_divergence_on_tool_choice():
 
 
 def test_divergence_on_tool_args():
-    a = _traj(steps=[
-        AgentStep(step_idx=0, role="assistant", tool_calls=[_call("search", {"q": "X"})]),
-        AgentStep(step_idx=0, role="tool", content="r"),
-        AgentStep(step_idx=1, role="assistant", content="answer"),
-    ], rollout="vllm-bf16")
-    b = _traj(steps=[
-        AgentStep(step_idx=0, role="assistant", tool_calls=[_call("search", {"q": "Y"})]),
-        AgentStep(step_idx=0, role="tool", content="r"),
-        AgentStep(step_idx=1, role="assistant", content="answer"),
-    ], rollout="vllm-fp8")
+    a = _traj(
+        steps=[
+            AgentStep(step_idx=0, role="assistant", tool_calls=[_call("search", {"q": "X"})]),
+            AgentStep(step_idx=0, role="tool", content="r"),
+            AgentStep(step_idx=1, role="assistant", content="answer"),
+        ],
+        rollout="vllm-bf16",
+    )
+    b = _traj(
+        steps=[
+            AgentStep(step_idx=0, role="assistant", tool_calls=[_call("search", {"q": "Y"})]),
+            AgentStep(step_idx=0, role="tool", content="r"),
+            AgentStep(step_idx=1, role="assistant", content="answer"),
+        ],
+        rollout="vllm-fp8",
+    )
     rep = compute_trajectory_divergence(b, a)
     assert rep.first_divergence_step == 0
     assert rep.first_divergence_kind == "tool_args"
 
 
 def test_divergence_on_termination_when_prefix_matches_but_lengths_differ():
-    short = _traj(steps=[
-        AgentStep(step_idx=0, role="assistant", tool_calls=[_call("search")]),
-        AgentStep(step_idx=0, role="tool", content="r"),
-        AgentStep(step_idx=1, role="assistant", content="answer"),
-    ], rollout="vllm-bf16", final_answer="answer")
-    long = _traj(steps=[
-        AgentStep(step_idx=0, role="assistant", tool_calls=[_call("search")]),
-        AgentStep(step_idx=0, role="tool", content="r"),
-        AgentStep(step_idx=1, role="assistant", content="answer"),
-        AgentStep(step_idx=2, role="assistant", content="follow-up clarification"),
-    ], rollout="vllm-fp8", final_answer="follow-up clarification")
+    short = _traj(
+        steps=[
+            AgentStep(step_idx=0, role="assistant", tool_calls=[_call("search")]),
+            AgentStep(step_idx=0, role="tool", content="r"),
+            AgentStep(step_idx=1, role="assistant", content="answer"),
+        ],
+        rollout="vllm-bf16",
+        final_answer="answer",
+    )
+    long = _traj(
+        steps=[
+            AgentStep(step_idx=0, role="assistant", tool_calls=[_call("search")]),
+            AgentStep(step_idx=0, role="tool", content="r"),
+            AgentStep(step_idx=1, role="assistant", content="answer"),
+            AgentStep(step_idx=2, role="assistant", content="follow-up clarification"),
+        ],
+        rollout="vllm-fp8",
+        final_answer="follow-up clarification",
+    )
     rep = compute_trajectory_divergence(long, short)
     assert rep.first_divergence_step == 2  # past the matching prefix
     assert rep.first_divergence_kind == "termination"
@@ -241,18 +368,24 @@ def test_divergence_on_termination_when_prefix_matches_but_lengths_differ():
 
 
 def test_divergence_when_long_traj_takes_extra_tool_step_is_tool_choice_not_termination():
-    short = _traj(steps=[
-        AgentStep(step_idx=0, role="assistant", tool_calls=[_call("search")]),
-        AgentStep(step_idx=0, role="tool", content="r"),
-        AgentStep(step_idx=1, role="assistant", content="answer"),
-    ], rollout="vllm-bf16")
-    long = _traj(steps=[
-        AgentStep(step_idx=0, role="assistant", tool_calls=[_call("search")]),
-        AgentStep(step_idx=0, role="tool", content="r"),
-        AgentStep(step_idx=1, role="assistant", tool_calls=[_call("search")]),
-        AgentStep(step_idx=1, role="tool", content="r2"),
-        AgentStep(step_idx=2, role="assistant", content="answer"),
-    ], rollout="vllm-fp8")
+    short = _traj(
+        steps=[
+            AgentStep(step_idx=0, role="assistant", tool_calls=[_call("search")]),
+            AgentStep(step_idx=0, role="tool", content="r"),
+            AgentStep(step_idx=1, role="assistant", content="answer"),
+        ],
+        rollout="vllm-bf16",
+    )
+    long = _traj(
+        steps=[
+            AgentStep(step_idx=0, role="assistant", tool_calls=[_call("search")]),
+            AgentStep(step_idx=0, role="tool", content="r"),
+            AgentStep(step_idx=1, role="assistant", tool_calls=[_call("search")]),
+            AgentStep(step_idx=1, role="tool", content="r2"),
+            AgentStep(step_idx=2, role="assistant", content="answer"),
+        ],
+        rollout="vllm-fp8",
+    )
     # At step 1 the long traj calls a tool while the short one just answers —
     # that's a tool_choice divergence, not a termination one.
     rep = compute_trajectory_divergence(long, short)
@@ -262,32 +395,45 @@ def test_divergence_when_long_traj_takes_extra_tool_step_is_tool_choice_not_term
 
 
 def test_divergence_on_content_only():
-    a = _traj(steps=[
-        AgentStep(step_idx=0, role="assistant", content="answer A"),
-    ], rollout="vllm-bf16", final_answer="answer A")
-    b = _traj(steps=[
-        AgentStep(step_idx=0, role="assistant", content="answer B"),
-    ], rollout="vllm-fp8", final_answer="answer B")
+    a = _traj(
+        steps=[
+            AgentStep(step_idx=0, role="assistant", content="answer A"),
+        ],
+        rollout="vllm-bf16",
+        final_answer="answer A",
+    )
+    b = _traj(
+        steps=[
+            AgentStep(step_idx=0, role="assistant", content="answer B"),
+        ],
+        rollout="vllm-fp8",
+        final_answer="answer B",
+    )
     rep = compute_trajectory_divergence(b, a)
     assert rep.first_divergence_step == 0
     assert rep.first_divergence_kind == "content"
 
 
 def test_jaccard_partial_overlap():
-    a = _traj(steps=[
-        AgentStep(step_idx=0, role="assistant", tool_calls=[_call("search")]),
-        AgentStep(step_idx=0, role="tool", content="r"),
-        AgentStep(step_idx=1, role="assistant", tool_calls=[_call("calculator")]),
-        AgentStep(step_idx=1, role="tool", content="r2"),
-        AgentStep(step_idx=2, role="assistant", content="answer"),
-    ])
-    b = _traj(steps=[
-        AgentStep(step_idx=0, role="assistant", tool_calls=[_call("search")]),
-        AgentStep(step_idx=0, role="tool", content="r"),
-        AgentStep(step_idx=1, role="assistant", tool_calls=[_call("python_eval")]),
-        AgentStep(step_idx=1, role="tool", content="r2"),
-        AgentStep(step_idx=2, role="assistant", content="answer"),
-    ], rollout="other")
+    a = _traj(
+        steps=[
+            AgentStep(step_idx=0, role="assistant", tool_calls=[_call("search")]),
+            AgentStep(step_idx=0, role="tool", content="r"),
+            AgentStep(step_idx=1, role="assistant", tool_calls=[_call("calculator")]),
+            AgentStep(step_idx=1, role="tool", content="r2"),
+            AgentStep(step_idx=2, role="assistant", content="answer"),
+        ]
+    )
+    b = _traj(
+        steps=[
+            AgentStep(step_idx=0, role="assistant", tool_calls=[_call("search")]),
+            AgentStep(step_idx=0, role="tool", content="r"),
+            AgentStep(step_idx=1, role="assistant", tool_calls=[_call("python_eval")]),
+            AgentStep(step_idx=1, role="tool", content="r2"),
+            AgentStep(step_idx=2, role="assistant", content="answer"),
+        ],
+        rollout="other",
+    )
     rep = compute_trajectory_divergence(b, a)
     # Two distinct tools each side, one shared (search) -> jaccard 1/3.
     assert rep.tool_call_jaccard == pytest.approx(1 / 3)
@@ -328,7 +474,11 @@ def test_render_html_self_contained_and_marks_divergence():
     rep = compute_trajectory_divergence(b, a)
     page = render_trajectory_html(rep, b, a)
     assert page.startswith("<!doctype html>")
-    assert "first divergence" in page.lower() or "first-div" in page.lower() or "first divergence step" in page.lower()
+    assert (
+        "first divergence" in page.lower()
+        or "first-div" in page.lower()
+        or "first divergence step" in page.lower()
+    )
     assert "side-by-side" in page.lower() or "Side-by-side" in page
 
 

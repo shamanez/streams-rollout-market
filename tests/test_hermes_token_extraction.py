@@ -398,6 +398,82 @@ def test_extract_with_system_prompt_prepends_system_role(extractor, tokenizer, s
     assert len(p0) > len(p0_no_sys)
 
 
+def test_extract_prefers_captured_token_ids_over_chat_template(extractor):
+    """When AgentStep carries rollout-probe IDs, extract returns them
+    verbatim — no tokenizer is needed.
+
+    This is the long-term stable path: vLLM emits the exact prompt /
+    response token IDs at generation time, the trajectory persists
+    them, and the trainer-side teacher-force replays the exact same
+    IDs without any chat-template re-encoding (which can drift across
+    tokenizer / transformers versions).
+    """
+    captured_prompt = [101, 102, 103, 104, 105]
+    captured_response = [201, 202, 203]
+    traj = _make_trajectory(
+        "captured",
+        "what is 2+2?",
+        [
+            AgentStep(
+                step_idx=0,
+                role="assistant",
+                content="The answer is 4.",
+                prompt_token_ids=captured_prompt,
+                response_token_ids=captured_response,
+                response_logprobs=[-0.1, -0.2, -0.3],
+            )
+        ],
+    )
+    # tokenizer=None proves the path doesn't need one when IDs are captured.
+    pairs = extractor.extract_token_pairs(traj, tokenizer=None)
+    assert pairs == [(captured_prompt, captured_response)]
+
+
+def test_extract_raises_when_no_tokens_and_no_tokenizer(extractor):
+    traj = _make_trajectory(
+        "no-capture",
+        "hi",
+        [AgentStep(step_idx=0, role="assistant", content="hello")],
+    )
+    with pytest.raises(ValueError, match="no captured token IDs"):
+        extractor.extract_token_pairs(traj, tokenizer=None)
+
+
+def test_extract_mixed_capture_falls_back_to_chat_template(extractor, tokenizer):
+    """If only some assistant turns have captured IDs, the rest
+    fall back to chat-template re-encoding using the supplied tokenizer.
+
+    A real-world case: a trajectory might be re-played from a
+    legacy capture for turn 0 (text only) but turn 1 onward came
+    from a probe-enabled re-run. The function must not refuse the
+    mixed input — it processes each turn under the best available
+    signal.
+    """
+    captured_prompt = [101, 102, 103]
+    captured_response = [201, 202]
+    traj = _make_trajectory(
+        "mixed",
+        "two turns",
+        [
+            AgentStep(step_idx=0, role="assistant", content="first turn"),
+            AgentStep(step_idx=0, role="tool", content="tool result"),
+            AgentStep(
+                step_idx=1,
+                role="assistant",
+                content="second turn answer",
+                prompt_token_ids=captured_prompt,
+                response_token_ids=captured_response,
+            ),
+        ],
+    )
+    pairs = extractor.extract_token_pairs(traj, tokenizer)
+    assert len(pairs) == 2
+    # Turn 0 came through the chat-template fallback.
+    assert pairs[0][0][-1] == FakeTokenizer.GEN_PROMPT_MARKER
+    # Turn 1 returned the captured IDs verbatim.
+    assert pairs[1] == (captured_prompt, captured_response)
+
+
 def test_coerce_handles_batch_encoding_and_encoding_shapes(extractor):
     """Verify the BatchEncoding / Encoding shape adapters used on the spot.
 

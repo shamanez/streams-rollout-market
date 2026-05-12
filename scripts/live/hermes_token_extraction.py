@@ -160,33 +160,60 @@ def _build_prior_messages(
 
 def extract_token_pairs(
     trajectory: AgentTrajectory,
-    tokenizer: ChatTokenizer,
+    tokenizer: ChatTokenizer | None = None,
     *,
     system_prompt: str | None = None,
 ) -> list[tuple[list[int], list[int]]]:
     """Return one ``(prompt_token_ids, response_token_ids)`` pair per
     assistant turn in ``trajectory``.
 
-    For assistant turn ``i``:
+    Two paths:
 
-      * **prompt** = chat-templated encoding of ``system + user +
-        assistant_turns[0..i-1]`` interleaved with their tool responses,
-        terminated by the assistant generation prompt
-        (``add_generation_prompt=True``).
-      * **response** = the encoding of the chat template applied to
-        ``prior_messages + [assistant turn i]`` with
-        ``add_generation_prompt=False``, sliced past the prompt prefix.
-        ``<think>`` blocks are stripped from the response text;
-        ``<tool_call>`` XML blocks are kept as Hermes emitted them.
+      1. **Captured token IDs (preferred, long-term stable).** If every
+         assistant step carries ``prompt_token_ids`` *and*
+         ``response_token_ids`` populated by the rollout-time probe,
+         those exact IDs are returned. No tokenizer is needed; the
+         tokenizer arg may be ``None``. This path is tokenizer-version
+         agnostic and exactly reproduces what vLLM saw at generation
+         time.
 
-    Pure function — no file I/O, no env reads. Raises ``ValueError`` if
-    the chat template does not extend its output for the assistant turn
-    (a contract violation, surfaced loudly so callers can investigate
-    the tokenizer).
+      2. **Chat-template re-encoding (fallback).** For legacy
+         trajectories captured before the rollout probes existed —
+         where ``prompt_token_ids`` / ``response_token_ids`` are
+         ``None`` — the function re-encodes via the supplied
+         tokenizer's chat template:
+
+           * **prompt** = chat-templated encoding of ``system + user +
+             assistant_turns[0..i-1]`` interleaved with their tool
+             responses, terminated by the assistant generation prompt.
+           * **response** = the encoding of the chat template applied to
+             ``prior_messages + [assistant turn i]`` with
+             ``add_generation_prompt=False``, sliced past the prompt
+             prefix. ``<think>`` blocks are stripped; ``<tool_call>``
+             XML bodies are kept.
+
+         Raises ``ValueError`` when the tokenizer is missing on this
+         path or the chat template does not extend its output.
+
+    Pure function — no file I/O, no env reads. The mixed case (some
+    steps captured, others not) falls back to re-encoding for the
+    missing-id steps so callers never see partial output.
     """
     pairs: list[tuple[list[int], list[int]]] = []
     assistant_steps = [s for s in trajectory.steps if s.role == "assistant"]
     for i, step in enumerate(assistant_steps):
+        captured_prompt = step.prompt_token_ids
+        captured_response = step.response_token_ids
+        if captured_prompt is not None and captured_response is not None:
+            # Preferred path — exact IDs vLLM saw / emitted.
+            pairs.append((list(captured_prompt), list(captured_response)))
+            continue
+        # Fallback: re-encode via chat template.
+        if tokenizer is None:
+            raise ValueError(
+                f"assistant turn {i} has no captured token IDs and no "
+                "tokenizer was supplied for the chat-template fallback"
+            )
         prior_msgs = _build_prior_messages(
             trajectory,
             target_assistant_idx=i,
@@ -220,7 +247,7 @@ def extract_token_pairs(
 
 def trajectory_to_rollouts(
     trajectory: AgentTrajectory,
-    tokenizer: ChatTokenizer,
+    tokenizer: ChatTokenizer | None = None,
     *,
     system_prompt: str | None = None,
 ) -> list[dict]:
