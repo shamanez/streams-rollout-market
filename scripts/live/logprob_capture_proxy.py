@@ -83,9 +83,12 @@ def inject_logprobs(request_body: bytes) -> bytes:
         return request_body
     body.setdefault("logprobs", True)
     body.setdefault("top_logprobs", 1)
-    extra = body.setdefault("extra_body", {})
-    if isinstance(extra, dict):
-        extra.setdefault("return_tokens_as_token_ids", True)
+    # vLLM 0.x exposes a top-level ``return_token_ids`` flag (NOT under
+    # extra_body) that populates the response with ``prompt_token_ids``
+    # (top level) and ``choices[i].token_ids`` (per choice). This is
+    # the cleanest path to raw int token IDs — far simpler than
+    # parsing ``token_id:{N}`` strings from ``return_tokens_as_token_ids``.
+    body.setdefault("return_token_ids", True)
     # routed_experts capture is engine-level (the vLLM serve must be
     # launched with `--enable-return-routed-experts`). No request-side
     # parameter is needed; vLLM stamps the routed_experts field on each
@@ -143,8 +146,6 @@ def extract_probes(
     if not isinstance(content, list) or not content:
         return None
     response_logprobs: list[float] = []
-    response_token_ids: list[int] = []
-    saw_any_token_id = False
     for entry in content:
         if not isinstance(entry, dict):
             return None
@@ -152,17 +153,26 @@ def extract_probes(
         if not isinstance(lp, (int, float)):
             return None
         response_logprobs.append(float(lp))
-        tid = entry.get("token_id")
-        if isinstance(tid, int):
-            response_token_ids.append(tid)
-            saw_any_token_id = True
     out: dict = {
         "prompt_index": prompt_index,
         "turn_idx": turn_idx,
         "response_logprobs": response_logprobs,
     }
-    if saw_any_token_id and len(response_token_ids) == len(response_logprobs):
-        out["response_token_ids"] = response_token_ids
+    # ``return_token_ids=true`` on the request populates two TOP-LEVEL
+    # fields: the response object's ``prompt_token_ids`` (the ints
+    # vLLM saw as input) and ``choices[i].token_ids`` (the ints vLLM
+    # emitted). Both are plain list[int]. This is what fills in the
+    # ``prompt_token_ids`` / ``response_token_ids`` halves of the
+    # cycle-3 v2 probe surface directly — no chat-template fallback
+    # needed when these are populated.
+    choice = choices[0] if isinstance(choices[0], dict) else None
+    if choice is not None:
+        resp_tids = choice.get("token_ids")
+        if isinstance(resp_tids, list) and resp_tids:
+            out["response_token_ids"] = list(resp_tids)
+    prompt_tids = rsp.get("prompt_token_ids")
+    if isinstance(prompt_tids, list) and prompt_tids:
+        out["prompt_token_ids"] = list(prompt_tids)
     # MoE routed_experts: per the vLLM docs
     # (https://docs.vllm.ai/en/latest/training/routed_experts_replay/),
     # this is a TOP-LEVEL field on each choice, NOT a per-token field
@@ -173,7 +183,6 @@ def extract_probes(
     # ``[prompt_len, num_moe_layers, top_k]``) — captured here too so
     # downstream router-pair scripts can build a full RouterTrace
     # against the prompt+response concatenation if they want.
-    choice = choices[0] if isinstance(choices[0], dict) else None
     if choice is not None:
         routed = choice.get("routed_experts")
         if isinstance(routed, list) and routed:

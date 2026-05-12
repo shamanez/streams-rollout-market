@@ -118,16 +118,19 @@ def _vllm_response_with_routed(
     ``[gen_len, num_moe_layers, top_k]`` — the per-token list is the
     OUTER axis of one ``choices[0].routed_experts`` array.
     """
-    content = [{"token": tok, "logprob": lp, "token_id": tid} for tok, tid, lp, _ in tokens]
+    content = [{"token": tok, "logprob": lp} for tok, _, lp, _ in tokens]
+    token_ids = [tid for _, tid, _, _ in tokens]
     routed_experts = [re for _, _, _, re in tokens]
     return json.dumps(
         {
             "id": "chatcmpl-moe-e2e",
+            "prompt_token_ids": [40, 41, 42, 43, 44],
             "choices": [
                 {
                     "index": 0,
                     "message": {"role": "assistant", "content": "answer"},
                     "logprobs": {"content": content},
+                    "token_ids": token_ids,
                     "routed_experts": routed_experts,
                     "finish_reason": "stop",
                 }
@@ -193,7 +196,8 @@ def test_full_moe_pipeline_e2e_matched(
 
     # 3. filler (re-derives prompt_token_ids)
     traj, n_filled = filler_mod.fill_trajectory(trajectories[0], _FakeTokenizer())
-    assert n_filled == 1
+    # Proxy already captured prompt_token_ids via return_token_ids.
+    assert n_filled == 0
 
     # 4. builder
     _, index = builder_mod.build_rollouts_and_index([traj], precision_class="bf16")

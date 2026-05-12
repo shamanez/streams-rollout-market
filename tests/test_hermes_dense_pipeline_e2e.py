@@ -108,11 +108,18 @@ class _FakeTokenizer:
         return ids
 
 
-def _synth_vllm_response(tokens: list[tuple[str, int, float]]) -> bytes:
-    content = [{"token": tok, "logprob": lp, "token_id": tid} for tok, tid, lp in tokens]
+def _synth_vllm_response(
+    tokens: list[tuple[str, int, float]],
+    *,
+    prompt_token_ids: list[int] | None = None,
+) -> bytes:
+    """Match the real vLLM shape: choices[0].token_ids + top-level
+    prompt_token_ids when ``return_token_ids=true`` was on the request."""
+    content = [{"token": tok, "logprob": lp} for tok, _, lp in tokens]
     return json.dumps(
         {
             "id": "chatcmpl-e2e",
+            "prompt_token_ids": prompt_token_ids or [10, 11, 12, 13, 14, 15, 16, 17],
             "choices": [
                 {
                     "index": 0,
@@ -121,6 +128,7 @@ def _synth_vllm_response(tokens: list[tuple[str, int, float]]) -> bytes:
                         "content": "".join(t[0] for t in tokens),
                     },
                     "logprobs": {"content": content},
+                    "token_ids": [t[1] for t in tokens],
                     "finish_reason": "stop",
                 }
             ],
@@ -190,16 +198,15 @@ def test_full_dense_pipeline_e2e(
     assert step.response_token_ids == [t[1] for t in tokens]
     assert step.response_logprobs == pytest.approx([t[2] for t in tokens])
 
-    # --- step 3a: filler.fill_trajectory re-derives prompt_token_ids ---
-    # This is the load-bearing step that replaces the previous synthetic
-    # stamp: the proxy can't capture prompt_token_ids from
-    # chat-completions, so we let the filler do the real chat-template
-    # encoding from the trajectory's accumulated history.
+    # --- step 3a: filler.fill_trajectory is a no-op when the proxy
+    # already captured prompt_token_ids via return_token_ids ---
+    # The proxy fills prompt_token_ids straight from the vLLM
+    # response, so the filler has nothing to do.
     traj_with_prompt, n_filled = filler_mod.fill_trajectory(traj, _FakeTokenizer())
-    assert n_filled == 1
+    assert n_filled == 0
     filled_step = traj_with_prompt.assistant_steps()[0]
     assert filled_step.prompt_token_ids is not None
-    # Captured response IDs survived the fill step untouched.
+    # Captured response IDs survived untouched.
     assert filled_step.response_token_ids == [t[1] for t in tokens]
 
     # --- step 3b: builder.build_rollouts_and_index ---------------------
@@ -389,7 +396,9 @@ def test_full_dense_pipeline_propagates_divergence(
         engine_fingerprint="sha256:hermes-qwen3-32b-fp8",
     )
     traj, n_filled = filler_mod.fill_trajectory(trajectories[0], _FakeTokenizer())
-    assert n_filled == 1
+    # Proxy already captured prompt_token_ids via return_token_ids,
+    # so the filler has nothing to do.
+    assert n_filled == 0
     _, index = builder_mod.build_rollouts_and_index([traj], precision_class="fp8")
     # Trainer disagrees by a per-token-varying delta. A constant
     # offset would leave ESS == 1.0 (the importance weights would be

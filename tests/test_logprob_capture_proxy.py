@@ -54,7 +54,10 @@ def test_inject_logprobs_adds_missing_keys(proxy: ModuleType) -> None:
     out = json.loads(proxy.inject_logprobs(body).decode())
     assert out["logprobs"] is True
     assert out["top_logprobs"] == 1
-    assert out["extra_body"]["return_tokens_as_token_ids"] is True
+    # Top-level return_token_ids surfaces prompt_token_ids /
+    # choices[i].token_ids as raw int lists — see vLLM
+    # entrypoints/openai/chat_completion/protocol.py.
+    assert out["return_token_ids"] is True
 
 
 def test_inject_logprobs_preserves_agent_preference(proxy: ModuleType) -> None:
@@ -65,13 +68,13 @@ def test_inject_logprobs_preserves_agent_preference(proxy: ModuleType) -> None:
             "model": "Qwen/Qwen3-32B",
             "logprobs": False,
             "top_logprobs": 5,
-            "extra_body": {"return_tokens_as_token_ids": False},
+            "return_token_ids": False,
         }
     ).encode("utf-8")
     out = json.loads(proxy.inject_logprobs(body).decode())
     assert out["logprobs"] is False
     assert out["top_logprobs"] == 5
-    assert out["extra_body"]["return_tokens_as_token_ids"] is False
+    assert out["return_token_ids"] is False
 
 
 def test_inject_logprobs_passes_non_json_through(proxy: ModuleType) -> None:
@@ -94,9 +97,8 @@ def test_inject_logprobs_does_not_add_routed_experts_request_param(
     out = json.loads(proxy.inject_logprobs(body).decode())
     extra = out.get("extra_body", {})
     assert "return_routed_experts" not in extra
-    # token_ids extra is still injected — that one IS a real vLLM
-    # request-side opt-in.
-    assert extra.get("return_tokens_as_token_ids") is True
+    # return_token_ids is the load-bearing opt-in (top-level, not extra_body).
+    assert out["return_token_ids"] is True
 
 
 # --- derive_turn_idx --------------------------------------------------------
@@ -196,38 +198,34 @@ def test_derive_prompt_index_fallback_zero_string(proxy: ModuleType) -> None:
 
 
 def _vllm_response(*, with_token_ids: bool = True) -> bytes:
+    """Build a synthetic vLLM chat-completions response.
+
+    When ``with_token_ids=True`` the response includes the top-level
+    ``prompt_token_ids`` and per-choice ``token_ids`` fields that vLLM
+    populates when the request had ``return_token_ids=true``.
+    """
     content = [
-        {
-            "token": "The",
-            "logprob": -0.1,
-            **({"token_id": 791} if with_token_ids else {}),
-        },
-        {
-            "token": " answer",
-            "logprob": -0.2,
-            **({"token_id": 4320} if with_token_ids else {}),
-        },
-        {
-            "token": " 4",
-            "logprob": -0.05,
-            **({"token_id": 19} if with_token_ids else {}),
-        },
+        {"token": "The", "logprob": -0.1},
+        {"token": " answer", "logprob": -0.2},
+        {"token": " 4", "logprob": -0.05},
     ]
-    rsp = {
-        "id": "chatcmpl-1",
-        "choices": [
-            {
-                "index": 0,
-                "message": {"role": "assistant", "content": "The answer 4"},
-                "logprobs": {"content": content},
-                "finish_reason": "stop",
-            }
-        ],
+    choice = {
+        "index": 0,
+        "message": {"role": "assistant", "content": "The answer 4"},
+        "logprobs": {"content": content},
+        "finish_reason": "stop",
     }
+    rsp = {"id": "chatcmpl-1", "choices": [choice]}
+    if with_token_ids:
+        choice["token_ids"] = [791, 4320, 19]
+        rsp["prompt_token_ids"] = [100, 101, 102, 103]
     return json.dumps(rsp).encode("utf-8")
 
 
 def test_extract_probes_vllm_shape_with_token_ids(proxy: ModuleType) -> None:
+    """When the response includes vLLM's return_token_ids fields,
+    both prompt_token_ids (top-level) and response_token_ids
+    (choices[0].token_ids) land on the sidecar."""
     out = proxy.extract_probes(
         b"{}", _vllm_response(with_token_ids=True), prompt_index=0, turn_idx=0
     )
@@ -236,11 +234,12 @@ def test_extract_probes_vllm_shape_with_token_ids(proxy: ModuleType) -> None:
     assert out["turn_idx"] == 0
     assert out["response_logprobs"] == [-0.1, -0.2, -0.05]
     assert out["response_token_ids"] == [791, 4320, 19]
+    assert out["prompt_token_ids"] == [100, 101, 102, 103]
 
 
 def test_extract_probes_openai_shape_no_token_ids(proxy: ModuleType) -> None:
     """Vanilla OpenAI chat-completions doesn't carry per-token ids;
-    we still return the logprobs and just omit token_ids."""
+    we still return the logprobs and just omit the token_ids keys."""
     out = proxy.extract_probes(
         b"{}", _vllm_response(with_token_ids=False), prompt_index=1, turn_idx=3
     )
@@ -249,6 +248,7 @@ def test_extract_probes_openai_shape_no_token_ids(proxy: ModuleType) -> None:
     assert out["turn_idx"] == 3
     assert out["response_logprobs"] == [-0.1, -0.2, -0.05]
     assert "response_token_ids" not in out
+    assert "prompt_token_ids" not in out
 
 
 def test_extract_probes_captures_routed_experts_when_present(
@@ -261,16 +261,18 @@ def test_extract_probes_captures_routed_experts_when_present(
     """
     rsp = json.dumps(
         {
+            "prompt_token_ids": [50, 51, 52],
             "prompt_routed_experts": [
                 [[7, 6], [5, 4], [3, 2]],
                 [[6, 7], [4, 5], [2, 3]],
             ],
             "choices": [
                 {
+                    "token_ids": [100, 101],
                     "logprobs": {
                         "content": [
-                            {"token": "A", "logprob": -0.1, "token_id": 100},
-                            {"token": "B", "logprob": -0.2, "token_id": 101},
+                            {"token": "A", "logprob": -0.1},
+                            {"token": "B", "logprob": -0.2},
                         ]
                     },
                     "routed_experts": [
@@ -283,17 +285,16 @@ def test_extract_probes_captures_routed_experts_when_present(
     ).encode()
     out = proxy.extract_probes(b"{}", rsp, prompt_index=0, turn_idx=0)
     assert out is not None
-    # Per-choice routed_experts -> response_routed_experts on the sidecar.
     assert out["response_routed_experts"] == [
         [[0, 1], [2, 3], [4, 5]],
         [[1, 0], [3, 2], [5, 4]],
     ]
-    # Top-level prompt_routed_experts -> prompt_routed_experts on the sidecar.
     assert out["prompt_routed_experts"] == [
         [[7, 6], [5, 4], [3, 2]],
         [[6, 7], [4, 5], [2, 3]],
     ]
     assert out["response_token_ids"] == [100, 101]
+    assert out["prompt_token_ids"] == [50, 51, 52]
 
 
 def test_extract_probes_omits_routed_experts_when_absent(
@@ -432,11 +433,11 @@ def test_end_to_end_proxy_records_sidecar(proxy: ModuleType, tmp_path: Path) -> 
         server.shutdown()
         server.server_close()
 
-    # Upstream saw the rewritten body with logprobs injected.
+    # Upstream saw the rewritten body with logprobs + return_token_ids injected.
     received = json.loads(upstream.received_body.decode())
     assert received["logprobs"] is True
     assert received["top_logprobs"] == 1
-    assert received["extra_body"]["return_tokens_as_token_ids"] is True
+    assert received["return_token_ids"] is True
 
     # Client got the upstream's response verbatim.
     assert json.loads(body)["choices"][0]["finish_reason"] == "stop"
@@ -449,6 +450,7 @@ def test_end_to_end_proxy_records_sidecar(proxy: ModuleType, tmp_path: Path) -> 
     assert rec["turn_idx"] == 2
     assert rec["response_logprobs"] == [-0.1, -0.2, -0.05]
     assert rec["response_token_ids"] == [791, 4320, 19]
+    assert rec["prompt_token_ids"] == [100, 101, 102, 103]
 
 
 def test_end_to_end_proxy_auto_derives_turn_idx_without_header(
