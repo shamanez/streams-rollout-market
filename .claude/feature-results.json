@@ -115,8 +115,8 @@
     "directive": "Final acceptance gate. Re-run `python -m rollout_market.cli.dense_dashboard ...`, `python -m rollout_market.cli.router_dashboard ...`, `python -m rollout_market.cli.agent_dashboard ...`, then `python scripts/live/publish_dashboards.py`. Inspect the rendered `docs/index.html`: above the fold MUST show 8 tiles that are colour-coded green / amber / red against the per-metric thresholds (no `mx-empty` and no `mx-tbd` placeholders in the visible matrix area). Run `/codex-review --effort low` against `docs/index.html` with the prompt 'Does this 8-tile dashboard answer the question: does the rollout-vs-trainer engine choice change inference-time behaviour enough to matter for crowdsourced MoE rollouts?'. On PASS save the verdict to `.claude/evidence/dashboard_high_quality_render/codex_verdict.txt`. Evidence: that verdict file + the re-rendered `docs/index.html` snapshot. This is the LAST entry — when it flips true the autonomous loop deletes STEER.md per the stop clause and the dashboard is complete."
   },
   "hermes_agent.runner_and_adapter": {
-    "passes": false,
-    "evidence": null,
+    "passes": true,
+    "evidence": ".claude/evidence/hermes_agent_runner/test_hermes_agent_runner.py",
     "directive": "Add scripts/live/hermes_agent_runner.py that shells out to the NousResearch/hermes-agent CLI (run one task at a time with OPENAI_BASE_URL+OPENAI_API_KEY env), parses the resulting JSONL trajectory, and writes our AgentTrajectory schema (src/rollout_market/observatory/agent_trajectory_lab.py). The adapter must be a pure function adapt_hermes_record() testable offline. Add tests/test_hermes_agent_runner.py with a fixture JSONL covering: <think> block, two <tool_call> blocks with matched tool-result records, final non-tool assistant turn, plus a negative malformed-record case. rollout_engine.name must come from env var ENGINE_LABEL with default hermes-{model}-{precision}. Honor STEER.md global directives (one entry per commit)."
   },
   "hermes_agent.realistic_task_suite": {
