@@ -1,7 +1,7 @@
 # PROGRESS.md — Agent Handoff State
 
 ## Last updated
-2026-05-12 (cycle 3 v2 minimal-task reset — 8 entries to fill the dashboard)
+2026-05-12 (cycle 3 v2 task #1 shipped — proxy_enable_thinking_off; 7 queue entries remain)
 
 ---
 
@@ -81,6 +81,32 @@ by `scripts/live/serve_for_capture.sh`.
 - `bash .claude/scripts/steer.sh "<note>"` — overwrite STEER.md.
 
 ---
+
+## Cycle 3 v2 — task #1 shipped: `proxy_enable_thinking_off` (2026-05-12)
+
+`scripts/live/logprob_capture_proxy.py::inject_logprobs` now `setdefault`s
+`chat_template_kwargs.enable_thinking=False` on every outbound chat-
+completions request. This is the documented off-switch for Qwen3's
+default reasoning mode — `/no_think` in user content is NOT a fix
+(Qwen3 reads it as plain text), and Hermes-Agent doesn't thread the
+kwarg through. Idempotent on caller choice: when the caller explicitly
+opts into reasoning mode or has other `chat_template_kwargs` keys set,
+the proxy preserves them — same agent-preference rule the existing
+`logprobs` / `top_logprobs` / `return_token_ids` injects already follow.
+
+Tests (+2 in `tests/test_logprob_capture_proxy.py`):
+- `test_inject_disables_thinking_by_default` — bare request gets the
+  kwarg stamped.
+- `test_inject_preserves_caller_thinking_choice` — explicit
+  `enable_thinking=True` and sibling keys survive untouched.
+
+**476 passing (+2 from 474)**. ruff clean. Evidence under
+`.claude/evidence/hermes_proxy_enable_thinking/`.
+
+This unblocks the cycle-3 v2 MoE smoke: the 2026-05-12 DNF (1 658 s,
+`Context length exceeded: max compression attempts (3) reached`)
+should reduce to ≤ 90 s once the next task (`live_moe_bf16_capture`)
+runs the same prompt through the patched proxy.
 
 ## Cycle 3 v2 iter 2 — setup-22 commit (2026-05-12)
 

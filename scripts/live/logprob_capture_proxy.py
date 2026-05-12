@@ -89,6 +89,18 @@ def inject_logprobs(request_body: bytes) -> bytes:
     # the cleanest path to raw int token IDs — far simpler than
     # parsing ``token_id:{N}`` strings from ``return_tokens_as_token_ids``.
     body.setdefault("return_token_ids", True)
+    # Qwen3 (Dense AND MoE) ships with reasoning mode on; without the
+    # chat-template kwarg below it emits ``<think>...</think>`` blocks
+    # long enough to blow past 131K context in 3 turns. ``/no_think`` in
+    # the user content is NOT a fix — Qwen3 reads it as plain text. The
+    # only working off-switch is ``chat_template_kwargs.enable_thinking
+    # =false`` at the OpenAI body level (documented on Qwen3's chat
+    # template). Hermes-Agent doesn't thread this kwarg through, so we
+    # ``setdefault`` it here. Idempotent: the caller's explicit choice
+    # wins. Non-vLLM upstreams ignore unknown kwargs.
+    chat_template_kwargs = body.setdefault("chat_template_kwargs", {})
+    if isinstance(chat_template_kwargs, dict):
+        chat_template_kwargs.setdefault("enable_thinking", False)
     # routed_experts capture is engine-level (the vLLM serve must be
     # launched with `--enable-return-routed-experts`). No request-side
     # parameter is needed; vLLM stamps the routed_experts field on each

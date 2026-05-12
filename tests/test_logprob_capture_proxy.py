@@ -101,6 +101,35 @@ def test_inject_logprobs_does_not_add_routed_experts_request_param(
     assert out["return_token_ids"] is True
 
 
+def test_inject_disables_thinking_by_default(proxy: ModuleType) -> None:
+    """Qwen3 (both Dense and MoE) defaults to reasoning mode; the
+    ``<think>...</think>`` blocks blew past 131K context in 3 turns
+    during the 2026-05-12 Hermes-MoE summarize-repo smoke. The only
+    documented off-switch is ``chat_template_kwargs.enable_thinking=
+    False`` at the OpenAI body level — Hermes-Agent doesn't thread it
+    through, so the proxy injects it on every outbound request."""
+    body = json.dumps({"model": "Qwen/Qwen3-30B-A3B", "messages": []}).encode("utf-8")
+    out = json.loads(proxy.inject_logprobs(body).decode())
+    assert out["chat_template_kwargs"]["enable_thinking"] is False
+
+
+def test_inject_preserves_caller_thinking_choice(proxy: ModuleType) -> None:
+    """Idempotent: if the caller explicitly opts into reasoning mode
+    (``enable_thinking=True``) or has other ``chat_template_kwargs``
+    keys set, the proxy must NOT overwrite them — same agent-preference
+    rule as for ``logprobs`` / ``top_logprobs``."""
+    body = json.dumps(
+        {
+            "model": "Qwen/Qwen3-30B-A3B",
+            "messages": [],
+            "chat_template_kwargs": {"enable_thinking": True, "custom_key": "value"},
+        }
+    ).encode("utf-8")
+    out = json.loads(proxy.inject_logprobs(body).decode())
+    assert out["chat_template_kwargs"]["enable_thinking"] is True
+    assert out["chat_template_kwargs"]["custom_key"] == "value"
+
+
 # --- derive_turn_idx --------------------------------------------------------
 
 
