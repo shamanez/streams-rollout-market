@@ -1,8 +1,11 @@
 # PROGRESS.md — Agent Handoff State
 
 ## Last updated
-2026-05-12 (cycle 3 v2 tasks #1/#2/#3 shipped; pivot to logprob-only dashboard
-per operator direction)
+2026-05-12 (cycle 3 v2 tasks #1/#2/#3 shipped + 3 of 4 trainer-force cells
+real on the Hermes-Agent dashboard matrices: Dense×FSDP=0.9997 green,
+Dense×Megatron=0.9996 green, MoE×FSDP=0.9532 amber, MoE×Megatron=TBD
+pending checkpoint conversion. Router-flip-rate is a documented TBD
+placeholder per the operator pivot away from cycle-2 MoE numbers.)
 
 ---
 

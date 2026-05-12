@@ -1,6 +1,39 @@
 {
-  "num_runs": 45,
+  "num_runs": 48,
   "engine_pairs": [
+    {
+      "rollout_engine": "hermes-qwen3-30b-a3b-bf16",
+      "trainer_engine": "fsdp-bf16",
+      "count": 1,
+      "mean_ess": 0.9532407765248674,
+      "mean_clipped_fraction": 0.0,
+      "mean_sequence_log_ratio": -1.6093293414765526,
+      "mean_delta_logprob_abs": 0.13578409295251012,
+      "worst_max_abs_log_ratio": 2.0267215073108673,
+      "total_policy_tokens": 18
+    },
+    {
+      "rollout_engine": "hermes-qwen3-32b-bf16",
+      "trainer_engine": "fsdp-bf16",
+      "count": 1,
+      "mean_ess": 0.9997302722747179,
+      "mean_clipped_fraction": 0.0,
+      "mean_sequence_log_ratio": -0.11544823229434087,
+      "mean_delta_logprob_abs": 0.004683970787105544,
+      "worst_max_abs_log_ratio": 0.08414685726165771,
+      "total_policy_tokens": 27
+    },
+    {
+      "rollout_engine": "hermes-qwen3-32b-bf16",
+      "trainer_engine": "megatron-bf16",
+      "count": 1,
+      "mean_ess": 0.999602486433886,
+      "mean_clipped_fraction": 0.0,
+      "mean_sequence_log_ratio": -0.1503798658495512,
+      "mean_delta_logprob_abs": 0.006051176334443496,
+      "worst_max_abs_log_ratio": 0.0841105580329895,
+      "total_policy_tokens": 27
+    },
     {
       "rollout_engine": "sglang",
       "trainer_engine": "hf-transformers",
@@ -945,6 +978,63 @@
       "max_abs_log_ratio": 0.3861668109893799,
       "top_1pct_gradient_mass": 0.009736679418907004,
       "created_at": "2026-05-11T13:41:09.700369+00:00"
+    },
+    {
+      "run_id": "hermes-qwen3-32b-bf16-vs-fsdp-bf16-no-op-trivia-turn0",
+      "model_id": "Qwen/Qwen3-32B",
+      "rollout_engine": "hermes-qwen3-32b-bf16",
+      "trainer_engine": "fsdp-bf16",
+      "precision_class": "bf16",
+      "quantization_class": null,
+      "prompt_id": "no-op-trivia-turn0",
+      "num_policy_tokens": 27,
+      "delta_logprob_mean": -0.004275860455345958,
+      "delta_logprob_abs_mean": 0.004683970787105544,
+      "sequence_log_ratio": -0.11544823229434087,
+      "ess": 0.9997302722747179,
+      "clipped_fraction": 0.0,
+      "veto_fraction": 0.0,
+      "max_abs_log_ratio": 0.08414685726165771,
+      "top_1pct_gradient_mass": 0.0373390470215034,
+      "created_at": "2026-05-12T11:09:28.642245+00:00"
+    },
+    {
+      "run_id": "hermes-qwen3-30b-a3b-bf16-vs-fsdp-bf16-no-op-trivia-turn0",
+      "model_id": "Qwen/Qwen3-30B-A3B",
+      "rollout_engine": "hermes-qwen3-30b-a3b-bf16",
+      "trainer_engine": "fsdp-bf16",
+      "precision_class": "bf16",
+      "quantization_class": null,
+      "prompt_id": "no-op-trivia-turn0",
+      "num_policy_tokens": 18,
+      "delta_logprob_mean": -0.08940718563758626,
+      "delta_logprob_abs_mean": 0.13578409295251012,
+      "sequence_log_ratio": -1.6093293414765526,
+      "ess": 0.9532407765248674,
+      "clipped_fraction": 0.0,
+      "veto_fraction": 0.0,
+      "max_abs_log_ratio": 2.0267215073108673,
+      "top_1pct_gradient_mass": 0.07250638033500224,
+      "created_at": "2026-05-12T11:09:28.832407+00:00"
+    },
+    {
+      "run_id": "hermes-qwen3-32b-bf16-vs-megatron-bf16-no-op-trivia-turn0",
+      "model_id": "Qwen/Qwen3-32B",
+      "rollout_engine": "hermes-qwen3-32b-bf16",
+      "trainer_engine": "megatron-bf16",
+      "precision_class": "bf16",
+      "quantization_class": null,
+      "prompt_id": "no-op-trivia-turn0",
+      "num_policy_tokens": 27,
+      "delta_logprob_mean": -0.0055696246610944895,
+      "delta_logprob_abs_mean": 0.006051176334443496,
+      "sequence_log_ratio": -0.1503798658495512,
+      "ess": 0.999602486433886,
+      "clipped_fraction": 0.0,
+      "veto_fraction": 0.0,
+      "max_abs_log_ratio": 0.0841105580329895,
+      "top_1pct_gradient_mass": 0.03738488801783275,
+      "created_at": "2026-05-12T11:19:33.130489+00:00"
     }
   ]
 }

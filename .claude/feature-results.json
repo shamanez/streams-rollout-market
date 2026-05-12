@@ -135,8 +135,8 @@
     "directive": "Cycle-3 v2 live capture (single host, on the spot). Goal: one AgentTrajectory JSON for ONE Hermes task at Dense bf16 with response_logprobs populated (no routed_experts for dense). Same flow as live_moe_bf16_capture but: tmux session A uses MODEL=Qwen/Qwen3-32B TP=4 MAX_LEN=131072 (routed-experts auto-disabled for dense). sidecar at /tmp/hermes_probes_dense_bf16.jsonl. Hermes model.default = 'Qwen/Qwen3-32B'. Same one summarize-repo task. Merger output dir runs/live/agent/hermes/qwen3-32b/bf16/, engine-label hermes-qwen3-32b-bf16, engine-fingerprint sha256:hermes-qwen3-32b-bf16-tp4-l40s. ACCEPTANCE: exactly one .json file under runs/live/agent/hermes/qwen3-32b/bf16/ with at least one AgentStep carrying non-empty response_logprobs + response_token_ids. Evidence at .claude/evidence/hermes_live_dense_bf16_capture/. Honor STEER.md."
   },
   "hermes_agent.live_moe_fsdp_pair": {
-    "passes": false,
-    "evidence": null,
+    "passes": true,
+    "evidence": ".claude/evidence/hermes_live_moe_fsdp_pair/SUMMARY.md",
     "directive": "Cycle-3 v2 trainer pair (MoE \u00d7 FSDP-bf16). Reuses the trajectory from live_moe_bf16_capture (NO new rollout). Steps on the spot: (1) python scripts/live/fill_prompt_token_ids.py --trajectory-dir runs/live/agent/hermes/qwen3-30b-a3b/bf16/ (fills any missing prompt_token_ids via chat-template). (2) python scripts/live/build_hermes_dense_input.py --trajectory-dir runs/live/agent/hermes/qwen3-30b-a3b/bf16/ --precision-class bf16 \u2014 writes /tmp/rollouts.json (multi-prompt list) + /tmp/hermes_dense_index_bf16.json. (3) Tear down vLLM+proxy tmux sessions to free GPUs. (4) torchrun --nproc-per-node 4 ~/run_fsdp_moe_reference.py \u2014 writes /tmp/trainers_moe.json. (5) python scripts/live/pair_hermes_moe_reports.py --index /tmp/hermes_dense_index_bf16.json --trainers /tmp/trainers_moe.json --trajectory-dir runs/live/agent/hermes/qwen3-30b-a3b/bf16/ --out-root runs/live/router/hermes-qwen3-30b-a3b-bf16-vs-fsdp-bf16/ --trainer-engine-label fsdp-bf16. ACCEPTANCE: at least one router_mismatch_report.json under runs/live/router/hermes-qwen3-30b-a3b-bf16-vs-fsdp-bf16/ with trainer_engine.name == fsdp AND a non-degenerate router_flip_rate. Evidence path + the .json. Honor STEER.md."
   },
   "hermes_agent.live_moe_megatron_pair": {
@@ -145,13 +145,13 @@
     "directive": "Cycle-3 v2 trainer pair (MoE \u00d7 Megatron-bf16). Same trajectory as live_moe_fsdp_pair (no new rollout, no new build). Steps on the spot: (1) bash ~/megatron_moe_reference_launch.sh \u2014 runs run_megatron_moe_reference.py inside the slimerl/slime docker container with the bind-mounted /root/megatron_conversion/megatron_ckpt path. Reads /tmp/rollouts.json from the host; writes /tmp/trainers_moe_megatron.json (override the default output filename if needed). (2) python scripts/live/pair_hermes_moe_reports.py --index /tmp/hermes_dense_index_bf16.json --trainers /tmp/trainers_moe_megatron.json --trajectory-dir runs/live/agent/hermes/qwen3-30b-a3b/bf16/ --out-root runs/live/router/hermes-qwen3-30b-a3b-bf16-vs-megatron-bf16/ --trainer-engine-label megatron-bf16. ACCEPTANCE: at least one router_mismatch_report.json under runs/live/router/hermes-qwen3-30b-a3b-bf16-vs-megatron-bf16/ with trainer_engine.name == megatron-lm AND a non-degenerate router_flip_rate. Honor STEER.md."
   },
   "hermes_agent.live_dense_fsdp_pair": {
-    "passes": false,
-    "evidence": null,
+    "passes": true,
+    "evidence": ".claude/evidence/hermes_live_dense_fsdp_pair/SUMMARY.md",
     "directive": "Cycle-3 v2 trainer pair (Dense \u00d7 FSDP-bf16). Reuses the trajectory from live_dense_bf16_capture (no new rollout). Steps on the spot: (1) python scripts/live/fill_prompt_token_ids.py --trajectory-dir runs/live/agent/hermes/qwen3-32b/bf16/. (2) python scripts/live/build_hermes_dense_input.py --trajectory-dir runs/live/agent/hermes/qwen3-32b/bf16/ --precision-class bf16 \u2014 writes /tmp/rollouts.json + /tmp/hermes_dense_index_bf16.json. (3) torchrun --nproc-per-node 4 ~/run_fsdp_reference.py \u2014 writes /tmp/trainers.json. (4) python scripts/live/pair_hermes_dense_reports.py --index /tmp/hermes_dense_index_bf16.json --trainers /tmp/trainers.json --trajectory-dir runs/live/agent/hermes/qwen3-32b/bf16/ --out-root runs/live/dense/hermes-qwen3-32b-bf16-vs-fsdp-bf16/ --trainer-engine-label fsdp-bf16. ACCEPTANCE: at least one dense_mismatch_report.json under runs/live/dense/hermes-qwen3-32b-bf16-vs-fsdp-bf16/ with trainer_engine.name == fsdp AND a finite mean_ESS in [0, 1]. Honor STEER.md."
   },
   "hermes_agent.live_dense_megatron_pair": {
-    "passes": false,
-    "evidence": null,
+    "passes": true,
+    "evidence": ".claude/evidence/hermes_live_dense_megatron_pair/SUMMARY.md",
     "directive": "Cycle-3 v2 trainer pair (Dense \u00d7 Megatron-bf16). Same trajectory as live_dense_fsdp_pair. Steps on the spot: (1) bash ~/megatron_reference_launch.sh \u2014 runs run_megatron_reference.py inside slimerl/slime docker container with the bind-mounted /root/megatron_conversion/qwen3_32b_torch_dist path. Reads /tmp/rollouts.json; writes /tmp/trainers_megatron.json. (2) python scripts/live/pair_hermes_dense_reports.py --index /tmp/hermes_dense_index_bf16.json --trainers /tmp/trainers_megatron.json --trajectory-dir runs/live/agent/hermes/qwen3-32b/bf16/ --out-root runs/live/dense/hermes-qwen3-32b-bf16-vs-megatron-bf16/ --trainer-engine-label megatron-bf16. ACCEPTANCE: at least one dense_mismatch_report.json under runs/live/dense/hermes-qwen3-32b-bf16-vs-megatron-bf16/ with trainer_engine.name == megatron-lm AND a finite mean_ESS. Honor STEER.md."
   },
   "hermes_agent.matrix_render_and_codex": {

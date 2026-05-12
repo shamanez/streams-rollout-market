@@ -205,6 +205,29 @@ The MoE leg of the pipeline is identical with three substitutions:
    script (it autoloads any HF causal-LM, including Qwen3MoE).
    Megatron MoE: `~/megatron_moe_reference_launch.sh`.
 
+> **Note** (2026-05-12): Megatron MoE requires the
+> `~/megatron_conversion/megatron_ckpt/release/` directory to contain
+> the converted Qwen3-30B-A3B torch-dist shards. On a fresh spot
+> reprovisioning the dir may be present but empty (HF→Megatron MoE
+> conversion not run). Re-run the conversion via
+> `~/megatron_conversion/launch_qwen3_30b_a3b.sh` (if present) or
+> follow the conversion runbook before the MoE Megatron leg can
+> succeed. The dashboard tile for `(Hermes MoE × Megatron)` renders
+> as `TBD` until this is done.
+
+The Megatron trainer JSON is a single dict, not a list. After pulling
+back to the laptop, wrap it before passing to `pair_hermes_dense_reports.py`:
+
+```bash
+python3 -c "
+import json, sys
+d = json.load(open(sys.argv[1]))
+if isinstance(d, dict):
+    d.setdefault('prompt_idx', 0)
+    json.dump([d], open(sys.argv[1], 'w'))
+" /tmp/trainers_hermes_dense_megatron_bf16.json
+```
+
 ### One-command summary (laptop side)
 
 Once the spot is set up and a fresh trajectory is captured, this is
