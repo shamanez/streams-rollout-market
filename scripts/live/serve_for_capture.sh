@@ -56,7 +56,7 @@ ROUTED_FLAG=""
 if [[ "$ROUTED_EXPERTS" == "1" ]]; then
     ROUTED_FLAG="--enable-return-routed-experts"
 fi
-ROPE_FLAG=""
+ROPE_FLAG=()
 if [[ "$ROPE_YARN" == "1" ]]; then
     # vLLM 0.20+ removed --rope-scaling; rope settings go via --hf-overrides.
     ROPE_FLAG=(--hf-overrides '{"rope_scaling":{"rope_type":"yarn","factor":4.0,"original_max_position_embeddings":32768}}')
