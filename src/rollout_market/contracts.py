@@ -53,6 +53,14 @@ class DecisionReason(str, Enum):
     REPLAY_TIER_ESS = "replay_tier_ess"
     STALE_POLICY_LAG = "stale_policy_lag"
     VETO_THRESHOLD_EXCEEDED = "veto_threshold_exceeded"
+    # MoE rollouts: the per-(token, layer) top-1 expert disagreement
+    # rate between the rollout engine and the trainer reference. Above
+    # the configured threshold (BudgetPolicy.max_router_flip_rate)
+    # the group is quarantined because every retained gradient step
+    # would route into the wrong expert sub-network on a non-trivial
+    # fraction of tokens — corrupting the MoE training signal in a
+    # way logprob-level correction cannot recover.
+    HIGH_ROUTER_FLIP_RATE = "high_router_flip_rate"
 
 
 class PolicyManifest(BaseModel):
@@ -318,6 +326,11 @@ class BudgetReport(BaseModel):
     veto_fraction: float
     max_abs_log_ratio: float
     policy_lag_steps: int
+    # MoE-only: rollout-vs-trainer top-1 expert disagreement fraction
+    # over the group's response tokens. ``None`` on dense rollouts and
+    # on MoE rollouts that didn't capture router traces. ``decide_group``
+    # only uses this when it's populated, so dense paths are unchanged.
+    router_flip_rate: float | None = None
     notes: list[str] = Field(default_factory=list)
 
 

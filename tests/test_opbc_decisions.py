@@ -39,6 +39,7 @@ def _report(
     veto_fraction: float = 0.0,
     policy_lag: int = 0,
     max_abs_log_ratio: float = 0.1,
+    router_flip_rate: float | None = None,
 ) -> BudgetReport:
     return BudgetReport(
         group_id="g",
@@ -50,6 +51,7 @@ def _report(
         veto_fraction=veto_fraction,
         max_abs_log_ratio=max_abs_log_ratio,
         policy_lag_steps=policy_lag,
+        router_flip_rate=router_flip_rate,
     )
 
 
@@ -224,3 +226,53 @@ def test_full_action_taxonomy_covered():
         decide_group(_report(ess=0.10)).recommended_action,
     }
     assert actions == {"train", "replay", "train_with_correction", "quarantine"}
+
+
+# --- router_flip_rate gate (MoE-only) ---------------------------------------
+
+
+def test_router_flip_rate_above_threshold_quarantines():
+    """MoE rollouts whose top-1 expert disagreement exceeds the
+    dashboard's red threshold (15%) must be quarantined — too many
+    tokens route through the wrong expert sub-network for logprob-
+    level off-policy correction to recover."""
+    decision = decide_group(_report(router_flip_rate=0.20))
+    assert decision.recommended_action == "quarantine"
+    assert decision.status == GroupStatus.QUARANTINED
+    assert DecisionReason.HIGH_ROUTER_FLIP_RATE in decision.decision_reasons
+
+
+def test_router_flip_rate_at_threshold_does_not_quarantine():
+    """The gate is strict greater-than to match the dashboard's amber
+    boundary; an exactly-at-threshold flip rate stays trainable."""
+    decision = decide_group(_report(router_flip_rate=0.15))
+    assert decision.recommended_action == "train"
+    assert decision.status == GroupStatus.ACCEPTED
+
+
+def test_router_flip_rate_none_skips_gate():
+    """Dense rollouts (no router trace captured) report
+    ``router_flip_rate=None``; the gate must be silently skipped so
+    Dense BudgetReports keep flowing through the existing taxonomy."""
+    decision = decide_group(_report(router_flip_rate=None))
+    assert decision.recommended_action == "train"
+    assert decision.decision_reasons == [DecisionReason.WITHIN_BUDGET]
+
+
+def test_router_flip_rate_combines_with_other_quarantine_reasons():
+    """A MoE group can fail multiple quarantine checks at once; the
+    decision should carry every reason that fired so the operator can
+    distinguish ESS-from-flip-rate failures in postmortem."""
+    decision = decide_group(_report(ess=0.10, router_flip_rate=0.40))
+    assert decision.recommended_action == "quarantine"
+    assert DecisionReason.LOW_ESS in decision.decision_reasons
+    assert DecisionReason.HIGH_ROUTER_FLIP_RATE in decision.decision_reasons
+
+
+def test_router_flip_rate_threshold_override_via_policy():
+    """A custom BudgetPolicy can tighten the threshold (e.g. a
+    production-mode marketplace might require flip < 5%)."""
+    strict = BudgetPolicy(max_router_flip_rate=0.05)
+    decision = decide_group(_report(router_flip_rate=0.10), policy=strict)
+    assert decision.recommended_action == "quarantine"
+    assert DecisionReason.HIGH_ROUTER_FLIP_RATE in decision.decision_reasons

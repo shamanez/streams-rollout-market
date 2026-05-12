@@ -1,7 +1,40 @@
 # PROGRESS.md — Agent Handoff State
 
 ## Last updated
-2026-05-12 (cycle 3 v2 iter 2 setup-17 — e2e MoE pipeline integration test)
+2026-05-12 (cycle 3 v2 iter 2 setup-18 — OPBC high_router_flip_rate gate)
+
+## Cycle 3 v2 iter 2 — setup-18 commit (2026-05-12)
+
+Closes the PROGRESS.md "Next work" follow-up #3 (OPBC integration of
+router_flip_rate). OPBC previously only inspected logprob-level
+mismatch; MoE groups whose top-1 expert disagreement was egregious
+would still slip through as long as their ESS held up.
+
+Contract changes (one-commit-bundle per CLAUDE.md):
+
+- `contracts.DecisionReason.HIGH_ROUTER_FLIP_RATE` enum value added,
+  documented with the threshold rationale.
+- `contracts.BudgetReport.router_flip_rate: float | None = None` —
+  backward-compatible (Dense rollouts leave it ``None``).
+- `opbc.BudgetPolicy.max_router_flip_rate: float = 0.15` — mirrors
+  the dashboard's red threshold (>15% = red tile).
+- `opbc.compute_budget_report` gains a new `router_flip_rate=` kwarg
+  that threads onto the BudgetReport.
+- `opbc.decide_group` quarantines when `router_flip_rate >
+  max_router_flip_rate`, *combinable* with other quarantine reasons
+  (LOW_ESS, STALE_POLICY_LAG) so postmortem inspection can tell
+  apart which gate fired.
+
+Tests (7 new): gate above threshold quarantines; exactly-at-threshold
+trains; ``None`` skips the gate (Dense back-compat); combines with
+LOW_ESS; custom strict policy override; ``compute_budget_report``
+threads the kwarg; end-to-end Dense-ESS-clean + high flip → quarantine.
+
+**473 passing (+7 from 466)**. The MoE pipeline's marketplace
+verdict — `router_flip_rate` — now feeds OPBC directly, not just the
+dashboard.
+
+## Cycle 3 v2 iter 2 — setup-17 commit (2026-05-12)
 
 ## Cycle 3 v2 iter 2 — setup-17 commit (2026-05-12)
 

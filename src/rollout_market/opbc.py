@@ -32,6 +32,11 @@ class BudgetPolicy:
     max_policy_lag_steps: int = 8
     replay_lag_threshold: int = 4
     veto_abs_log_ratio: float = 30.0
+    # MoE-only quarantine gate. The Dense + MoE dashboards both flag
+    # router_flip_rate > 15% as the marketplace red threshold, so we
+    # mirror that here. ``None`` on a BudgetReport (Dense rollout)
+    # skips this check entirely.
+    max_router_flip_rate: float = 0.15
 
 
 def _flatten_rollout_logprobs(group: SampleGroup) -> np.ndarray:
@@ -47,11 +52,20 @@ def compute_budget_report(
     group: SampleGroup,
     train_logprobs: list[float] | np.ndarray,
     policy: BudgetPolicy | None = None,
+    *,
+    router_flip_rate: float | None = None,
 ) -> BudgetReport:
     """Compute budget metrics for one group.
 
     `train_logprobs` should correspond to the same valid policy tokens selected by
     action_mask == 1 and tool_output_mask == 0.
+
+    ``router_flip_rate`` is the optional MoE router-mismatch signal
+    (rollout-vs-trainer top-1 expert disagreement fraction over the
+    same response tokens). When supplied it threads onto the
+    ``BudgetReport`` and ``decide_group`` quarantines the group if it
+    exceeds ``BudgetPolicy.max_router_flip_rate``. Dense rollouts
+    leave this ``None`` and the gate is skipped.
     """
     policy = policy or BudgetPolicy()
     rollout = _flatten_rollout_logprobs(group)
@@ -78,6 +92,8 @@ def compute_budget_report(
         notes.append("high clipped fraction")
     if group.policy_lag_steps > policy.max_policy_lag_steps:
         notes.append("policy lag exceeds limit")
+    if router_flip_rate is not None and router_flip_rate > policy.max_router_flip_rate:
+        notes.append("router_flip_rate exceeds limit")
 
     return BudgetReport(
         group_id=group.group_id,
@@ -89,6 +105,7 @@ def compute_budget_report(
         veto_fraction=veto_fraction,
         max_abs_log_ratio=float(np.max(np.abs(log_ratio))),
         policy_lag_steps=group.policy_lag_steps,
+        router_flip_rate=router_flip_rate,
         notes=notes,
     )
 
@@ -123,6 +140,15 @@ def decide_group(report: BudgetReport, policy: BudgetPolicy | None = None) -> Gr
         quarantine_reasons.append(DecisionReason.STALE_POLICY_LAG)
     if report.effective_sample_size < policy.min_ess:
         quarantine_reasons.append(DecisionReason.LOW_ESS)
+    if (
+        report.router_flip_rate is not None
+        and report.router_flip_rate > policy.max_router_flip_rate
+    ):
+        # MoE-only: top-1 expert disagreement above threshold means
+        # too many tokens route through the wrong expert sub-network
+        # — corrupts the gradient on those tokens regardless of how
+        # well logprob-level off-policy correction works.
+        quarantine_reasons.append(DecisionReason.HIGH_ROUTER_FLIP_RATE)
     if quarantine_reasons:
         return GroupDecision(
             group_id=report.group_id,
