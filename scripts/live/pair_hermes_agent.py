@@ -47,40 +47,83 @@ def _pair_one(rollout: Path, trainer: Path, out_root: Path) -> None:
     subprocess.run(cmd, cwd=str(REPO_ROOT), check=True)
 
 
+def _list_trajectories(dirs: list[Path]) -> dict[str, list[Path]]:
+    """Return ``{task_id: [trajectory_json, ...]}`` across all replicate dirs.
+
+    A directory may contain multiple replicates of the same task — the
+    files just need to be parseable AgentTrajectory JSON and share the
+    same ``task_id`` field. We bucket by **filename stem** because
+    hermes_agent_runner writes one trajectory per task with the file
+    name = task_id; replicate dirs follow the same convention. Empty
+    or missing directories are skipped silently.
+    """
+    out: dict[str, list[Path]] = {}
+    for d in dirs:
+        if not d.is_dir():
+            continue
+        for path in sorted(d.glob("*.json")):
+            out.setdefault(path.stem, []).append(path)
+    return out
+
+
 def _pair_side(
     *,
-    rollout_dir: Path,
-    trainer_dir: Path,
+    rollout_dirs: list[Path],
+    trainer_dirs: list[Path],
     out_root: Path,
 ) -> int:
-    if not rollout_dir.is_dir() or not trainer_dir.is_dir():
+    """Pair every rollout replicate against every trainer replicate per task.
+
+    n_rollout_replicates x n_trainer_replicates pairs are produced per
+    task. With one replicate per side this collapses to the original
+    1-pair-per-task behaviour. The aggregator can then average over a
+    much larger sample for noise-floor / precision-effect tiles.
+    """
+    rollout_by_task = _list_trajectories(rollout_dirs)
+    trainer_by_task = _list_trajectories(trainer_dirs)
+    if not rollout_by_task or not trainer_by_task:
         print(
-            f"[warn] skipping pair: missing {rollout_dir} or {trainer_dir}",
+            f"[warn] skipping pair: empty rollout {[str(d) for d in rollout_dirs]} "
+            f"or trainer {[str(d) for d in trainer_dirs]}",
             file=sys.stderr,
         )
         return 0
     paired = 0
-    for rollout_json in sorted(rollout_dir.glob("*.json")):
-        task_id = rollout_json.stem
-        trainer_json = trainer_dir / f"{task_id}.json"
-        if not trainer_json.exists():
-            print(f"[skip] {task_id}: no matching trainer trajectory", file=sys.stderr)
-            continue
-        _pair_one(rollout_json, trainer_json, out_root)
-        paired += 1
+    for task_id in sorted(rollout_by_task.keys() & trainer_by_task.keys()):
+        for r in rollout_by_task[task_id]:
+            for t in trainer_by_task[task_id]:
+                if r == t:
+                    continue  # noise-floor against itself (replicate vs itself)
+                _pair_one(r, t, out_root)
+                paired += 1
     return paired
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="pair_hermes_agent")
     parser.add_argument("--model-slug", required=True, help="e.g. qwen3-32b or qwen3-30b-a3b")
-    parser.add_argument("--bf16-dir", required=True, help="bf16 trajectory dir")
-    parser.add_argument("--fp8-dir", required=False, default=None, help="fp8 trajectory dir")
+    parser.add_argument(
+        "--bf16-dir",
+        required=True,
+        action="append",
+        help=(
+            "bf16 trajectory dir; repeat the flag to pass multiple replicate "
+            "dirs (e.g. --bf16-dir runs/.../bf16 --bf16-dir runs/.../bf16_rep2)"
+        ),
+    )
+    parser.add_argument(
+        "--fp8-dir",
+        required=False,
+        action="append",
+        default=None,
+        help="fp8 trajectory dir; repeatable for replicates",
+    )
     parser.add_argument(
         "--bf16-seedb-dir",
         required=False,
+        action="append",
         default=None,
-        help="bf16_seedB trajectory dir (noise floor)",
+        help="bf16_seedB trajectory dir (noise floor); repeatable for replicates",
     )
     parser.add_argument(
         "--out-base",
@@ -94,24 +137,24 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    bf16 = Path(args.bf16_dir)
+    bf16_dirs = [Path(d) for d in (args.bf16_dir or [])]
     out_base = Path(args.out_base)
 
     total_paired = 0
     if args.fp8_dir:
-        fp8 = Path(args.fp8_dir)
+        fp8_dirs = [Path(d) for d in args.fp8_dir]
         out = out_base / f"hermes-{args.model_slug}-fp8-vs-bf16"
         out.mkdir(parents=True, exist_ok=True)
-        n = _pair_side(rollout_dir=fp8, trainer_dir=bf16, out_root=out)
-        print(f"[paired] fp8-vs-bf16: {n} tasks")
+        n = _pair_side(rollout_dirs=fp8_dirs, trainer_dirs=bf16_dirs, out_root=out)
+        print(f"[paired] fp8-vs-bf16: {n} pairs (across replicates)")
         total_paired += n
 
     if args.bf16_seedb_dir:
-        sb = Path(args.bf16_seedb_dir)
+        sb_dirs = [Path(d) for d in args.bf16_seedb_dir]
         out = out_base / f"hermes-{args.model_slug}-bf16_seedB-vs-bf16"
         out.mkdir(parents=True, exist_ok=True)
-        n = _pair_side(rollout_dir=sb, trainer_dir=bf16, out_root=out)
-        print(f"[paired] bf16_seedB-vs-bf16: {n} tasks")
+        n = _pair_side(rollout_dirs=sb_dirs, trainer_dirs=bf16_dirs, out_root=out)
+        print(f"[paired] bf16_seedB-vs-bf16: {n} pairs (across replicates)")
         total_paired += n
 
     if total_paired == 0:
