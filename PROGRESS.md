@@ -4,10 +4,11 @@
 2026-05-12
 
 ## Current phase
-**Hermes Agent matrix in progress (2/6 iters done).** STEER.md is
-re-armed for a six-iteration cycle that adds 4 new traffic-light
-tiles below the existing 8 (real `hermes-agent` multi-turn
-trajectories over Qwen3-32B + Qwen3-30B-A3B at vLLM-bf16/fp8).
+**Hermes Agent matrix paused on Iter 3 (2/6 iters done, 1 blocker).**
+STEER.md is re-armed for a six-iteration cycle that adds 4 new
+traffic-light tiles below the existing 8 (real `hermes-agent`
+multi-turn trajectories over Qwen3-32B + Qwen3-30B-A3B at
+vLLM-bf16/fp8).
 
 Iter 1 shipped: `scripts/live/hermes_agent_runner.py` + pure
 `adapt_hermes_record` / `adapt_hermes_jsonl` adapters with 18 new
@@ -21,6 +22,20 @@ and `/tmp/clip.py` (correct clipping function for the
 read-then-verify task). 11 new tests in
 `test_agent_tasks_hermes_schema.py`. Total 376 passing (+29 since
 session start).
+
+**Iter 3 blocker** (recorded in
+`scripts/live/hermes_integration_notes.md`): cloned NousResearch/
+hermes-agent into /tmp and discovered the real batch trajectory
+output is ShareGPT `from/value` JSONL with inline `<think>` /
+`<tool_call>` / `<tool_response>` XML — NOT the OpenAI chat-
+completions JSONL the Iter 1 adapter was built against. The Iter 1
+adapter and its 18 tests describe the correct *target* schema
+(AgentTrajectory) but the wrong *source* shape. Three credible
+paths forward (A: pivot adapter to ShareGPT shape; B: relax STEER
+to "hermes tool-call parser via our existing runner"; C: defer
+Iter 3-6) — each represents a different scope contract that needs
+operator input. Loop halts cleanly; operator can pick a path and
+re-arm STEER.
 
 The previous-cycle dashboard restructure is still live;
 `/docs/index.html` continues to answer the load-bearing question:
