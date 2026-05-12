@@ -65,10 +65,29 @@ commit).
 The plan in `docs/git_plan_v2.md` is complete. Pick the next unit of
 work from, in order of preference:
 
-1. **PROGRESS.md "Next work"** — operator-curated research follow-ups
-   ranked by effort-to-evidence ratio.
-2. **`docs/future_research.md`** — the long-form open-questions list.
-3. **`STEER.md`** — operator redirect overrides everything else.
+1. **`STEER.md` "Read this first" block** — when present, supersedes
+   everything. The current top of `STEER.md` (2026-05-12) names the
+   three setup-23/24/25 unblockers that must land before the live
+   cycle-3-v2 rollout can complete:
+   - `hermes_agent.proxy_enable_thinking_off` (1-line proxy patch +
+     2 tests; unblocks the MoE summarize-repo smoke from 1 658 s DNF
+     to <90 s).
+   - `hermes_agent.agent_step_prompt_routed_experts` (schema field +
+     end-to-end thread-through).
+   - `hermes_agent.router_pair_handle_minus_one_sentinel` (filter
+     vLLM's prefix-cache sentinel from `router_flip_rate`).
+2. **`PROGRESS.md` "Bold next steps"** — same ordered priority list,
+   richer detail.
+3. **`.claude/feature-results.json`** — the 5 remaining
+   `hermes_agent.*` entries' `directive` fields (consumed by
+   `/implement-feature`).
+4. **`docs/future_research.md`** — long-form open-questions list.
+
+The live operational runs (steps 4-6 in PROGRESS.md "Bold next steps")
+require running `scripts/live/HERMES_INSTALL.md` from a clean spot
+state. Each is an operator-driven loop iteration: launch the proxy +
+serve, run hermes-agent against the proxy, scp results back, run the
+trainer-side teacher-force, pair, publish_dashboards.
 
 If a follow-up looks too large for one loop iteration (e.g. a full
 n=30 matrix run), break it into a setup PR + a run PR + a writeup PR
