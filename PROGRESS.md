@@ -1,7 +1,40 @@
 # PROGRESS.md — Agent Handoff State
 
 ## Last updated
-2026-05-12 (cycle 3 v2 armed — probe-at-rollout, refeed direction discarded)
+2026-05-12 (cycle 3 v2 iter 2 setup — adapter probe pass-through + MAX_STEPS bumped)
+
+## Cycle 3 v2 iter 2 — setup commit (2026-05-12)
+
+`hermes_agent.dense_capture_then_fsdp` part (a) shipped on
+`research/hermes-dense-capture-setup`:
+
+- `adapt_hermes_record` + `adapt_hermes_sharegpt_trajectory` now thread
+  rollout-side probe fields (`prompt_token_ids`, `response_token_ids`,
+  `response_logprobs`, `response_routed_experts`) onto each assistant
+  `AgentStep` when present on the input record. Tool-role records that
+  carry probes surface as a `ValueError` via `AgentStep`'s own
+  validator (instead of being silently dropped).
+- `MAX_STEPS` default bumped 8 → 25. Long-horizon agent runs commonly
+  need 15-25 turns of tool calls before answering; the cycle-2 default
+  of 8 truncated multi-tool tasks prematurely.
+- 6 new tests covering: probe pass-through on `adapt_hermes_record`,
+  silent-skip when probes are absent, validator rejection on tool
+  records, end-to-end pass-through in `adapt_hermes_jsonl`,
+  ShareGPT-format pass-through (incl. survival across the tool-result
+  backfill rewrite), and the `MAX_STEPS=25` module default.
+
+393 passing (+6 since 387). ruff clean on touched files.
+
+Remaining for the entry to flip `passes: true`:
+  - (b) spot re-run of Dense rollouts at bf16+fp8 with vLLM
+    chat-completions logprobs=True + persistence of token IDs on each
+    assistant turn — needs upstream patches into hermes-agent's
+    batch_runner OR a thin proxy in our runner that injects
+    `logprobs=True` + `top_logprobs=1` into the OpenAI request.
+  - (c) FSDP-bf16 teacher-force on captured `(prompt_token_ids,
+    response_token_ids)` pairs (one forward pass per assistant turn).
+  - (d) Pair into `DenseMismatchReport` per (trajectory, turn) under
+    `runs/live/dense/hermes-qwen3-32b-{bf16,fp8}-vs-fsdp-bf16/`.
 
 ## Current phase
 **Cycle 3 v2 armed — design pivot mid-session (2026-05-12).** Iter 1

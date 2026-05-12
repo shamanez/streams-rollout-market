@@ -70,7 +70,7 @@ PRECISION = os.environ.get("PRECISION", "bf16")
 TASKS_FILE = os.environ.get("TASKS_FILE", "scripts/live/agent_tasks_hermes.json")
 HERMES_CLI = os.environ.get("HERMES_CLI", "hermes-agent")
 HERMES_CONFIG = os.environ.get("HERMES_CONFIG", "")
-MAX_STEPS = int(os.environ.get("MAX_STEPS", "8"))
+MAX_STEPS = int(os.environ.get("MAX_STEPS", "25"))
 ENGINE_VERSION = os.environ.get("ENGINE_VERSION", "0.20.1")
 
 
@@ -81,9 +81,7 @@ def _default_engine_label() -> str:
 
 
 ENGINE_LABEL = os.environ.get("ENGINE_LABEL", _default_engine_label())
-ENGINE_FINGERPRINT = os.environ.get(
-    "ENGINE_FINGERPRINT", f"sha256:{ENGINE_LABEL}-tp4-l40s"
-)
+ENGINE_FINGERPRINT = os.environ.get("ENGINE_FINGERPRINT", f"sha256:{ENGINE_LABEL}-tp4-l40s")
 OUT_DIR = Path(
     os.environ.get(
         "OUT_DIR",
@@ -96,6 +94,24 @@ OUT_DIR = Path(
 
 
 _VALID_ROLES = ("assistant", "tool")
+
+# Optional rollout-side probe fields that the Hermes Agent harness may
+# stamp onto each assistant record when vLLM was asked to return them
+# at generation time. They flow straight through to the AgentStep so
+# the trainer-side teacher-force can re-evaluate the exact same token
+# pair. Tool-role records must never carry them — the AgentStep
+# validator enforces this and we mirror the rule here.
+_PROBE_FIELDS = (
+    "prompt_token_ids",
+    "response_token_ids",
+    "response_logprobs",
+    "response_routed_experts",
+)
+
+
+def _extract_probes(record: dict) -> dict:
+    """Pull probe fields out of a record dict, skipping ones set to None."""
+    return {k: record[k] for k in _PROBE_FIELDS if record.get(k) is not None}
 
 
 def adapt_hermes_record(
@@ -111,27 +127,31 @@ def adapt_hermes_record(
     caller is responsible for building it by scanning tool-role records
     first. Records of unsupported role or missing required fields raise
     ``ValueError`` with a message that names the offending field.
+
+    Assistant records may optionally carry the rollout-time probe
+    fields (``prompt_token_ids``, ``response_token_ids``,
+    ``response_logprobs``, ``response_routed_experts``); they are
+    threaded onto the resulting ``AgentStep`` verbatim.
     """
     if not isinstance(record, dict):
-        raise ValueError(
-            f"hermes record must be a dict, got {type(record).__name__}: {record!r}"
-        )
+        raise ValueError(f"hermes record must be a dict, got {type(record).__name__}: {record!r}")
     role = record.get("role")
     if role not in _VALID_ROLES:
-        raise ValueError(
-            f"hermes record role must be one of {_VALID_ROLES}, got {role!r}"
-        )
+        raise ValueError(f"hermes record role must be one of {_VALID_ROLES}, got {role!r}")
 
     content = record.get("content")
     if content is None:
         content = ""
     elif not isinstance(content, str):
-        raise ValueError(
-            f"hermes record 'content' must be a string, got {type(content).__name__}"
-        )
+        raise ValueError(f"hermes record 'content' must be a string, got {type(content).__name__}")
 
     if role == "tool":
-        return AgentStep(step_idx=step_idx, role="tool", content=content)
+        return AgentStep(
+            step_idx=step_idx,
+            role="tool",
+            content=content,
+            **_extract_probes(record),
+        )
 
     # assistant role — content + optional tool_calls.
     tool_calls_raw = record.get("tool_calls") or []
@@ -144,9 +164,7 @@ def adapt_hermes_record(
     captured: list[ToolCallRecord] = []
     for call in tool_calls_raw:
         if not isinstance(call, dict):
-            raise ValueError(
-                f"hermes tool_call entry must be a dict, got {type(call).__name__}"
-            )
+            raise ValueError(f"hermes tool_call entry must be a dict, got {type(call).__name__}")
         fn = call.get("function") or {}
         name = fn.get("name")
         if not isinstance(name, str) or not name:
@@ -166,9 +184,7 @@ def adapt_hermes_record(
             )
         call_id = call.get("id") or ""
         result = results.get(call_id, "")
-        captured.append(
-            ToolCallRecord.from_call(name=name, arguments=args, result=result)
-        )
+        captured.append(ToolCallRecord.from_call(name=name, arguments=args, result=result))
 
     return AgentStep(
         step_idx=step_idx,
@@ -177,6 +193,7 @@ def adapt_hermes_record(
         tool_calls=captured,
         finish_reason=record.get("finish_reason"),
         response_token_count=int(record.get("response_token_count") or 0),
+        **_extract_probes(record),
     )
 
 
@@ -206,17 +223,13 @@ def adapt_hermes_jsonl(
     - empty trajectory → ``"error"``
     """
     if not isinstance(records, list):
-        raise ValueError(
-            f"records must be a list, got {type(records).__name__}"
-        )
+        raise ValueError(f"records must be a list, got {type(records).__name__}")
 
     # Pass 1: build tool_call_id → result text.
     tool_results: dict[str, str] = {}
     for rec in records:
         if not isinstance(rec, dict):
-            raise ValueError(
-                f"hermes record must be a dict, got {type(rec).__name__}: {rec!r}"
-            )
+            raise ValueError(f"hermes record must be a dict, got {type(rec).__name__}: {rec!r}")
         if rec.get("role") == "tool":
             tcid = rec.get("tool_call_id") or ""
             if tcid:
@@ -302,13 +315,9 @@ def _parse_gpt_value(value: str) -> list[dict]:
         try:
             blob = json.loads(body)
         except json.JSONDecodeError as exc:
-            raise ValueError(
-                f"malformed <tool_call> JSON: {body[:80]!r} ({exc})"
-            ) from exc
+            raise ValueError(f"malformed <tool_call> JSON: {body[:80]!r} ({exc})") from exc
         if not isinstance(blob, dict) or "name" not in blob:
-            raise ValueError(
-                f"<tool_call> body must be a dict with 'name': {blob!r}"
-            )
+            raise ValueError(f"<tool_call> body must be a dict with 'name': {blob!r}")
         out.append(blob)
     return out
 
@@ -326,9 +335,7 @@ def _parse_tool_value(value: str) -> list[dict]:
         try:
             blob = json.loads(body)
         except json.JSONDecodeError as exc:
-            raise ValueError(
-                f"malformed <tool_response> JSON: {body[:80]!r} ({exc})"
-            ) from exc
+            raise ValueError(f"malformed <tool_response> JSON: {body[:80]!r} ({exc})") from exc
         out.append(blob)
     return out
 
@@ -372,14 +379,10 @@ def adapt_hermes_sharegpt_trajectory(
       - otherwise                     → ``"max_steps"``
     """
     if not isinstance(record, dict):
-        raise ValueError(
-            f"hermes record must be a dict, got {type(record).__name__}"
-        )
+        raise ValueError(f"hermes record must be a dict, got {type(record).__name__}")
     convs = record.get("conversations")
     if not isinstance(convs, list):
-        raise ValueError(
-            f"hermes record missing 'conversations' list (got {type(convs).__name__})"
-        )
+        raise ValueError(f"hermes record missing 'conversations' list (got {type(convs).__name__})")
 
     steps: list[AgentStep] = []
     assistant_idx = 0
@@ -390,15 +393,11 @@ def adapt_hermes_sharegpt_trajectory(
 
     for conv in convs:
         if not isinstance(conv, dict):
-            raise ValueError(
-                f"conversations entry must be a dict, got {type(conv).__name__}"
-            )
+            raise ValueError(f"conversations entry must be a dict, got {type(conv).__name__}")
         role_from = conv.get("from")
         value = conv.get("value")
         if not isinstance(value, str):
-            raise ValueError(
-                f"conversations entry 'value' must be a string for from={role_from!r}"
-            )
+            raise ValueError(f"conversations entry 'value' must be a string for from={role_from!r}")
 
         if role_from in ("system", "human"):
             continue
@@ -422,6 +421,7 @@ def adapt_hermes_sharegpt_trajectory(
                     role="assistant",
                     content=value,
                     tool_calls=captured,
+                    **_extract_probes(conv),
                 )
             )
             pending_calls = captured
@@ -465,6 +465,10 @@ def adapt_hermes_sharegpt_trajectory(
                     tool_calls=pending_calls,
                     finish_reason=prev.finish_reason,
                     response_token_count=prev.response_token_count,
+                    prompt_token_ids=prev.prompt_token_ids,
+                    response_token_ids=prev.response_token_ids,
+                    response_logprobs=prev.response_logprobs,
+                    response_routed_experts=prev.response_routed_experts,
                 )
             pending_calls = []
             pending_assistant_step_pos = None
@@ -472,9 +476,7 @@ def adapt_hermes_sharegpt_trajectory(
             pending_call_args = []
             continue
 
-        raise ValueError(
-            f"unsupported conversations 'from' value: {role_from!r}"
-        )
+        raise ValueError(f"unsupported conversations 'from' value: {role_from!r}")
 
     completed = bool(record.get("completed", False))
     partial = bool(record.get("partial", False))
@@ -525,9 +527,7 @@ def _read_jsonl(path: Path) -> list[dict]:
         try:
             rec = json.loads(line)
         except json.JSONDecodeError as exc:
-            raise ValueError(
-                f"hermes JSONL line {i + 1} is not valid JSON: {exc}"
-            ) from exc
+            raise ValueError(f"hermes JSONL line {i + 1} is not valid JSON: {exc}") from exc
         out.append(rec)
     return out
 
@@ -581,9 +581,7 @@ def main() -> int:
         try:
             rc = _run_hermes_cli(task, jsonl_path)
             if rc != 0:
-                print(
-                    f"[error] {task_id}: hermes CLI exited rc={rc}", file=sys.stderr
-                )
+                print(f"[error] {task_id}: hermes CLI exited rc={rc}", file=sys.stderr)
                 continue
             records = _read_jsonl(jsonl_path)
             traj = adapt_hermes_jsonl(

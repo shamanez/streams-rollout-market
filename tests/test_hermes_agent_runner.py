@@ -27,19 +27,12 @@ from rollout_market.observatory.agent_trajectory_lab import (
 
 def _load_runner(env: dict[str, str] | None = None) -> ModuleType:
     """Import scripts/live/hermes_agent_runner.py under custom env vars."""
-    spec_path = (
-        Path(__file__).resolve().parents[1]
-        / "scripts"
-        / "live"
-        / "hermes_agent_runner.py"
-    )
+    spec_path = Path(__file__).resolve().parents[1] / "scripts" / "live" / "hermes_agent_runner.py"
     saved = {k: os.environ.get(k) for k in (env or {})}
     if env:
         os.environ.update(env)
     try:
-        spec = importlib.util.spec_from_file_location(
-            f"hermes_agent_runner_{id(env)}", spec_path
-        )
+        spec = importlib.util.spec_from_file_location(f"hermes_agent_runner_{id(env)}", spec_path)
         assert spec and spec.loader
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
@@ -158,9 +151,7 @@ def test_adapt_tool_call_record_pairs_result(runner: ModuleType) -> None:
             }
         ],
     }
-    step = runner.adapt_hermes_record(
-        rec, tool_results={"c1": "file contents here"}
-    )
+    step = runner.adapt_hermes_record(rec, tool_results={"c1": "file contents here"})
     assert step.role == "assistant"
     assert len(step.tool_calls) == 1
     tc = step.tool_calls[0]
@@ -725,9 +716,7 @@ def test_adapt_sharegpt_rejects_unsupported_from(runner: ModuleType) -> None:
         )
 
 
-def test_adapt_sharegpt_roundtrips_through_json(
-    runner: ModuleType, tmp_path: Path
-) -> None:
+def test_adapt_sharegpt_roundtrips_through_json(runner: ModuleType, tmp_path: Path) -> None:
     """The AgentTrajectory produced from a ShareGPT record must serialise
     and re-parse cleanly through Pydantic."""
     rec = _sharegpt_record_with_two_tool_calls()
@@ -747,6 +736,186 @@ def test_adapt_sharegpt_roundtrips_through_json(
     assert reloaded.tool_call_signature() == traj.tool_call_signature()
 
 
+def test_adapt_record_threads_probe_fields_onto_assistant_step(
+    runner: ModuleType,
+) -> None:
+    """Rollout-side probe fields (prompt/response tokens, logprobs,
+    routed experts) on an assistant record must land verbatim on the
+    AgentStep. The validator already enforces length parity; we just
+    care that the values survive the adapter."""
+    rec = {
+        "role": "assistant",
+        "content": "The answer is 4.",
+        "response_token_count": 5,
+        "prompt_token_ids": [101, 102, 103, 104],
+        "response_token_ids": [201, 202, 203, 204, 205],
+        "response_logprobs": [-0.1, -0.2, -0.3, -0.4, -0.5],
+        "response_routed_experts": [[[0, 1]]] * 5,
+    }
+    step = runner.adapt_hermes_record(rec)
+    assert step.prompt_token_ids == [101, 102, 103, 104]
+    assert step.response_token_ids == [201, 202, 203, 204, 205]
+    assert step.response_logprobs == [-0.1, -0.2, -0.3, -0.4, -0.5]
+    assert step.response_routed_experts == [[[0, 1]]] * 5
+
+
+def test_adapt_record_skips_absent_probe_fields(runner: ModuleType) -> None:
+    """A record with no probe fields must leave them None on the AgentStep
+    (back-compat for legacy trajectories captured pre-cycle-3)."""
+    step = runner.adapt_hermes_record(
+        {"role": "assistant", "content": "hi", "response_token_count": 1}
+    )
+    assert step.prompt_token_ids is None
+    assert step.response_token_ids is None
+    assert step.response_logprobs is None
+    assert step.response_routed_experts is None
+
+
+def test_adapt_record_tool_role_rejects_probe_fields(runner: ModuleType) -> None:
+    """The AgentStep validator forbids probes on tool-role steps; the
+    adapter must surface that as a ValueError instead of swallowing it."""
+    with pytest.raises(ValueError, match="tool-role"):
+        runner.adapt_hermes_record(
+            {
+                "role": "tool",
+                "tool_call_id": "c1",
+                "content": "120",
+                # tool-role records should never carry probes; if they do,
+                # surface the error rather than silently dropping the data.
+                "response_token_ids": [1, 2, 3],
+            }
+        )
+
+
+def test_adapt_jsonl_propagates_probe_fields(runner: ModuleType) -> None:
+    """End-to-end: probe fields on every assistant record should land
+    on every assistant step of the resulting AgentTrajectory."""
+    records = [
+        {"role": "system", "content": "sys"},
+        {"role": "user", "content": "go"},
+        {
+            "role": "assistant",
+            "content": "Let me check.",
+            "response_token_count": 3,
+            "prompt_token_ids": [10, 11, 12],
+            "response_token_ids": [20, 21, 22],
+            "response_logprobs": [-0.1, -0.2, -0.3],
+            "tool_calls": [
+                {
+                    "id": "c1",
+                    "type": "function",
+                    "function": {
+                        "name": "calculator",
+                        "arguments": '{"expression": "2+2"}',
+                    },
+                }
+            ],
+        },
+        {"role": "tool", "tool_call_id": "c1", "content": "4"},
+        {
+            "role": "assistant",
+            "content": "Answer: 4",
+            "response_token_count": 3,
+            "prompt_token_ids": [10, 11, 12, 13, 14, 15],
+            "response_token_ids": [30, 31, 32],
+            "response_logprobs": [-0.05, -0.1, -0.15],
+        },
+    ]
+    traj = runner.adapt_hermes_jsonl(
+        records,
+        task=_task(),
+        model_id="Qwen/Qwen3-32B",
+        engine_label="hermes-qwen3-32b-bf16",
+        engine_fingerprint="sha256:x",
+    )
+    assistants = traj.assistant_steps()
+    assert len(assistants) == 2
+    assert assistants[0].response_token_ids == [20, 21, 22]
+    assert assistants[0].response_logprobs == [-0.1, -0.2, -0.3]
+    # Turn-2 prompt is longer because it includes prior history.
+    assert assistants[1].prompt_token_ids == [10, 11, 12, 13, 14, 15]
+    assert assistants[1].response_token_ids == [30, 31, 32]
+    # Tool-role step must remain probe-free.
+    tool_steps = [s for s in traj.steps if s.role == "tool"]
+    assert tool_steps[0].response_token_ids is None
+
+
+def test_adapt_sharegpt_threads_probes_onto_each_assistant_step(
+    runner: ModuleType,
+) -> None:
+    """Hermes-agent's ShareGPT format may surface probes as
+    sibling-fields next to ``value`` on each ``from=gpt`` conv entry.
+    The adapter must pull them off and put them on the matching
+    AgentStep, including after the tool-result backfill rewrites the
+    step in place."""
+    rec = {
+        "conversations": [
+            {"from": "system", "value": "sys"},
+            {"from": "human", "value": "q"},
+            {
+                "from": "gpt",
+                "value": (
+                    "<tool_call>\n"
+                    '{"name": "calculator", "arguments": {"expression": "2+2"}}\n'
+                    "</tool_call>"
+                ),
+                "prompt_token_ids": [10, 11, 12],
+                "response_token_ids": [20, 21, 22],
+                "response_logprobs": [-0.1, -0.2, -0.3],
+            },
+            {
+                "from": "tool",
+                "value": (
+                    "<tool_response>\n"
+                    '{"tool_call_id": "c1", "name": "calculator", "content": "4"}\n'
+                    "</tool_response>"
+                ),
+            },
+            {
+                "from": "gpt",
+                "value": "<think>\n</think>\nAnswer: 4",
+                "prompt_token_ids": [10, 11, 12, 13, 14, 15, 16, 17],
+                "response_token_ids": [40, 41, 42, 43],
+                "response_logprobs": [-0.05, -0.1, -0.15, -0.2],
+            },
+        ],
+        "completed": True,
+        "partial": False,
+    }
+    traj = runner.adapt_hermes_sharegpt_trajectory(
+        rec,
+        task=_task(),
+        model_id="Qwen/Qwen3-32B",
+        engine_label="hermes-qwen3-32b-bf16",
+        engine_fingerprint="sha256:x",
+    )
+    assistants = traj.assistant_steps()
+    assert len(assistants) == 2
+    # First turn: probes survived the tool-result backfill rewrite.
+    assert assistants[0].response_token_ids == [20, 21, 22]
+    assert assistants[0].response_logprobs == [-0.1, -0.2, -0.3]
+    assert assistants[0].prompt_token_ids == [10, 11, 12]
+    # Second turn carries the accumulated history in prompt_token_ids.
+    assert assistants[1].prompt_token_ids == [10, 11, 12, 13, 14, 15, 16, 17]
+    assert assistants[1].response_token_ids == [40, 41, 42, 43]
+    # JSON round-trip preserves probes.
+    reloaded = AgentTrajectory.model_validate_json(traj.model_dump_json())
+    assert reloaded.assistant_steps()[0].response_logprobs == [-0.1, -0.2, -0.3]
+
+
+def test_max_steps_default_is_25() -> None:
+    """Per STEER cycle-3 v2: multi-turn agent runs need 15-25 turns
+    before answering. The pre-cycle-3 default of 8 truncated long
+    trajectories prematurely; the new default is 25."""
+    prior = os.environ.pop("MAX_STEPS", None)
+    try:
+        mod = _load_runner()
+        assert mod.MAX_STEPS == 25
+    finally:
+        if prior is not None:
+            os.environ["MAX_STEPS"] = prior
+
+
 def test_adapt_sharegpt_handles_dict_tool_response_content(
     runner: ModuleType,
 ) -> None:
@@ -759,9 +928,7 @@ def test_adapt_sharegpt_handles_dict_tool_response_content(
             {
                 "from": "gpt",
                 "value": (
-                    "<tool_call>\n"
-                    '{"name": "web_search", "arguments": {"query": "x"}}\n'
-                    "</tool_call>"
+                    '<tool_call>\n{"name": "web_search", "arguments": {"query": "x"}}\n</tool_call>'
                 ),
             },
             {
