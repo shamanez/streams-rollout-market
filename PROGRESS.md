@@ -1,165 +1,84 @@
 # PROGRESS.md — Agent Handoff State
 
 ## Last updated
-2026-05-12 (cycle 3 v2 iter 2 setup-23 directive — proxy `enable_thinking=false` + prompt_routed_experts schema)
+2026-05-12 (cycle 3 v2 minimal-task reset — 8 entries to fill the dashboard)
 
 ---
 
 ## ⚡ TL;DR for a fresh session (zero prior context)
 
-> **Read this section first. Everything below is supporting detail.**
-
 ### What this repo is
 A decentralized rollout marketplace + rollout-validity layer for agentic
-RL. **vLLM hosts rollouts; FSDP/Megatron-LM teacher-force the captured
-token pairs to measure training-inference mismatch.** The dashboard answers:
-how much does engine + precision + device change inference-time behaviour
-relative to the trainer's forward pass?
+RL. **vLLM hosts rollouts; FSDP/Megatron teacher-force the captured
+token pairs to measure training-inference mismatch.** The dashboard
+answers: how much does engine + precision change inference-time
+behaviour relative to the trainer's forward pass?
 
-### Where the work is right now
-- **Cycle 3 v2 (probe-at-rollout)** is the active design. vLLM emits all
-  signals at rollout time; nothing is ever refed through vLLM.
-- The **code side is fully shipped** (474 tests pass, end-to-end pipeline
-  exercised in fixtures). The dashboard renders both Hermes-Agent matrices
-  (Dense + MoE) and the legacy single-prompt matrices.
-- 5 `.claude/feature-results.json` entries remain at `passes: false`. They
-  all need **the live spot rollout** to populate the proxy sidecar + the
-  trainer-side teacher-force outputs.
+### Goal of this session
+Fill the Hermes Dense + MoE dashboard matrices with **one bf16 tile
+per trainer per model** — 4 real tiles total (Dense×FSDP, Dense×Megatron,
+MoE×FSDP, MoE×Megatron). fp8 stays TBD this cycle.
 
-### Topology — where each process actually runs (confirmed 2026-05-12)
-- **Hermes-Agent**: on the spot, installed at `~/.local/bin/hermes` via
-  the official `curl … | bash` (see `scripts/live/HERMES_INSTALL.md`).
-- **vLLM**: on the spot, port 8000.
-- **`logprob_capture_proxy.py`**: on the spot, port 8001 (between
-  Hermes and vLLM). Sidecar JSONL lives on the spot at
-  `/tmp/hermes_probes_*.jsonl`.
-- **Merger / filler / builder / trainer-side teacher-force / pair**:
-  all on the spot.
-- **Laptop**: SSH terminal only, plus optional dashboard re-render
-  (`publish_dashboards.py`) after `rsync`ing `runs/` back.
+### Topology (all on the spot, single host)
+Hermes-Agent + logprob_capture_proxy + vLLM all run on the spot host.
+The laptop is purely an SSH terminal (+ optional final dashboard
+re-render after `rsync`ing `runs/` back). No SSH tunnel in the data
+path. Full topology diagram in `scripts/live/HERMES_INSTALL.md`.
 
-There is **no SSH port forwarding** for the data path. The earlier docs
-that showed a laptop-side proxy were aspirational; the working setup we
-just validated keeps everything on a single host.
+### The 8-task queue (selection rule: file order of false entries in `.claude/feature-results.json`)
 
-### The one thing blocking the live rollout
-Qwen3-MoE in its default reasoning mode (`<think>...</think>` blocks) writes
-out enough chain-of-thought to fill 131K context in 3 multi-turn rounds.
-Hermes-Agent's history compression then gives up. The 27.6-minute MoE smoke
-test on 2026-05-12 hit `Context length exceeded: max compression attempts (3)
-reached`. Dense (Qwen3-32B) is fine — it terminates `<think>` within ~30s.
+| # | Entry | What it does | Reuses |
+|---|-------|-------------|--------|
+| 1 | `hermes_agent.proxy_enable_thinking_off` | 1-line proxy patch + 2 unit tests | — |
+| 2 | `hermes_agent.live_moe_bf16_capture` | ONE Hermes task → AgentTrajectory JSON (logprobs + routed_experts) | — |
+| 3 | `hermes_agent.live_dense_bf16_capture` | ONE Hermes task → AgentTrajectory JSON (logprobs only) | — |
+| 4 | `hermes_agent.live_moe_fsdp_pair` | FSDP-MoE teacher-force + pair → RouterMismatchReport | #2 trajectory |
+| 5 | `hermes_agent.live_moe_megatron_pair` | Megatron-MoE teacher-force + pair | #2 trajectory |
+| 6 | `hermes_agent.live_dense_fsdp_pair` | FSDP teacher-force + pair → DenseMismatchReport | #3 trajectory |
+| 7 | `hermes_agent.live_dense_megatron_pair` | Megatron teacher-force + pair | #3 trajectory |
+| 8 | `hermes_agent.matrix_render_and_codex` | rsync + publish_dashboards + codex review | — |
 
-### The fix (1 line)
-`scripts/live/logprob_capture_proxy.py::inject_logprobs` already rewrites
-every `/v1/chat/completions` body. Add::
+**One task per capture** (#2 and #3 run one prompt each, not 12).
+Trajectories are captured once and reused for both trainers.
 
-```python
-ctk = body.setdefault("chat_template_kwargs", {})
-ctk.setdefault("enable_thinking", False)
-```
+### Why entry #1 exists
+On 2026-05-12 the MoE summarize-repo smoke (Qwen3-30B-A3B at 131K
+bf16) DNF'd at 1 658 s with `Context length exceeded: max compression
+attempts (3) reached`. Root cause: Qwen3's default reasoning mode
+emits `<think>...</think>` blocks long enough to fill 131K context in
+3 turns. `/no_think` in the user prompt is **not** a fix — Qwen3
+reads it as plain text. The chat-template kwarg
+`chat_template_kwargs.enable_thinking=false` IS the fix, but
+Hermes-Agent doesn't thread it through. Patch the proxy to
+`setdefault` it on every outbound request body.
 
-This kwarg disables Qwen3's reasoning blocks at the chat-template level
-(Qwen3 documents it; `/no_think` in the user-content body does **NOT**
-work — it's read as text). Hermes-Agent never threads it through; the
-proxy is the right hook point.
+### What vLLM actually exposes for MoE
+Per <https://docs.vllm.ai/en/latest/training/routed_experts_replay/>:
+- `choices[i].routed_experts` shape `[gen_len, num_moe_layers, top_k]`
+  of int16 expert IDs.
+- `prompt_routed_experts` (top-level) shape `[prompt_len, num_moe_layers,
+  top_k]`. `-1` for prefix-cached positions.
+- **Router gate logits / weights are NOT exposed.** Top-k expert IDs
+  only. No extra capture surface exists short of patching vLLM.
 
-### Bold next steps (in priority order)
-
-> Each step is a single autonomous-loop iteration. **Do them in this order.**
-
-1. **`hermes_agent.proxy_enable_thinking_off`** (NEW — 1-line proxy
-   patch + 2 unit tests; ≤30 min):
-   - Patch `inject_logprobs` to setdefault `chat_template_kwargs:
-     {enable_thinking: False}`.
-   - Add `test_inject_disables_thinking` + `test_inject_preserves_caller_thinking_choice`.
-   - Re-run the MoE summarize-repo smoke through the proxy to verify
-     wall-clock drops from 1 658 s (DNF) to < 90 s.
-   - Acceptance evidence: the smoke transcript stored at
-     `.claude/evidence/hermes_proxy_enable_thinking/smoke.txt`.
-
-2. **`hermes_agent.agent_step_prompt_routed_experts`** (NEW — schema
-   extension; ≤45 min):
-   - The proxy already captures `prompt_routed_experts` (per the vLLM
-     doc, shape `[prompt_len, num_moe_layers, top_k]`), but `AgentStep`
-     only accepts `response_routed_experts`. The merger drops the field
-     on the floor today.
-   - Add `prompt_routed_experts: list[list[list[int]]] | None = None`
-     to `AgentStep`, mirror the validator branch, thread through
-     `adapt_hermes_record` + `adapt_hermes_sharegpt_trajectory` +
-     `merge_probes_into_trajectories.py`.
-   - Add 3 tests: schema field present, validator agrees on
-     `[prompt_len, num_layers, top_k]` shape, merger threads it through.
-   - Acceptance: a fixture trajectory carries both prompt + response
-     routing arrays end-to-end.
-
-3. **`hermes_agent.router_pair_handle_minus_one_sentinel`** (NEW —
-   prefix-cache sentinel handling; ≤45 min):
-   - vLLM's routed_experts replay marks prefix-cached positions with
-     `-1` (cached positions weren't routed at this generation). Today
-     `pair_hermes_moe_reports.py` would treat `-1` as a real expert ID
-     and inflate `router_flip_rate`.
-   - Filter `-1` positions before computing flip rate; surface a count
-     of skipped positions on the report so we can see how much of a
-     trajectory came from prefix cache.
-   - Acceptance: a fixture with a `-1`-padded prefix produces a
-     well-formed RouterMismatchReport whose `router_flip_rate` matches
-     the manually-computed expected value.
-
-4. **`hermes_agent.dense_capture_then_fsdp`** (existing
-   `feature-results.json` entry; first live operational run, **all on
-   the spot**):
-   - tmux session A: vLLM-Qwen3-32B-bf16 at 131K (`serve_for_capture.sh`).
-   - tmux session B: patched `logprob_capture_proxy.py` on `localhost:8001`.
-   - hermes-agent (`~/.local/bin/hermes` on spot) configured with
-     `base_url=http://localhost:8001/v1`; runs the 12 tasks in
-     `scripts/live/agent_tasks_hermes.json`.
-   - merge → fill → build → tear down vLLM+proxy to free GPUs →
-     torchrun `run_fsdp_reference.py` → pair → `publish_dashboards.py`.
-   - Step-by-step (single-host, no laptop in data path) in
-     `scripts/live/README.md` + `scripts/live/HERMES_INSTALL.md`.
-
-5. **`hermes_agent.moe_capture_then_fsdp_router`** (existing entry,
-   live run): same shape but with Qwen3-30B-A3B + run_fsdp_moe_reference.
-   Now passes because step 1 disables reasoning.
-
-6. Steps 4-5 repeat with Megatron trainers
-   (`hermes_agent.dense_capture_then_megatron` /
-   `hermes_agent.moe_capture_then_megatron_router`), then
-   `hermes_agent.matrix_render_and_codex` flips the headline.
+Our `scripts/live/logprob_capture_proxy.py` already lifts both arrays.
+Server-side flag `--enable-return-routed-experts` is auto-set for MoE
+by `scripts/live/serve_for_capture.sh`.
 
 ### Reproduce from scratch
-- Read `scripts/live/HERMES_INSTALL.md` end-to-end. It walks through:
-  delete stale Hermes installs, fresh `curl … | bash` install,
-  configure Hermes for vLLM at 131K, start `serve_for_capture.sh`,
-  run the summarize-repo smoke test, find the cycle-3-v2 proxy hook.
-- Read `scripts/live/README.md` for the full proxy → merger → filler
-  → builder → trainer-force → pair pipeline.
-- Read `STEER.md` for the iteration-by-iteration acceptance gates.
-
-### What vLLM exposes for MoE (full list — there is no hidden capture surface)
-Per <https://docs.vllm.ai/en/latest/training/routed_experts_replay/>:
-- `prompt_routed_experts` (response-level) — shape `[prompt_len,
-  num_moe_layers, top_k]`, dtype int16, values are expert IDs in
-  `[0, num_experts)`. `-1` for prefix-cached positions.
-- `choices[i].routed_experts` (per choice) — shape `[gen_len,
-  num_moe_layers, top_k]`, same dtype/range.
-- **Router gate logits / softmax weights are NOT exposed.** The
-  FusedMoE device buffer only writes top-k expert indices. If we ever
-  need gate logits we'd have to patch vLLM itself.
-
-Our `scripts/live/logprob_capture_proxy.py` already captures **both** the
-prompt and response arrays via `return_token_ids=true` plus the server
-flag `--enable-return-routed-experts` (auto-set by
-`scripts/live/serve_for_capture.sh` for MoE Qwen3). The capture surface is
-complete on the vLLM side; the gaps listed above are downstream
-(schema + math + chat-template kwarg).
+- `scripts/live/HERMES_INSTALL.md` — clean Hermes install, vLLM at
+  131K, Hermes config, summarize-repo smoke.
+- `scripts/live/README.md` — full single-host pipeline (proxy →
+  merger → filler → builder → trainer-force → pair → publish).
+- `STEER.md` — minimal directive + 8-entry queue overview.
+- `.claude/feature-results.json` — verbatim per-entry directive
+  (consumed by `/implement-feature`).
 
 ### Operator controls
-- `bash .claude/scripts/steer.sh "<directive>"` — re-arm STEER.md.
+- `/autonomous-loop` — starts the loop on entry #1 of the queue above.
 - `touch AGENT_STOP` — halt after current iteration.
 - `rm AGENT_STOP` — resume.
-- `/autonomous-loop` — start (or restart) the loop with the priority list
-  above.
+- `bash .claude/scripts/steer.sh "<note>"` — overwrite STEER.md.
 
 ---
 
