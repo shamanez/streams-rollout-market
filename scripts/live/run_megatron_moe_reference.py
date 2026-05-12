@@ -313,6 +313,15 @@ def main() -> None:
                 "top_k": int(top_k),
                 "expert_ids": expert_ids,
                 "engine": "megatron",
+                # pair_hermes_moe_reports joins by prompt_idx — propagate
+                # the rollout-side value so multi-task batches stay
+                # correctly paired with their captured (traj, turn).
+                "prompt_idx": entry.get("prompt_idx", 0),
+                "engine_fingerprint": (
+                    f"sha256:megatron-core-r0.13-tp{args.tensor_model_parallel_size}-"
+                    f"ep{getattr(args, 'expert_model_parallel_size', 1)}-bf16-moe"
+                ),
+                "world_size": world_size,
             })
         if rank == 0:
             trainers.append({

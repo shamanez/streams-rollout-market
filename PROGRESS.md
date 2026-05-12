@@ -1,7 +1,27 @@
 # PROGRESS.md — Agent Handoff State
 
 ## Last updated
-2026-05-12 (cycle 3 v2 iter 2 setup-15 — multi-prompt mode in run_fsdp_moe_reference)
+2026-05-12 (cycle 3 v2 iter 2 setup-16 — Megatron-MoE router records carry prompt_idx)
+
+## Cycle 3 v2 iter 2 — setup-16 commit (2026-05-12)
+
+`scripts/live/run_megatron_moe_reference.py` already iterated over a
+multi-prompt rollouts list, but the per-prompt entries it appended
+to `router_records` didn't carry `prompt_idx` / `engine_fingerprint`
+/ `world_size`. `pair_hermes_moe_reports.py` keys join on
+`prompt_idx`, so without that field a multi-task Megatron pass would
+collide all entries on `prompt_idx=0`.
+
+Fixed by propagating those three fields from the rollout entry +
+the parsed args into each router_record. No new tests (the only
+contract surface that mattered — `_load_rollouts` + the rollout-list
+iteration — was already in the script).
+
+464 passing (unchanged). Both Dense and MoE trainer-side reference
+scripts now emit per-prompt payloads with the metadata the pair
+scripts expect.
+
+## Cycle 3 v2 iter 2 — setup-15 commit (2026-05-12)
 
 ## Cycle 3 v2 iter 2 — setup-15 commit (2026-05-12)
 
