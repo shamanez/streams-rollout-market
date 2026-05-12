@@ -1,7 +1,33 @@
 # PROGRESS.md — Agent Handoff State
 
 ## Last updated
-2026-05-12 (cycle 3 v2 iter 2 setup-13 — MoE routed_experts forward-compat in proxy)
+2026-05-12 (cycle 3 v2 iter 2 setup-14 — pair_hermes_moe_reports MoE joiner)
+
+## Cycle 3 v2 iter 2 — setup-14 commit (2026-05-12)
+
+`scripts/live/pair_hermes_moe_reports.py` — MoE counterpart of
+`pair_hermes_dense_reports.py`. Consumes the index + an MoE trainer
+payload (per-prompt `expert_ids` from `run_fsdp_moe_reference.py` or
+`run_megatron_moe_reference.py`) + the AgentTrajectory dir, and emits
+one `RouterMismatchReport` per `(trajectory, assistant_turn)` under
+`runs/live/router/hermes-qwen3-30b-a3b-{bf16,fp8}-vs-{fsdp,megatron}-
+bf16/<run_id>/`.
+
+- Reads `response_routed_experts` off the matching AgentStep
+  (captured by the proxy in setup-13).
+- Validates rollout vs trainer trace shape (num_tokens, num_layers,
+  num_experts, top_k); surfaces mismatches with a clear ValueError.
+- 6 new offline tests: happy path (zero flip rate), divergence path
+  (50% flip rate with layer-level resolution), missing
+  routed_experts, unknown trajectory_run_id, engine-label override,
+  CLI round-trip. **459 passing (+6 from 453)**.
+
+Both `hermes_agent.moe_capture_then_fsdp_router` and
+`hermes_agent.moe_capture_then_megatron_router` now have their full
+code-side pipeline shipped end-to-end. Only the live spot run +
+trainer-side per-turn expert_ids aggregator remain operator-side.
+
+## Cycle 3 v2 iter 2 — setup-13 commit (2026-05-12)
 
 ## Cycle 3 v2 iter 2 — setup-13 commit (2026-05-12)
 
