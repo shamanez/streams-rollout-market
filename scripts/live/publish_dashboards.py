@@ -32,8 +32,10 @@ LIVE_ROOT = RUNS_ROOT / "live"
 def _render_full_glossary_html() -> str:
     """Lazy import: scripts/ isn't a package, so we add src/ to sys.path on demand."""
     import sys
+
     sys.path.insert(0, str(REPO_ROOT / "src"))
     from rollout_market.observatory._glossary import render_full_glossary_html
+
     return render_full_glossary_html()
 
 
@@ -144,28 +146,48 @@ def _resolve_html_json(card: dict) -> tuple[Path, Path] | None:
 
 _HEADLINES: dict[str, list[tuple[str, callable]]] = {
     "agent": [
-        ("worst answer-match rate",
-         lambda p: f"{min((x['final_answer_match_rate'] for x in p.get('engine_pairs', [])), default=0)*100:.0f}%"),
-        ("worst tool-jaccard",
-         lambda p: f"{min((x['mean_tool_call_jaccard'] for x in p.get('engine_pairs', [])), default=0):.2f}"),
+        (
+            "worst answer-match rate",
+            lambda p: (
+                f"{min((x['final_answer_match_rate'] for x in p.get('engine_pairs', [])), default=0) * 100:.0f}%"
+            ),
+        ),
+        (
+            "worst tool-jaccard",
+            lambda p: (
+                f"{min((x['mean_tool_call_jaccard'] for x in p.get('engine_pairs', [])), default=0):.2f}"
+            ),
+        ),
     ],
     "router": [
-        ("worst top-1 flip rate",
-         lambda p: f"{max((x['mean_router_flip_rate'] for x in p.get('engine_pairs', [])), default=0)*100:.1f}%"),
-        ("worst top-k set disagreement",
-         lambda p: f"{max((x['mean_token_expert_disagreement_rate'] for x in p.get('engine_pairs', [])), default=0)*100:.1f}%"),
+        (
+            "worst top-1 flip rate",
+            lambda p: (
+                f"{max((x['mean_router_flip_rate'] for x in p.get('engine_pairs', [])), default=0) * 100:.1f}%"
+            ),
+        ),
+        (
+            "worst top-k set disagreement",
+            lambda p: (
+                f"{max((x['mean_token_expert_disagreement_rate'] for x in p.get('engine_pairs', [])), default=0) * 100:.1f}%"
+            ),
+        ),
     ],
     "dense": [
-        ("worst ESS",
-         lambda p: f"{min((x['mean_ess'] for x in p.get('engine_pairs', [])), default=0):.4f}"),
-        ("worst max|log_ratio|",
-         lambda p: f"{max((x['worst_max_abs_log_ratio'] for x in p.get('engine_pairs', [])), default=0):.3f}"),
+        (
+            "worst ESS",
+            lambda p: f"{min((x['mean_ess'] for x in p.get('engine_pairs', [])), default=0):.4f}",
+        ),
+        (
+            "worst max|log_ratio|",
+            lambda p: (
+                f"{max((x['worst_max_abs_log_ratio'] for x in p.get('engine_pairs', [])), default=0):.3f}"
+            ),
+        ),
     ],
     "marketplace": [
-        ("submissions",
-         lambda p: str(p.get("submissions", 0))),
-        ("rejected",
-         lambda p: str(p.get("livestore_by_state", {}).get("rejected", 0))),
+        ("submissions", lambda p: str(p.get("submissions", 0))),
+        ("rejected", lambda p: str(p.get("livestore_by_state", {}).get("rejected", 0))),
     ],
 }
 
@@ -279,9 +301,7 @@ def _matrix_tile(
     """
     if cell is None or cell.get("count", 0) == 0:
         if trainer == "megatron":
-            inner = (
-                f"<div class='mx-placeholder'>{_html.escape(MEGATRON_PLACEHOLDER)}</div>"
-            )
+            inner = f"<div class='mx-placeholder'>{_html.escape(MEGATRON_PLACEHOLDER)}</div>"
             tile_class = "mx-tile mx-tbd"
         else:
             inner = "<div class='mx-empty'>no data</div>"
@@ -308,7 +328,9 @@ def _matrix_tile(
         sub = "mean top-1 flip"
     spark_max = max(cell["samples"]) if cell["samples"] else value
     spark_min = min(cell["samples"]) if cell["samples"] else value
-    bar_pct = 0 if value is None else min(max(value if kind == "dense" else (1 - value), 0), 1) * 100
+    bar_pct = (
+        0 if value is None else min(max(value if kind == "dense" else (1 - value), 0), 1) * 100
+    )
     return (
         f'<a class="mx-tile mx-{kind_class}" href="{_html.escape(href)}" '
         f'data-chart="matrix-tile" data-trainer="{_html.escape(trainer)}" '
@@ -351,7 +373,7 @@ def _render_matrix(
     for precision in ("bf16", "fp8"):
         for device in known_devices:
             columns.append(f"{precision} / {device}")
-    for (_, col) in cells.keys():
+    for _, col in cells.keys():
         if col not in columns:
             columns.append(col)
     grid_html = []
@@ -363,9 +385,7 @@ def _render_matrix(
     grid_html.append("</div>")
     for trainer in TRAINER_REFS:
         grid_html.append("<div class='mx-row'>")
-        grid_html.append(
-            f"<div class='mx-trainer'>{_html.escape(trainer.upper())}</div>"
-        )
+        grid_html.append(f"<div class='mx-trainer'>{_html.escape(trainer.upper())}</div>")
         for col in columns:
             cell = cells.get((trainer, col))
             grid_html.append(
@@ -484,13 +504,15 @@ def _select_hermes_pairs(
     precision_trainer = precision_trainer or bf16_engine
     noise_trainer = noise_trainer or bf16_engine
     pairs = [
-        p for p in payload.get("engine_pairs", [])
+        p
+        for p in payload.get("engine_pairs", [])
         if model_substring.lower() in (p.get("rollout_engine") or "").lower()
         or model_substring.lower() in (p.get("trainer_engine") or "").lower()
     ]
     precision = next(
         (
-            p for p in pairs
+            p
+            for p in pairs
             if (p.get("rollout_engine") or "") == fp8_engine
             and (p.get("trainer_engine") or "") == precision_trainer
         ),
@@ -498,7 +520,8 @@ def _select_hermes_pairs(
     )
     noise = next(
         (
-            p for p in pairs
+            p
+            for p in pairs
             if (p.get("rollout_engine") or "") == seedb_engine
             and (p.get("trainer_engine") or "") == noise_trainer
         ),
@@ -782,8 +805,12 @@ def render_index(card_data: list[dict]) -> str:
         ".kpi .l{font-size:.72rem;color:var(--muted);text-transform:uppercase;"
         "letter-spacing:.04em;margin-top:.1rem}"
         "footer{margin-top:2.5rem;color:var(--muted);font-size:.82rem;text-align:center}"
-        + _MATRIX_STYLES +
-        "</style></head><body>"
+        ".legacy-archive{margin-top:2rem;background:#fafafa;border:1px dashed var(--border);"
+        "border-radius:14px;padding:1rem 1.25rem}"
+        ".legacy-archive>summary{cursor:pointer;font-weight:600;color:var(--muted);"
+        "font-size:.95rem;list-style-position:inside}"
+        ".legacy-archive .legacy-note{color:var(--muted);font-size:.88rem;"
+        "margin:.5rem 0 1rem 0;font-style:italic}" + _MATRIX_STYLES + "</style></head><body>"
         "<header>"
         "<h1>streams-rollout-market — live dashboards</h1>"
         "<p>Real-data observatory for the rollout marketplace. Five lenses on how engine "
@@ -794,7 +821,23 @@ def render_index(card_data: list[dict]) -> str:
         "<a href='https://github.com/shamanez/streams-rollout-market' style='color:var(--accent);text-decoration:none;font-size:.92rem'>📂 Source code</a>"
         "</p>"
         "</header>"
-        f"{dense_matrix}{moe_matrix}{hermes_dense_matrix}{hermes_moe_matrix}"
+        # Cycle 3 v2: Hermes-Agent multi-turn matrices carry the headline;
+        # the legacy single-prompt Dense + MoE matrices move into a
+        # collapsible appendix below the fold per STEER.md's "Hermes-only
+        # dashboard" directive. The CLIs that produce the legacy matrices
+        # (dense_dashboard, router_dashboard) stay in place — their output
+        # is still useful for token-level engine comparison; it just no
+        # longer sits above the fold.
+        f"{hermes_dense_matrix}{hermes_moe_matrix}"
+        "<details class='legacy-archive' data-section='legacy-single-prompt'>"
+        "<summary>Legacy single-prompt experiments (archived)</summary>"
+        "<p class='legacy-note'>"
+        "Pre-Hermes single-prompt token-level matrices. Kept for reference; "
+        "the multi-turn agent matrices above are the load-bearing marketplace "
+        "signal."
+        "</p>"
+        f"{dense_matrix}{moe_matrix}"
+        "</details>"
         f"<div class='grid'>{''.join(cards_html)}</div>"
         "<footer>Generated from runs/live/. Each dashboard is regenerated by running the "
         "lab + dashboard CLIs in the source repo. <a href='glossary.html' "
@@ -879,13 +922,15 @@ def main() -> int:
             payload = _read_json(j) or {}
         else:
             payload = {}
-        card_data.append({
-            **card,
-            "ready": True,
-            "filename": target_html.name,
-            "summary": card["summary_fn"](payload),
-            "payload": payload,
-        })
+        card_data.append(
+            {
+                **card,
+                "ready": True,
+                "filename": target_html.name,
+                "summary": card["summary_fn"](payload),
+                "payload": payload,
+            }
+        )
 
     (out_dir / "index.html").write_text(render_index(card_data), encoding="utf-8")
     (out_dir / "glossary.html").write_text(_render_full_glossary_html(), encoding="utf-8")

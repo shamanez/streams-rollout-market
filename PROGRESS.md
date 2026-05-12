@@ -1,7 +1,36 @@
 # PROGRESS.md — Agent Handoff State
 
 ## Last updated
-2026-05-12 (cycle 3 v2 iter 2 setup-9 — e2e test now exercises filler)
+2026-05-12 (cycle 3 v2 iter 2 setup-10 — Hermes-first headline + legacy appendix)
+
+## Cycle 3 v2 iter 2 — setup-10 commit (2026-05-12)
+
+`scripts/live/publish_dashboards.py` `render_index` now leads with the
+two Hermes-Agent matrices (Dense + MoE) and moves the legacy
+single-prompt Dense + MoE matrices into a collapsible
+`<details class='legacy-archive'>` appendix below them, per the
+`hermes_agent.matrix_render_and_codex` directive.
+
+Non-destructive change — the legacy matrices are NOT deleted, just
+visually demoted. They remain reachable via the `Legacy single-prompt
+experiments (archived)` summary. Tile content is unchanged; only the
+ordering + wrapper changes.
+
+- 3 new tests in `test_publish_dashboards_hermes_v2.py`:
+  ordering (Hermes before legacy in source order), legacy matrices
+  live inside the `<details>` appendix, Hermes matrices live OUTSIDE
+  the appendix.
+- 11 dashboard tests passing in total; **442 passing (+3 from 439)**.
+- Existing tests in `test_publish_dashboards.py` (selectors against
+  `data-section="dense-matrix"` / `data-section="moe-matrix"`) keep
+  passing — those sections still render, just below the headline.
+
+Remaining for the matrix_render_and_codex entry to flip:
+  - Real Hermes-Agent reports populating the 4+4 tiles with numeric
+    `mx-value` + valid colour class (requires the live spot run).
+  - `/codex-review --effort low` PASS on the rendered headline.
+
+## Cycle 3 v2 iter 2 — setup-9 commit (2026-05-12)
 
 ## Cycle 3 v2 iter 2 — setup-9 commit (2026-05-12)
 
