@@ -1,9 +1,29 @@
 # PROGRESS.md — Agent Handoff State
 
 ## Last updated
-2026-05-12 (cycle 2 — Hermes Agent matrix complete)
+2026-05-12 (cycle 3 armed — Hermes vs trainer engines)
 
 ## Current phase
+**Cycle 3 armed (correct experimental design).** Cycle 2's hermes-
+agent matrix had a scope error: it compared two vLLM samples (bf16
+vs fp8 + a same-seed noise floor) — measuring *sampling noise +
+precision*, not the *engine-vs-trainer* divergence that the Dense
+ESS and MoE router_flip_rate matrices already prove. Cycle 3 fixes
+this: re-feed each hermes-agent response token sequence through
+**FSDP-bf16 / Megatron-bf16** trainer references, compute the same
+token-level metrics already in use (ESS for Dense,
+`router_flip_rate` for MoE), and render two new 2×2 matrix sections
+({FSDP, Megatron} × {bf16, fp8}).
+
+The vLLM trajectories already exist on disk (47 dense + 22 MoE);
+cycle 3 is re-feed + render, not new generation.
+
+STEER.md is armed with the six cycle-3 iterations. Trajectory
+directories consolidated to one bf16 + one fp8 per model, TP held
+constant within model (Dense TP=4; MoE TP=2 to match fp8's
+`block_n` constraint).
+
+## Cycle 2 retrospective (what worked, what was wrong)
 **Hermes Agent cycle COMPLETE — 12 traffic-light tiles + codex PASS.**
 All 29 entries in `.claude/feature-results.json` are `passes: true`.
 STEER.md self-deleted per its own stop clause. The rendered
