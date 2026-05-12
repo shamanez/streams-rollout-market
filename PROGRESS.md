@@ -1,7 +1,27 @@
 # PROGRESS.md — Agent Handoff State
 
 ## Last updated
-2026-05-12 (cycle 3 v2 iter 2 setup-16 — Megatron-MoE router records carry prompt_idx)
+2026-05-12 (cycle 3 v2 iter 2 setup-17 — e2e MoE pipeline integration test)
+
+## Cycle 3 v2 iter 2 — setup-17 commit (2026-05-12)
+
+`tests/test_hermes_moe_pipeline_e2e.py` mirrors the dense e2e test
+on the MoE side. Wires every cycle-3 v2 MoE component through their
+pure-function seams:
+
+  proxy.extract_probes (with routed_experts) → merger →
+  filler → builder → fake trainer → pair_hermes_moe_reports →
+  RouterMismatchReport
+
+Two tests: matched expert_ids → router_flip_rate=0.0, and layer-0
+divergence → 50% overall flip rate with per-layer resolution
+(layer-0=100%, layer-1=0%).
+
+2 new tests; **466 passing (+2 from 464)**. Both Dense AND MoE
+pipelines are now exercised end-to-end through their full proxy →
+sidecar → merger → filler → builder → pair seam in tests.
+
+## Cycle 3 v2 iter 2 — setup-16 commit (2026-05-12)
 
 ## Cycle 3 v2 iter 2 — setup-16 commit (2026-05-12)
 
