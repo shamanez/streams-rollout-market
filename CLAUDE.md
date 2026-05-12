@@ -187,7 +187,16 @@ python scripts/live/pair_hermes_dense_reports.py \
     --out-root runs/live/dense/hermes-qwen3-32b-bf16-vs-fsdp-bf16
 # (repeat with --trainers .../megatron... and --trainer-engine-label megatron-bf16)
 
-# === 8. (laptop) Re-render the dashboard ===
+# === 8. (laptop) Aggregate the mismatch reports + re-render the dashboard ===
+# 8a. Aggregate every dense_mismatch_report.json into the engine_pairs
+# index that the Hermes-Agent matrix tiles read from.
+python -m rollout_market.cli.dense_dashboard \
+    --reports-glob 'runs/live/dense/**/dense_mismatch_report.json' \
+    --out-dir runs/live/dense_dashboard
+
+# 8b. Render the index HTML. The Hermes-Agent matrices populate
+# automatically from the aggregator above; the router-flip-rate
+# section renders as TBD until the routed_experts capture path lands.
 python scripts/live/publish_dashboards.py
 python -m http.server -d docs 8000 &
 open http://localhost:8000/
