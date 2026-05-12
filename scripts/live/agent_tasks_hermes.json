@@ -1,0 +1,61 @@
+[
+  {
+    "task_id": "math-tokens-per-gpu-day",
+    "task_text": "A worker generates 24 tokens per second per GPU and runs 4 GPUs. Use the calculator tool to compute how many tokens that is per 24-hour day across all 4 GPUs. State the final answer as one integer.",
+    "expected_tools": ["calculator"]
+  },
+  {
+    "task_id": "math-bf16-vram-budget",
+    "task_text": "A 32-billion-parameter model in bf16 uses 2 bytes per parameter. Use the calculator to compute (a) the bf16 weight size in gibibytes (divide bytes by 1024 three times), and (b) how many such models fit in 96 GiB of VRAM. State both numbers, rounded to two decimals.",
+    "expected_tools": ["calculator"]
+  },
+  {
+    "task_id": "research-vllm-then-sglang",
+    "task_text": "Use web_search twice: first for 'vllm', then for 'sglang'. After both searches, write one sentence each comparing how the two frameworks describe themselves. Final answer: two sentences, one per framework.",
+    "expected_tools": ["web_search"]
+  },
+  {
+    "task_id": "code-fix-factorial",
+    "task_text": "There is a Python factorial function at /tmp/factorial.py. Use read_file to view it, identify the off-by-one bug in the base case, and use python_eval to verify that the corrected version returns 120 for factorial(5). State the corrected function as your final answer.",
+    "expected_tools": ["read_file", "python_eval"]
+  },
+  {
+    "task_id": "code-fix-fibonacci",
+    "task_text": "There is a Python fibonacci function at /tmp/fib.py. Use read_file to view it, identify the off-by-one bug, then use python_eval at least twice to check the corrected function against known values (fib(0)=0, fib(1)=1, fib(7)=13). State the corrected function as your final answer.",
+    "expected_tools": ["read_file", "python_eval"]
+  },
+  {
+    "task_id": "mixed-research-and-math",
+    "task_text": "Use web_search for 'tokyo population' and 'osaka population', then use the calculator to compute Osaka's population as a percentage of Tokyo's, rounded to one decimal place. Final answer: one number with a percent sign.",
+    "expected_tools": ["web_search", "calculator"]
+  },
+  {
+    "task_id": "plan-3step-experiment",
+    "task_text": "Use web_search once to confirm 'vllm' is an LLM serving framework. Then write a numbered 3-step plan for benchmarking vllm against another serving framework. Final answer: a numbered list of exactly 3 steps.",
+    "expected_tools": ["web_search"]
+  },
+  {
+    "task_id": "plan-then-budget",
+    "task_text": "Use web_search for 'vllm' to confirm what it is, then use the calculator to compute how many GPU-hours are needed to generate 1,000,000 tokens at 30 tokens/sec on 4 GPUs (one number, hours). Final answer: one short sentence stating both the framework's purpose and the GPU-hour budget.",
+    "expected_tools": ["web_search", "calculator"]
+  },
+  {
+    "task_id": "code-read-then-modify",
+    "task_text": "There is a Python clip(x, lo, hi) function at /tmp/clip.py. Use read_file to view it, then use python_eval twice: first to call clip(5, 0, 3) (expected 3) and then clip(-2, 0, 3) (expected 0). Report whether the implementation is correct as your final answer and quote the function body.",
+    "expected_tools": ["read_file", "python_eval"]
+  },
+  {
+    "task_id": "four-tool-sequence",
+    "task_text": "Long-horizon task using FOUR tools in order. (1) web_search for 'vllm' to confirm it is a serving framework. (2) read_file '/tmp/factorial.py' to see one of our test fixtures. (3) python_eval the expression '5*4*3*2*1' to compute factorial(5). (4) calculator '120 / 24' to express factorial(5) in days at 24 tokens/sec. Final answer: one sentence stitching all four observations together.",
+    "expected_tools": ["web_search", "read_file", "python_eval", "calculator"]
+  },
+  {
+    "task_id": "no-op-trivia",
+    "task_text": "Trivia: which two cities are the famous start and end of the Tokaido road in feudal Japan? Answer in one short sentence. You do NOT need to call any tools for this — just answer from background knowledge."
+  },
+  {
+    "task_id": "multi-tool-with-irrelevant-result",
+    "task_text": "Use web_search for the query 'qzx-unknown-token-distribution-xyz' (this is expected to return a non-useful canned result). Then ignore that result and use the calculator to compute 73 * 41 + 19. Final answer: the integer result of the arithmetic.",
+    "expected_tools": ["web_search", "calculator"]
+  }
+]

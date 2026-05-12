@@ -4,17 +4,23 @@
 2026-05-12
 
 ## Current phase
-**Hermes Agent matrix in progress (1/6 iters done).** STEER.md is
+**Hermes Agent matrix in progress (2/6 iters done).** STEER.md is
 re-armed for a six-iteration cycle that adds 4 new traffic-light
 tiles below the existing 8 (real `hermes-agent` multi-turn
 trajectories over Qwen3-32B + Qwen3-30B-A3B at vLLM-bf16/fp8).
 
 Iter 1 shipped: `scripts/live/hermes_agent_runner.py` + pure
 `adapt_hermes_record` / `adapt_hermes_jsonl` adapters with 18 new
-tests (365 total, +18). The remaining 22 entries in
-`.claude/feature-results.json` from the previous cycle are still
-`passes: true`; the 6 new `hermes_agent.*` entries are the cycle's
-work.
+tests.
+
+Iter 2 shipped: `scripts/live/agent_tasks_hermes.json` (12
+multi-turn tasks per the approved plan: 1 no-op-trivia, 6 multi-tool
+tasks, 1 four-tool long-horizon). Expanded `_SIM_FILES` in
+`scripts/live/agent_runner.py` with `/tmp/fib.py` (off-by-one bug)
+and `/tmp/clip.py` (correct clipping function for the
+read-then-verify task). 11 new tests in
+`test_agent_tasks_hermes_schema.py`. Total 376 passing (+29 since
+session start).
 
 The previous-cycle dashboard restructure is still live;
 `/docs/index.html` continues to answer the load-bearing question:
@@ -140,14 +146,13 @@ one response. Open candidates for follow-up iterations:
    the OPBC only inspects logprob-level mismatch.
 
 ## Test status
-- pytest -q: **365 passed, 0 failed** (2026-05-12). +18 since
-  last session: all from `test_hermes_agent_runner.py` (adapter
-  shape, terminal_reason logic, JSONL round-trip, env-label
-  defaults).
+- pytest -q: **376 passed, 0 failed** (2026-05-12). +29 since
+  last session: 18 from `test_hermes_agent_runner.py`, 11 from
+  `test_agent_tasks_hermes_schema.py`.
 - ruff check .: clean.
 - `.claude/feature-results.json`: 23 prior entries pass; 6 new
-  `hermes_agent.*` entries — 1 true (`hermes_agent.runner_and_adapter`),
-  5 false.
+  `hermes_agent.*` entries — 2 true (`runner_and_adapter`,
+  `realistic_task_suite`), 4 false (3 live, 1 render).
 
 ## Reproducibility
 Live runs use the env-driven runbook in `scripts/live/`:

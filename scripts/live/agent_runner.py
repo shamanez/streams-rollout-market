@@ -138,6 +138,22 @@ _SIM_FILES: dict[str, str] = {
         "        return 0  # bug: should return 1\n"
         "    return n * factorial(n - 1)\n"
     ),
+    "/tmp/fib.py": (
+        "def fib(n):\n"
+        "    if n == 0:\n"
+        "        return 1  # bug: should return 0\n"
+        "    if n == 1:\n"
+        "        return 1\n"
+        "    return fib(n - 1) + fib(n - 2)\n"
+    ),
+    "/tmp/clip.py": (
+        "def clip(x, lo, hi):\n"
+        "    if x < lo:\n"
+        "        return lo\n"
+        "    if x > hi:\n"
+        "        return hi\n"
+        "    return x\n"
+    ),
 }
 
 
