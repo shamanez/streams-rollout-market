@@ -1,7 +1,7 @@
 # PROGRESS.md — Agent Handoff State
 
 ## Last updated
-2026-05-12 (cycle 3 v2 task #1 shipped — proxy_enable_thinking_off; 7 queue entries remain)
+2026-05-12 (cycle 3 v2 task #1 shipped; task #2 blocked on streaming/SSE gap in proxy)
 
 ---
 
@@ -107,6 +107,67 @@ This unblocks the cycle-3 v2 MoE smoke: the 2026-05-12 DNF (1 658 s,
 `Context length exceeded: max compression attempts (3) reached`)
 should reduce to ≤ 90 s once the next task (`live_moe_bf16_capture`)
 runs the same prompt through the patched proxy.
+
+## Cycle 3 v2 — task #2 attempted, BLOCKED on SSE/streaming gap (2026-05-12)
+
+`live_moe_bf16_capture` attempted end-to-end on the spot. The proxy
+patch works exactly as intended — verified via instrumented run that
+logged each post-inject request body to `/tmp/hermes_request_bodies.jsonl`.
+First hermes request body contained:
+
+```
+chat_template_kwargs: {"enable_thinking": False}    ← injected by proxy
+logprobs: True, top_logprobs: 1, return_token_ids: True
+stream: True                                         ← hermes default
+tools: 28 entries
+```
+
+Direct curl-through-the-proxy with a small prompt produced a 3-token
+"Four." response with the prompt token tail
+`[151644, 77091, 198, 151667, 271, 151668, 271]` — Qwen3 emitted an
+empty `<think>\n\n</think>\n\n` block as expected when
+`enable_thinking=false`. enable_thinking IS being applied.
+
+**The blocker**: hermes uses `stream: True` by default, and the proxy's
+`extract_probes` does `json.loads(response_body)` on what is actually
+a Server-Sent Events stream. Result: probe records have
+`response_logprobs` and `response_token_ids` populated (likely from a
+final non-streamed merge by some intermediate), but
+`response_routed_experts` is NOT IN RECORD on every probe. The
+`live_moe_bf16_capture` acceptance criterion requires NON-EMPTY
+`response_routed_experts`, so the directive cannot pass without one
+of:
+
+(a) **Upgrade `extract_probes` to be SSE-aware** — parse each
+    `data: {...}` chunk, accumulate `routed_experts` lists per choice
+    (vLLM emits them incrementally), reassemble at end-of-stream.
+(b) **Disable upstream streaming in hermes** — find the hermes config
+    knob that sets `stream=False` on outbound chat-completions
+    requests. The hermes `streaming.enabled: false` in
+    `~/.hermes/config.yaml` controls only TUI rendering, not the
+    OpenAI client mode.
+(c) **Bypass hermes for the capture** — write a minimal stdlib
+    OpenAI-tool driver that hits the proxy with `stream=False`. The
+    repo already has `scripts/live/hermes_agent_runner.py` plus the
+    new `feat(minimal-agent): stdlib OpenAI driver` commit on
+    `research/hermes-install-runbook` (commit 17d1cb8) — likely
+    the cleanest path.
+
+GPU on the spot was freed; vLLM + proxy killed (verified via
+`nvidia-smi --query-compute-apps`). No background processes left
+running.
+
+**Files left on spot for next iter**:
+- `/tmp/hermes_request_bodies.jsonl` — single hermes request body
+  (for inspection of exact wire format)
+- `/tmp/hermes_probes_moe_bf16.jsonl` — 2 probe records (one from a
+  curl smoke, one from hermes — both with `routed_experts` absent)
+- `/tmp/proxy_debug_wrap.py` — instrumented proxy wrapper
+- `~/streams-rollout-market/scripts/live/logprob_capture_proxy.py` —
+  patched with enable_thinking=False
+
+`feature-results.json` for `live_moe_bf16_capture` remains
+`passes: false` pending resolution of one of (a)/(b)/(c).
 
 ## Cycle 3 v2 iter 2 — setup-22 commit (2026-05-12)
 
