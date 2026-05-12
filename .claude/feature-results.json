@@ -120,8 +120,8 @@
     "directive": "Add scripts/live/hermes_agent_runner.py that shells out to the NousResearch/hermes-agent CLI (run one task at a time with OPENAI_BASE_URL+OPENAI_API_KEY env), parses the resulting JSONL trajectory, and writes our AgentTrajectory schema (src/rollout_market/observatory/agent_trajectory_lab.py). The adapter must be a pure function adapt_hermes_record() testable offline. Add tests/test_hermes_agent_runner.py with a fixture JSONL covering: <think> block, two <tool_call> blocks with matched tool-result records, final non-tool assistant turn, plus a negative malformed-record case. rollout_engine.name must come from env var ENGINE_LABEL with default hermes-{model}-{precision}. Honor STEER.md global directives (one entry per commit)."
   },
   "hermes_agent.realistic_task_suite": {
-    "passes": false,
-    "evidence": null,
+    "passes": true,
+    "evidence": ".claude/evidence/agent_tasks_hermes_schema/test_agent_tasks_hermes_schema.py",
     "directive": "Add scripts/live/agent_tasks_hermes.json with exactly 12 multi-turn tasks per the table in the approved plan (/Users/shamane/.claude/plans/replicated-inventing-bear.md Iter 2 section). Tasks 5 and 9 require new entries in _SIM_FILES in scripts/live/agent_runner.py: '/tmp/fib.py' (off-by-one fibonacci) and '/tmp/clip.py' (hardcoded bound function). Add tests/test_agent_tasks_hermes_schema.py asserting exactly 12 tasks, all expected_tools exist in TOOL_SCHEMAS, at least 4 use multiple distinct tools, at least 1 has empty or absent expected_tools (the no-op-trivia case), and _SIM_FILES contains both new paths. Honor STEER.md global directives."
   },
   "hermes_agent.dense_qwen3_32b_run": {
