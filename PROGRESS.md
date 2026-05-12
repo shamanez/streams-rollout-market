@@ -48,11 +48,24 @@ STEER.md has been rewritten for cycle 3 v2 (six iterations). The
 - **iter 2/6 next — `hermes_agent.dense_capture_then_fsdp`** (live,
   spot). See STEER.md cycle-3 v2 iter 2 directive: (a) extend
   `scripts/live/hermes_agent_runner.py` to capture logprobs from
-  chat-completions and thread `prompt_token_ids` /
-  `response_token_ids` / `response_logprobs` onto `AgentStep`; (b)
+  chat-completions, **bump `MAX_STEPS` default 8 → 25** (long-horizon
+  multi-turn agent runs need it), thread `prompt_token_ids` /
+  `response_token_ids` / `response_logprobs` onto **each** `AgentStep`
+  (every assistant turn captures its own prompt — which includes the
+  full accumulated prior history — and its own response); (b)
   re-run Hermes-Agent Dense rollouts at bf16 + fp8; (c) FSDP-bf16
-  teacher-force on captured (prompt, response) pairs; (d) pair into
-  `DenseMismatchReport` per (trajectory, turn).
+  teacher-force on captured (prompt, response) pairs (one forward
+  pass per assistant turn); (d) pair into `DenseMismatchReport` per
+  (trajectory, turn).
+
+- **iter 6 scope update (UI cleanup, 2026-05-12).**
+  `matrix_render_and_codex` now also removes the legacy single-prompt
+  Dense + MoE matrices from the headline. The marketplace dashboard
+  becomes Hermes-only above the fold: Hermes-Dense ESS + Hermes-MoE
+  router_flip_rate, both 2×2 over `{FSDP, Megatron} × {bf16, fp8}`.
+  Legacy single-prompt outputs move into a collapsible "Legacy
+  single-prompt experiments (archived)" appendix — not above the
+  fold. The underlying CLIs stay; only the dashboard layout changes.
 
 ## Cycle 2 retrospective (what worked, what was wrong)
 **Hermes Agent cycle COMPLETE — 12 traffic-light tiles + codex PASS.**
