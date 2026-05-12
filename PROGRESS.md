@@ -1,7 +1,71 @@
 # PROGRESS.md — Agent Handoff State
 
 ## Last updated
-2026-05-12 (cycle 3 v2 iter 2 setup-4 — probe sidecar merger shipped)
+2026-05-12 (cycle 3 v2 iter 2 setup-5 — logprob capture proxy shipped)
+
+## Cycle 3 v2 iter 2 — setup-5 commit (2026-05-12)
+
+`hermes_agent.dense_capture_then_fsdp` part (b)-mechanism shipped on
+`research/hermes-logprob-proxy`:
+
+- `scripts/live/logprob_capture_proxy.py` — a tiny stdlib-only OpenAI
+  chat-completions proxy. Listens on a local port, forwards each
+  `/v1/chat/completions` POST to an upstream vLLM endpoint, and:
+    * rewrites the outbound request body to add `logprobs=True,
+      top_logprobs=1` (preserving the agent's preference when set);
+    * adds `extra_body.return_tokens_as_token_ids=True` so vLLM
+      returns integer token IDs alongside each logprob (non-vLLM
+      upstreams safely ignore the extra);
+    * appends one JSONL line to `/tmp/hermes_probes.jsonl` per
+      intercepted request with the captured per-turn probes, keyed by
+      the request's `X-Prompt-Index` + `X-Turn-Idx` headers (or
+      sequential turn counter when headers are absent).
+- Pure functions `inject_logprobs()` + `extract_probes()` carry all
+  the load-bearing logic; the HTTP wrapper is a thin shell. 11 new
+  tests including a true end-to-end run against a stdlib fake
+  upstream. **429 passing (+11 from 418).**
+
+The end-to-end dense Hermes pipeline now has a feasible operational
+path that does NOT require modifying hermes-agent:
+
+  1. (spot) `bash serve_qwen_for_agent.sh` — vLLM Qwen3-32B bf16 at :8000
+  2. (laptop) `ssh -L 8000:localhost:8000 spot -N &` — tunnel
+  3. (laptop) `python scripts/live/logprob_capture_proxy.py \
+        --upstream http://localhost:8000 \
+        --port 8001 \
+        --sidecar /tmp/hermes_probes_bf16.jsonl &`
+  4. (laptop) install + run hermes-agent against
+     `OPENAI_BASE_URL=http://localhost:8001/v1`
+  5. (laptop) `python scripts/live/merge_probes_into_trajectories.py \
+        --sharegpt <hermes-output>.jsonl \
+        --probes /tmp/hermes_probes_bf16.jsonl \
+        --tasks scripts/live/agent_tasks_hermes.json \
+        --model-id Qwen/Qwen3-32B \
+        --engine-label hermes-qwen3-32b-bf16 \
+        --engine-fingerprint sha256:... \
+        --out-dir runs/live/agent/hermes/qwen3-32b/bf16/`
+  6. (laptop) `python scripts/live/build_hermes_dense_input.py \
+        --trajectory-dir runs/live/agent/hermes/qwen3-32b/bf16 \
+        --precision-class bf16`
+  7. (spot) `scp + torchrun run_fsdp_reference.py`
+  8. (laptop) `scp back + pair_hermes_dense_reports.py` ->
+     `runs/live/dense/hermes-qwen3-32b-bf16-vs-fsdp-bf16/`
+  9. (laptop) `python scripts/live/publish_dashboards.py`
+
+Note: the proxy captures `response_logprobs` + `response_token_ids`
+but **not** `prompt_token_ids` (the OpenAI chat-completions response
+shape doesn't expose prompt token IDs). The merger and downstream
+pair script tolerate `prompt_token_ids=None`; the trainer-side script
+falls back to chat-template re-encoding via `hermes_token_extraction.py`'s
+existing fallback path. A future iteration could capture
+`prompt_token_ids` via either `echo=True` on the legacy `/v1/completions`
+endpoint or a tokenizer-side step.
+
+Next operator-actionable iteration: run the live pipeline end-to-end
+on one task to validate the toolchain, then scale up to the full 12
+Hermes tasks at bf16 + fp8.
+
+## Cycle 3 v2 iter 2 — setup-4 commit (2026-05-12)
 
 ## Cycle 3 v2 iter 2 — setup-4 commit (2026-05-12)
 
