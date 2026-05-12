@@ -419,8 +419,12 @@ def _hermes_pair_tile(
     fam = float(pair.get("final_answer_match_rate") or 0.0)
     jaccard = float(pair.get("mean_tool_call_jaccard") or 0.0)
     first_div = pair.get("mean_first_divergence_step")
-    answered = int(pair.get("fully_matched_count") or 0)
     n = int(pair.get("count") or 0)
+    # "answered" = trajectories whose final_answer text matched the trainer.
+    # fully_matched_count counts a stricter thing (no first divergence at
+    # any step), which is misleading for the per-STEER "k-of-N answered"
+    # subtitle. Derive the per-pair answered count from final_answer_match_rate.
+    answered = int(round(fam * n))
     if fam >= 0.80:
         kind_class = "good"
     elif fam >= 0.50:
