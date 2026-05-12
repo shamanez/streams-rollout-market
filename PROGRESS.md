@@ -225,24 +225,23 @@ one response. Open candidates for follow-up iterations:
 
 ## Next work (post-Hermes)
 
-1. **Soft answer-match**. Hermes trajectory final_answer is currently
-   compared by strict normalized-text equality (see
-   `agent_trajectory_lab._content_matches`). With multi-turn answers
-   this is over-strict — agents produce semantically identical
-   answers with surface variation ("per 24-hour day" vs "in a
-   24-hour day"). The dashboard tiles all flip to mx-bad (red) as a
-   result. Adding a softer match (numeric-token equivalence +
-   substring + small Levenshtein) would surface real signal for the
-   final_answer headline. Files: `_content_matches`,
-   `compute_trajectory_divergence`, `TrajectoryDivergenceReport`.
-2. **n=30 hermes rollouts**. Current n=12 means individual
+1. **n=30 hermes rollouts**. Current n=12 means individual
    per-task signal is noisy. A larger task suite (or repeated runs)
    would cut bar variance and let amber/green tiles emerge on the
    noise-floor side.
-3. **MoE seedB at TP=4**. The MoE seedB run used the same serve as
+2. **MoE seedB at TP=4**. The MoE seedB run used the same serve as
    bf16 (TP=4) but the fp8 run had to use TP=2. The TP difference
    could affect inference behaviour slightly; a TP=2 noise-floor run
    would isolate that variable.
+
+## Research follow-ups shipped (post-Hermes)
+
+- **Soft answer-match (2026-05-12)**. Added
+  `final_answer_match_soft` alongside the strict field, computed via
+  numeric-token equivalence + substring fallback. Hermes tile
+  rendering uses the soft rate; first AMBER Hermes tile (MoE fp8
+  5/9 = 56%) emerged. Strict field preserved for back-compat.
+  415 tests passing (+8 unit tests for the soft matcher).
 
 ## Reproducibility
 Live runs use the env-driven runbook in `scripts/live/`:
