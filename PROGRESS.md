@@ -1,14 +1,32 @@
 # PROGRESS.md — Agent Handoff State
 
 ## Last updated
-2026-05-12
+2026-05-12 (cycle 2 — Hermes Agent matrix complete)
 
 ## Current phase
-**Hermes Agent matrix paused on Iter 3 (2/6 iters done, 1 blocker).**
-STEER.md is re-armed for a six-iteration cycle that adds 4 new
-traffic-light tiles below the existing 8 (real `hermes-agent`
-multi-turn trajectories over Qwen3-32B + Qwen3-30B-A3B at
-vLLM-bf16/fp8).
+**Hermes Agent cycle COMPLETE — 12 traffic-light tiles + codex PASS.**
+All 29 entries in `.claude/feature-results.json` are `passes: true`.
+STEER.md self-deleted per its own stop clause. The rendered
+`/docs/index.html` now shows THREE matrices above the fold:
+
+  * Dense (Qwen3-32B)         — ESS                          (8 tiles, 4 visible)
+  * MoE (Qwen3-30B-A3B)       — router_flip_rate             (4 tiles, all visible)
+  * Hermes Agent Dense        — final_answer_match X/N        (2 tiles)
+  * Hermes Agent MoE          — final_answer_match X/N        (2 tiles)
+
+Cycle 2 findings: vLLM-fp8 inference matters more for MoE rollouts
+than Dense rollouts AT BOTH the token level AND the agent-trajectory
+level:
+  Dense ESS:           bf16 0.998  -> fp8 0.995  (tiny precision drop)
+  MoE flip rate:       bf16 4%     -> fp8 7%     (clear precision effect)
+  Hermes Dense jaccard: fp8 0.32   vs noise 0.29 (negligible)
+  Hermes MoE jaccard:   fp8 0.39   vs noise 0.48 (precision IS divergent)
+
+For crowdsourced MoE rollouts at fp8, the precision effect on multi-
+turn agent trajectories exceeds sampling noise — confirming the
+marketplace thesis at the action level.
+
+## Hermes Agent integration (Iter 1-6 arc, shipped 2026-05-12)
 
 Iter 1 shipped: `scripts/live/hermes_agent_runner.py` + pure
 `adapt_hermes_record` / `adapt_hermes_jsonl` adapters with 18 new
@@ -195,17 +213,36 @@ one response. Open candidates for follow-up iterations:
    the OPBC only inspects logprob-level mismatch.
 
 ## Test status
-- pytest -q: **393 passed, 0 failed** (2026-05-12). +46 since
-  last session: 35 from `test_hermes_agent_runner.py` (18 chat-
-  completions + 17 ShareGPT), 11 from
-  `test_agent_tasks_hermes_schema.py`.
+- pytest -q: **407 passed, 0 failed** (2026-05-12). +60 since prior
+  cycle: 35 in `test_hermes_agent_runner.py` (18 chat-completions +
+  17 ShareGPT), 11 in `test_agent_tasks_hermes_schema.py`, 10 in
+  `test_publish_dashboards_hermes_agent.py`, 4 in
+  `test_publish_dashboards_hermes_moe.py`.
 - ruff check .: clean.
-- `.claude/feature-results.json`: 23 prior entries pass; 6 new
-  `hermes_agent.*` entries — 2 true (`runner_and_adapter`,
-  `realistic_task_suite`), 4 false (3 live, 1 render). The Iter 1
-  adapter now also handles the real hermes-agent ShareGPT shape;
-  the entry stays true and the new code is unmarked prep for
-  Iter 3.
+- `.claude/feature-results.json`: **29/29 entries pass:true.** All
+  6 new `hermes_agent.*` entries flipped to true with evidence
+  paths referenced from `evidence_log.jsonl`.
+
+## Next work (post-Hermes)
+
+1. **Soft answer-match**. Hermes trajectory final_answer is currently
+   compared by strict normalized-text equality (see
+   `agent_trajectory_lab._content_matches`). With multi-turn answers
+   this is over-strict — agents produce semantically identical
+   answers with surface variation ("per 24-hour day" vs "in a
+   24-hour day"). The dashboard tiles all flip to mx-bad (red) as a
+   result. Adding a softer match (numeric-token equivalence +
+   substring + small Levenshtein) would surface real signal for the
+   final_answer headline. Files: `_content_matches`,
+   `compute_trajectory_divergence`, `TrajectoryDivergenceReport`.
+2. **n=30 hermes rollouts**. Current n=12 means individual
+   per-task signal is noisy. A larger task suite (or repeated runs)
+   would cut bar variance and let amber/green tiles emerge on the
+   noise-floor side.
+3. **MoE seedB at TP=4**. The MoE seedB run used the same serve as
+   bf16 (TP=4) but the fp8 run had to use TP=2. The TP difference
+   could affect inference behaviour slightly; a TP=2 noise-floor run
+   would isolate that variable.
 
 ## Reproducibility
 Live runs use the env-driven runbook in `scripts/live/`:
