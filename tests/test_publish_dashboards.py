@@ -62,18 +62,24 @@ def test_rendered_index_headline_has_no_endpoint_dashboard_string():
     assert "Agent trajectory dashboard" in headline
 
 
-def test_rendered_index_contains_dense_and_moe_matrices():
-    """STEER `dashboard.dense_moe_split`: index opens with two graph-first
-    matrices labelled Dense (Qwen3-32B) and MoE (Qwen3-30B-A3B)."""
+def test_rendered_index_contains_dense_matrix_and_placeholder():
+    """Per operator direction 2026-05-12 ('Remove all the numbers from
+    cycle-2 MoE'), the cycle-2 single-prompt MoE router_flip_rate matrix
+    is retired entirely and replaced with a TBD placeholder. The cycle-2
+    Dense ESS matrix survives in a collapsible legacy appendix because
+    ESS is still a token-prob-shift metric per the pivot."""
     card_data = [{**c, "ready": False, "payload": {}} for c in publish_dashboards.CARDS]
     page = publish_dashboards.render_index(card_data)
     assert "data-section=\"dense-matrix\"" in page
-    assert "data-section=\"moe-matrix\"" in page
+    # MoE matrix retired — must NOT appear in the index.
+    assert "data-section=\"moe-matrix\"" not in page
+    # Placeholder for the expert-routing TBD work renders in its place.
+    assert "data-section=\"router-flip-rate-placeholder\"" in page
     assert "Dense (Qwen3-32B)" in page
-    assert "MoE (Qwen3-30B-A3B)" in page
-    # Each matrix renders as a tile grid (data-chart hooks on populated
-    # tiles; the empty/TBD skeleton still emits the row labels FSDP and
-    # MEGATRON).
+    # The Hermes Agent MoE matrix above the fold is the only MoE surface
+    # in the headline now.
+    assert "Hermes Agent — MoE (Qwen3-30B-A3B)" in page
+    # The Dense matrix tile grid still emits the row labels FSDP and MEGATRON.
     assert "FSDP" in page
     assert "MEGATRON" in page
 
@@ -168,12 +174,12 @@ def test_megatron_placeholder_when_no_megatron_reports():
     # Placeholder literal exactly as the STEER directive requires.
     placeholder = publish_dashboards.MEGATRON_PLACEHOLDER
     assert placeholder == "TBD — pending HF→Megatron conversion"
-    # Megatron row tiles must show the placeholder. With one column in
-    # each matrix (bf16 / fp8 in dense, bf16 in moe), at least 2 tiles
-    # land in the Megatron row across the two matrices.
+    # Megatron row tiles must show the placeholder. Cycle-2 MoE matrix
+    # retired (2026-05-12 operator direction), so we only count Megatron
+    # tiles in the Dense matrix — 2 tiles (bf16 + fp8 column).
     occurrences = page.count(placeholder)
-    assert occurrences >= 3, (
-        f"expected ≥3 Megatron placeholder tiles across both matrices; "
+    assert occurrences >= 2, (
+        f"expected ≥2 Megatron placeholder tiles in the Dense matrix; "
         f"got {occurrences}"
     )
     # The placeholder tile is the TBD style — greyed / dashed.
@@ -262,14 +268,8 @@ def test_dense_and_moe_matrices_are_model_bound():
         page,
         flags=re.DOTALL,
     )
-    moe_match = re.search(
-        r'<section class="mx-section" data-section="moe-matrix">(.*?)</section>',
-        page,
-        flags=re.DOTALL,
-    )
-    assert dense_match and moe_match, "expected both matrix sections to render"
+    assert dense_match, "expected Dense matrix section to render"
     dense_section = dense_match.group(1)
-    moe_section = moe_match.group(1)
 
     # Dense matrix: keeps the Qwen3-32B ESS value, drops the MoE row's value.
     assert "0.9981" in dense_section
@@ -277,12 +277,16 @@ def test_dense_and_moe_matrices_are_model_bound():
         "MoE-model row leaked into the Dense matrix"
     )
 
-    # MoE matrix: keeps the Qwen3-30B-A3B router_flip_rate, drops the dense row.
-    # router_flip_rate=0.0723 → "7.2%" in the rendered tile.
-    assert "7.2%" in moe_section
-    assert "0.9999" not in moe_section
-    assert "100.0%" not in moe_section, (
-        "Dense-model row leaked into the MoE matrix"
+    # Cycle-2 MoE router_flip_rate matrix retired entirely (operator
+    # direction 2026-05-12). The router_payload above is still ingested
+    # so the JSON pipeline stays stable, but the matrix is no longer
+    # rendered. The router-flip-rate placeholder appears instead.
+    assert 'data-section="moe-matrix"' not in page
+    assert 'data-section="router-flip-rate-placeholder"' in page
+    # The cycle-2 MoE numbers (7.2%) must NOT appear anywhere in the
+    # rendered page now.
+    assert "7.2%" not in page, (
+        "cycle-2 MoE router_flip_rate leaked into the rendered index"
     )
 
     # The cross-model Megatron row in dense_payload would otherwise have

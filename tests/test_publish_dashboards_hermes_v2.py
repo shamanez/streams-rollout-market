@@ -33,38 +33,50 @@ def _render() -> str:
     return publish_dashboards.render_index(card_data)
 
 
-def test_hermes_matrices_appear_before_legacy_matrices() -> None:
-    """The headline must lead with Hermes; legacy matrices follow."""
+def test_hermes_matrices_appear_before_legacy_dense_archive() -> None:
+    """The headline must lead with Hermes; the legacy Dense matrix
+    follows in a collapsible appendix.
+
+    Operator direction 2026-05-12 ('Remove all the numbers from cycle-2
+    MoE'): the cycle-2 single-prompt MoE router_flip_rate matrix is
+    no longer rendered in the legacy appendix at all — it's been
+    replaced with the ``router-flip-rate-placeholder`` section above
+    the appendix. Only the cycle-2 Dense ESS matrix survives in the
+    archive (ESS is still a token-prob-shift metric per the pivot).
+    """
     page = _render()
     hermes_dense = page.find('data-section="hermes-agent-dense-matrix"')
     hermes_moe = page.find('data-section="hermes-agent-moe-matrix"')
     legacy_dense = page.find('data-section="dense-matrix"')
-    legacy_moe = page.find('data-section="moe-matrix"')
+    placeholder = page.find('data-section="router-flip-rate-placeholder"')
     assert hermes_dense != -1
     assert hermes_moe != -1
     assert legacy_dense != -1
-    assert legacy_moe != -1
-    # Hermes matrices precede the legacy ones in source order.
-    assert hermes_dense < legacy_dense
-    assert hermes_dense < legacy_moe
-    assert hermes_moe < legacy_dense
-    assert hermes_moe < legacy_moe
+    assert placeholder != -1
+    # Cycle-2 MoE router_flip_rate matrix retired entirely.
+    assert 'data-section="moe-matrix"' not in page
+    # Hermes matrices precede the placeholder + the legacy Dense archive
+    # in source order.
+    assert hermes_dense < placeholder
+    assert hermes_moe < placeholder
+    assert placeholder < legacy_dense
 
 
-def test_legacy_matrices_inside_collapsible_appendix() -> None:
-    """The legacy single-prompt matrices must be wrapped in a
-    ``<details>`` element so they don't dominate the headline visually."""
+def test_legacy_dense_inside_collapsible_appendix() -> None:
+    """The remaining cycle-2 Dense matrix must be wrapped in a
+    ``<details>`` element so it doesn't dominate the headline visually."""
     page = _render()
     details_open = page.find("<details class='legacy-archive'")
     details_close = page.find("</details>", details_open)
     assert details_open != -1, "legacy-archive <details> wrapper missing"
     assert details_close != -1
     appendix_html = page[details_open:details_close]
-    # Both legacy matrices live inside the appendix.
+    # Cycle-2 Dense matrix lives inside the appendix.
     assert 'data-section="dense-matrix"' in appendix_html
-    assert 'data-section="moe-matrix"' in appendix_html
+    # Cycle-2 MoE matrix must NOT live inside the appendix (or anywhere).
+    assert 'data-section="moe-matrix"' not in appendix_html
     # The summary label is operator-facing and signals 'archived'.
-    assert "Legacy single-prompt experiments" in appendix_html
+    assert "Legacy single-prompt Dense matrix" in appendix_html
     # And carries the data-section hook so downstream tests can target it.
     head = page[details_open : details_open + 200]
     assert (
@@ -81,3 +93,28 @@ def test_hermes_matrices_outside_legacy_appendix() -> None:
     appendix = page[details_open:]
     assert 'data-section="hermes-agent-dense-matrix"' not in appendix
     assert 'data-section="hermes-agent-moe-matrix"' not in appendix
+
+
+def test_router_flip_rate_placeholder_visible() -> None:
+    """The expert-routing 'TBD' slot must render in the headline area
+    (NOT hidden behind <details>) so readers know the metric is coming.
+
+    Operator direction 2026-05-12: cycle-2 MoE numbers are wrong; add a
+    placeholder for the expert-flopping work. The placeholder must
+    document the why (vLLM 0.20.x OpenAI shim limitation) so a future
+    operator can pick it up from the dashboard alone.
+    """
+    page = _render()
+    placeholder = page.find('data-section="router-flip-rate-placeholder"')
+    details_open = page.find("<details class='legacy-archive'")
+    assert placeholder != -1, "router-flip-rate placeholder section missing"
+    # Placeholder sits OUTSIDE the collapsible legacy archive (not hidden).
+    assert placeholder < details_open
+    # Placeholder content names the metric + the why.
+    section_end = page.find("</section>", placeholder)
+    section_html = page[placeholder:section_end]
+    assert "Router flip rate" in section_html
+    assert "TBD" in section_html
+    # Documents the vLLM root cause so a future operator can pick it up.
+    assert "routed_experts" in section_html
+    assert "vLLM" in section_html

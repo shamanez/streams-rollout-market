@@ -530,6 +530,144 @@ def _select_hermes_pairs(
     return precision, noise
 
 
+def _hermes_logprob_tile(
+    *,
+    label: str,
+    pair: dict | None,
+    href: str,
+    column_label: str,
+) -> str:
+    """Render one Hermes-Agent logprob-shift tile (operator pivot 2026-05-12).
+
+    Reads an aggregated dense_dashboard engine_pair (mean_ess +
+    mean_delta_logprob_abs over Hermes-multi-turn trajectories) and
+    renders it with the same traffic-light thresholds as the legacy
+    cycle-2 Dense matrix: green ≥0.99, amber 0.95–0.99, red <0.95.
+
+    When the pair is missing — e.g. the Megatron teacher-force hasn't
+    been run yet for this (model, trainer) cell — we emit a TBD tile so
+    the dashboard structure stays stable across iterations and so
+    readers can see at a glance what's still on the queue.
+    """
+    if pair is None:
+        return (
+            f'<a class="mx-tile mx-tbd" href="{_html.escape(href)}" '
+            f'data-chart="hermes-logprob-tile" '
+            f'data-trainer="{_html.escape(label)}" '
+            f'data-column="{_html.escape(column_label)}">'
+            f"<div class='mx-col'>{_html.escape(column_label)}</div>"
+            f"<div class='mx-value'>TBD</div>"
+            f"<div class='mx-bar'><div class='mx-bar-fill' style='width:0%'></div></div>"
+            f"<div class='mx-sub'>no trainer-force run yet</div>"
+            f"</a>"
+        )
+    ess = float(pair.get("mean_ess") or 0.0)
+    delta_lp = float(pair.get("mean_delta_logprob_abs") or 0.0)
+    count = int(pair.get("count") or 0)
+    if ess >= 0.99:
+        kind_class = "good"
+    elif ess >= 0.95:
+        kind_class = "warn"
+    else:
+        kind_class = "bad"
+    bar_pct = max(0.0, min(1.0, ess)) * 100
+    sub = f"n={count} run(s) · mean |Δlogprob|={delta_lp:.4f}"
+    return (
+        f'<a class="mx-tile mx-{kind_class}" href="{_html.escape(href)}" '
+        f'data-chart="hermes-logprob-tile" '
+        f'data-trainer="{_html.escape(label)}" '
+        f'data-column="{_html.escape(column_label)}">'
+        f"<div class='mx-col'>{_html.escape(column_label)}</div>"
+        f"<div class='mx-value'>{ess:.4f}</div>"
+        f"<div class='mx-bar'><div class='mx-bar-fill' style='width:{bar_pct:.1f}%'></div></div>"
+        f"<div class='mx-sub'>{_html.escape(sub)}</div>"
+        f"</a>"
+    )
+
+
+def _select_hermes_logprob_cells(
+    dense_payload: dict,
+    *,
+    rollout_engine: str,
+    trainer_engines: tuple[str, ...] = ("fsdp-bf16", "megatron-bf16"),
+) -> list[tuple[str, dict | None]]:
+    """Pick the per-trainer engine_pair entries for a given Hermes rollout.
+
+    Returns a list of ``(trainer_label, pair_or_None)`` tuples in the
+    order given by ``trainer_engines``. ``None`` means the cell hasn't
+    been paired yet — the tile renderer turns this into a TBD slot.
+    """
+    pairs_by_trainer: dict[str, dict] = {
+        (p.get("trainer_engine") or "").lower(): p
+        for p in dense_payload.get("engine_pairs", [])
+        if (p.get("rollout_engine") or "") == rollout_engine
+    }
+    return [(t, pairs_by_trainer.get(t.lower())) for t in trainer_engines]
+
+
+def _render_hermes_logprob_matrix(
+    *,
+    title: str,
+    section_slug: str,
+    dense_payload: dict,
+    rollout_engine: str,
+    detail_href: str,
+    blurb_html: str,
+    trainer_engines: tuple[str, ...] = ("fsdp-bf16", "megatron-bf16"),
+) -> str:
+    """Render the Hermes-Agent logprob-shift matrix per operator pivot
+    2026-05-12.
+
+    Layout: one row per rollout (single Hermes-bf16 column for now), two
+    tiles for trainer ∈ {FSDP, Megatron}. Reads from
+    ``docs/dense_dashboard.json``'s aggregated ``engine_pairs`` (output
+    of ``rollout_market.cli.dense_dashboard``), which already aggregates
+    every ``runs/live/dense/**/dense_mismatch_report.json``. So:
+
+      Hermes rollout → vLLM proxy → minimal_agent_driver →
+      AgentTrajectory →
+      run_fsdp_reference.py | megatron_reference_launch.sh →
+      pair_hermes_dense_reports.py →
+      runs/live/dense/<pair-slug>/<task>-turn<k>/dense_mismatch_report.json →
+      rollout_market.cli.dense_dashboard →
+      docs/dense_dashboard.json (engine_pairs) →
+      this tile.
+
+    Tiles missing a (rollout, trainer) cell render as TBD until the
+    operator runs the corresponding teacher-force pass.
+    """
+    cells = _select_hermes_logprob_cells(
+        dense_payload, rollout_engine=rollout_engine, trainer_engines=trainer_engines
+    )
+    grid_html = ["<div class='mx-grid'>"]
+    grid_html.append("<div class='mx-grid-head'>")
+    grid_html.append("<div class='mx-trainer-head'>trainer-ref</div>")
+    grid_html.append("<div class='mx-col-head'>bf16 · L40S</div>")
+    grid_html.append("</div>")
+    for trainer_label, pair in cells:
+        # Pretty trainer name: "fsdp-bf16" → "FSDP" for the row header.
+        pretty = (trainer_label.split("-")[0] or trainer_label).upper()
+        grid_html.append("<div class='mx-row'>")
+        grid_html.append(f"<div class='mx-trainer'>{_html.escape(pretty)}</div>")
+        grid_html.append(
+            _hermes_logprob_tile(
+                label=pretty,
+                pair=pair,
+                href=detail_href,
+                column_label=f"{rollout_engine}",
+            )
+        )
+        grid_html.append("</div>")
+    grid_html.append("</div>")
+    return (
+        f'<section class="mx-section" data-section="{section_slug}">'
+        f"<h2>{_html.escape(title)}</h2>"
+        f"<div class='mx-blurb'>{blurb_html}</div>"
+        f"{''.join(grid_html)}"
+        f"</section>"
+    )
+
+
 def _render_hermes_section(
     *,
     title: str,
@@ -678,18 +816,25 @@ def render_index(card_data: list[dict]) -> str:
         model_substring="Qwen3-32B",
         blurb_html=dense_blurb,
     )
-    moe_matrix = _render_matrix(
-        title="MoE (Qwen3-30B-A3B)",
-        model="Qwen/Qwen3-30B-A3B",
-        payload=router_payload,
-        metric_key="router_flip_rate",
-        kind="moe",
-        detail_href="router_dashboard.html",
-        section_slug="moe-matrix",
-        model_substring="Qwen3-30B-A3B",
-        blurb_html=moe_blurb,
-    )
+    # Cycle-2 single-prompt MoE router_flip_rate matrix retired from the
+    # public surface per operator direction 2026-05-12 ("Remove all the
+    # numbers from cycle-2 MoE, I think it was wrong"). The
+    # router_dashboard CLI still runs and writes JSON under
+    # runs/live/router/ for offline inspection. ``router_payload`` and
+    # ``moe_blurb`` are bound above so the JSON ingestion path stays
+    # identical (and to feed the click-through link from the legacy card
+    # row lower on the page). The actual matrix is replaced by the
+    # ``router-flip-rate-placeholder`` section below the headline.
+    _ = (router_payload, moe_blurb)
+    # The agent_payload (final_answer_match / tool_call_jaccard from
+    # agent_dashboard.json) is retained for the per-tile click-through
+    # detail page but no longer drives the headline Hermes matrices.
+    # Per operator direction 2026-05-12 ("complete the dashboard only
+    # with token prob shifts"), the headline Hermes-Agent tiles read
+    # from the dense_dashboard aggregator (mean_ess +
+    # mean_delta_logprob_abs).
     agent_payload = (by_slug.get("agent") or {}).get("payload") or {}
+    _ = agent_payload
     hermes_dense_blurb = (
         "<p><strong>What this measures.</strong> Real "
         "<a href='https://github.com/NousResearch/hermes-agent'>Nous Hermes "
@@ -710,45 +855,54 @@ def render_index(card_data: list[dict]) -> str:
         "what the agent <em>actually does</em>, not just its per-token "
         "logprobs.</p>"
     )
-    hermes_moe_blurb = (
-        "<p><strong>Same recipe, MoE rollouts — with TP held constant.</strong> "
-        "Hermes Agent trajectories over Qwen3-30B-A3B. The fp8 variant must "
-        "run at TP=2 (FP8 <code>block_n=128</code> / <code>ffn_intermediate=768</code> "
-        "constraint), so the precision-effect tile pairs <code>vLLM-fp8 @ TP=2</code> "
-        "against a fresh <code>vLLM-bf16 @ TP=2</code> reference (apples-to-apples). "
-        "The noise-floor tile compares <code>bf16 @ TP=4</code> against itself with "
-        "a different sampling seed — same engine, same precision, same TP, just "
-        "different RNG. The MoE matrix above already shows fp8 adds 2-3% "
-        "router_flip_rate at the token level; this section asks whether that "
-        "compounds into <em>different agent actions</em>. At n=12 trajectories "
-        "the TP-matched precision effect is essentially identical to the "
-        "noise floor — at this sample size, fp8 doesn't move the dial above "
-        "what sampling alone already does.</p>"
+    # Per operator direction 2026-05-12 ("complete the dashboard only
+    # with token prob shifts"), both Hermes-Agent matrices now render
+    # ESS over Hermes-multi-turn response tokens against the trainer
+    # teacher-force. The blurbs above describe the underlying
+    # measurement; the matrix itself is two tiles (FSDP, Megatron) per
+    # model. Tiles with no trainer-force pass yet render TBD.
+    hermes_dense_blurb = (
+        "<p><strong>What this measures.</strong> A real "
+        "<a href='https://github.com/NousResearch/hermes-agent'>Hermes-Agent</a> "
+        "multi-turn trajectory captured through the proxy at "
+        "<code>scripts/live/logprob_capture_proxy.py</code>, then "
+        "teacher-forced through FSDP and Megatron in bf16. Each tile reports "
+        "the mean <strong>ESS</strong> over the agent's response tokens — "
+        "how usable that rollout would be for off-policy training. Green "
+        "(ESS &gt; 0.99) means rollout and trainer agree token-for-token; "
+        "amber (0.95–0.99) means the trainer needs stronger off-policy "
+        "correction; red (&lt; 0.95) means the rollout would be dropped. "
+        "TBD tiles are trainer-force passes still on the queue.</p>"
     )
-    hermes_dense_matrix = _render_hermes_section(
+    hermes_moe_blurb = (
+        "<p><strong>Same recipe, MoE rollouts.</strong> Hermes-Agent "
+        "trajectory over Qwen3-30B-A3B, teacher-forced through FSDP and "
+        "Megatron in bf16. The logprob-shift here measures the same thing "
+        "the Dense matrix above measures — divergence in next-token "
+        "predictions between rollout and trainer engines over the agent's "
+        "response tokens — applied to MoE forward passes. Router-flip-rate "
+        "(<em>which experts</em> each engine picked) is the placeholder "
+        "section below: it's the marketplace metric for crowdsourced MoE "
+        "rollouts but is gated on vLLM exposing <code>routed_experts</code> "
+        "on the OpenAI HTTP endpoint, which 0.20.x does not.</p>"
+    )
+    # ``dense_payload`` already holds the aggregated dense_dashboard.json
+    # (engine_pairs + rows). Both Hermes matrices read from the same
+    # source so the aggregation invariants stay consistent.
+    hermes_dense_matrix = _render_hermes_logprob_matrix(
         title="Hermes Agent — Dense (Qwen3-32B)",
         section_slug="hermes-agent-dense-matrix",
-        payload=agent_payload,
-        model_substring="Qwen3-32B",
-        bf16_engine="hermes-qwen3-32b-bf16",
-        fp8_engine="hermes-qwen3-32b-fp8",
-        seedb_engine="hermes-qwen3-32b-bf16_seedB",
-        detail_href="agent_dashboard.html",
+        dense_payload=dense_payload,
+        rollout_engine="hermes-qwen3-32b-bf16",
+        detail_href="dense_dashboard.html",
         blurb_html=hermes_dense_blurb,
     )
-    hermes_moe_matrix = _render_hermes_section(
+    hermes_moe_matrix = _render_hermes_logprob_matrix(
         title="Hermes Agent — MoE (Qwen3-30B-A3B)",
         section_slug="hermes-agent-moe-matrix",
-        payload=agent_payload,
-        model_substring="Qwen3-30B-A3B",
-        bf16_engine="hermes-qwen3-30b-a3b-bf16",
-        fp8_engine="hermes-qwen3-30b-a3b-fp8",
-        seedb_engine="hermes-qwen3-30b-a3b-bf16_seedB",
-        # MoE fp8 must run at TP=2 (FP8 block_n=128 / ffn_inter=768 constraint),
-        # so the precision-effect pair holds TP constant by using bf16_tp2 as
-        # its trainer. Noise floor stays on bf16(TP=4) seedB-vs-bf16.
-        precision_trainer="hermes-qwen3-30b-a3b-bf16_tp2",
-        detail_href="agent_dashboard.html",
+        dense_payload=dense_payload,
+        rollout_engine="hermes-qwen3-30b-a3b-bf16",
+        detail_href="dense_dashboard.html",
         blurb_html=hermes_moe_blurb,
     )
     cards_html = []
@@ -810,7 +964,19 @@ def render_index(card_data: list[dict]) -> str:
         ".legacy-archive>summary{cursor:pointer;font-weight:600;color:var(--muted);"
         "font-size:.95rem;list-style-position:inside}"
         ".legacy-archive .legacy-note{color:var(--muted);font-size:.88rem;"
-        "margin:.5rem 0 1rem 0;font-style:italic}" + _MATRIX_STYLES + "</style></head><body>"
+        "margin:.5rem 0 1rem 0;font-style:italic}"
+        # Router-flip-rate placeholder styling — a visible "TBD" slot in
+        # the dashboard, deliberately not hidden behind a <details>. We
+        # want readers to know the metric is coming, not assume the
+        # MoE-routing story is closed.
+        "section[data-section='router-flip-rate-placeholder']{"
+        "margin-top:2rem;background:#fffbea;border:1px dashed #c4a23a;"
+        "border-radius:14px;padding:1rem 1.25rem}"
+        "section[data-section='router-flip-rate-placeholder']>h2{"
+        "margin:.1rem 0 .6rem 0;font-size:1.1rem;color:#7c5a14}"
+        "section[data-section='router-flip-rate-placeholder'] .tbd-note{"
+        "color:#5a4a14;font-size:.92rem;margin:.4rem 0;line-height:1.55}"
+        + _MATRIX_STYLES + "</style></head><body>"
         "<header>"
         "<h1>streams-rollout-market — live dashboards</h1>"
         "<p>Real-data observatory for the rollout marketplace. Five lenses on how engine "
@@ -822,21 +988,65 @@ def render_index(card_data: list[dict]) -> str:
         "</p>"
         "</header>"
         # Cycle 3 v2: Hermes-Agent multi-turn matrices carry the headline;
-        # the legacy single-prompt Dense + MoE matrices move into a
-        # collapsible appendix below the fold per STEER.md's "Hermes-only
-        # dashboard" directive. The CLIs that produce the legacy matrices
-        # (dense_dashboard, router_dashboard) stay in place — their output
-        # is still useful for token-level engine comparison; it just no
-        # longer sits above the fold.
+        # the legacy single-prompt Dense matrix moves into a collapsible
+        # appendix below the fold per STEER.md's "Hermes-only dashboard"
+        # directive. The cycle-2 single-prompt MoE router_flip_rate
+        # matrix has been retired entirely from the public surface and
+        # replaced with the ``router-flip-rate-placeholder`` slot below.
         f"{hermes_dense_matrix}{hermes_moe_matrix}"
-        "<details class='legacy-archive' data-section='legacy-single-prompt'>"
-        "<summary>Legacy single-prompt experiments (archived)</summary>"
-        "<p class='legacy-note'>"
-        "Pre-Hermes single-prompt token-level matrices. Kept for reference; "
-        "the multi-turn agent matrices above are the load-bearing marketplace "
-        "signal."
+        # Router-flip-rate (expert routing) placeholder. Per operator
+        # direction 2026-05-12 the cycle-2 single-prompt MoE
+        # router_flip_rate tiles are removed from the public surface;
+        # the metric returns once we drive the native-API "replay" path
+        # documented in PROGRESS.md (Hermes captures token IDs via the
+        # OpenAI proxy, then a side pass through vLLM's native
+        # ``LLM.generate(prompt_token_ids=...)`` harvests
+        # ``routed_experts`` for those exact tokens — vLLM 0.20.x's
+        # OpenAI HTTP entrypoint does not expose the field). Until then
+        # this section is an explicit TBD slot, not silently empty, so
+        # readers know it's coming.
+        '<section class="matrix-section" data-section="router-flip-rate-placeholder">'
+        "<h2>Router flip rate (TBD)</h2>"
+        "<p class='tbd-note'>"
+        "<strong>Status:</strong> placeholder, returning soon. "
+        "Top-1 expert-id disagreement between rollout and trainer per "
+        "<code>(token, layer)</code> over the MoE response tokens — "
+        "expressed as <strong>router_flip_rate</strong>, the marketplace "
+        "metric for whether crowdsourced MoE rollouts route to the same "
+        "experts the trainer would. The earlier cycle-2 single-prompt "
+        "numbers (4.3%/7.1%/4.1%/6.3% across the four <code>(rollout, "
+        "trainer)</code> cells) have been retired pending a "
+        "multi-turn-agent re-run on the cycle-3 v2 pipeline."
         "</p>"
-        f"{dense_matrix}{moe_matrix}"
+        "<p class='tbd-note'>"
+        "<strong>Why TBD:</strong> vLLM 0.20.x's OpenAI HTTP entrypoint "
+        "does not emit <code>routed_experts</code> on the response shape "
+        "(verified on 0.20.1 and 0.20.2: <code>grep -rn routed_experts "
+        "vllm/entrypoints/openai/</code> returns zero hits). The field "
+        "is only available on the native <code>LLM.generate()</code> "
+        "API path (which <code>~/run_vllm_moe_rollout.py</code> uses "
+        "for cycle-2). For Hermes-Agent multi-turn captures we need a "
+        "second native-API forward pass over the captured "
+        "<code>(prompt_token_ids + response_token_ids)</code> to "
+        "harvest the routing trace — see <code>PROGRESS.md</code> "
+        "and <code>docs/future_research.md</code> for the planned wiring."
+        "</p>"
+        "</section>"
+        # Legacy single-prompt Dense ESS matrix kept in a collapsible
+        # appendix. It's still a token-prob-shift metric (matches the
+        # dashboard direction) and ESS numbers from cycle-2 are
+        # methodologically sound — they came from the same proxy +
+        # FSDP/Megatron teacher-force seam Hermes uses. The cycle-2 MoE
+        # numbers are NOT kept here (per operator direction; placeholder
+        # section above documents why).
+        "<details class='legacy-archive' data-section='legacy-single-prompt'>"
+        "<summary>Legacy single-prompt Dense matrix (archived)</summary>"
+        "<p class='legacy-note'>"
+        "Cycle-2 single-prompt token-level ESS for Dense (Qwen3-32B). "
+        "Kept for reference; the Hermes-Agent multi-turn Dense matrix above "
+        "is the load-bearing marketplace signal."
+        "</p>"
+        f"{dense_matrix}"
         "</details>"
         f"<div class='grid'>{''.join(cards_html)}</div>"
         "<footer>Generated from runs/live/. Each dashboard is regenerated by running the "
