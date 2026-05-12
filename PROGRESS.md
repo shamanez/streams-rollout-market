@@ -4,10 +4,20 @@
 2026-05-12
 
 ## Current phase
-**STEER complete — 8 green/amber matrix tiles + codex PASS.** All 23
-entries in `.claude/feature-results.json` are `passes: true`. STEER.md
-self-deleted per its own stop clause. The dashboard restructure is
-done; `/docs/index.html` answers the load-bearing question:
+**Hermes Agent matrix in progress (1/6 iters done).** STEER.md is
+re-armed for a six-iteration cycle that adds 4 new traffic-light
+tiles below the existing 8 (real `hermes-agent` multi-turn
+trajectories over Qwen3-32B + Qwen3-30B-A3B at vLLM-bf16/fp8).
+
+Iter 1 shipped: `scripts/live/hermes_agent_runner.py` + pure
+`adapt_hermes_record` / `adapt_hermes_jsonl` adapters with 18 new
+tests (365 total, +18). The remaining 22 entries in
+`.claude/feature-results.json` from the previous cycle are still
+`passes: true`; the 6 new `hermes_agent.*` entries are the cycle's
+work.
+
+The previous-cycle dashboard restructure is still live;
+`/docs/index.html` continues to answer the load-bearing question:
 
   *Engine + precision + device DO change inference-time behaviour
   enough to matter for crowdsourced MoE rollouts.* fp8 inference
@@ -130,12 +140,14 @@ one response. Open candidates for follow-up iterations:
    the OPBC only inspects logprob-level mismatch.
 
 ## Test status
-- pytest -q: **347 passed, 0 failed** (2026-05-11). +14 since
-  session start: 4 from `test_megatron_reference_shape.py`, 4 from
-  `test_fsdp_moe_reference_shape.py`, 6 from
-  `test_build_router_input_pair.py`.
+- pytest -q: **365 passed, 0 failed** (2026-05-12). +18 since
+  last session: all from `test_hermes_agent_runner.py` (adapter
+  shape, terminal_reason logic, JSONL round-trip, env-label
+  defaults).
 - ruff check .: clean.
-- All 23 `.claude/feature-results.json` entries: `passes: true`.
+- `.claude/feature-results.json`: 23 prior entries pass; 6 new
+  `hermes_agent.*` entries — 1 true (`hermes_agent.runner_and_adapter`),
+  5 false.
 
 ## Reproducibility
 Live runs use the env-driven runbook in `scripts/live/`:
