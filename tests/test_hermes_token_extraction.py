@@ -398,6 +398,43 @@ def test_extract_with_system_prompt_prepends_system_role(extractor, tokenizer, s
     assert len(p0) > len(p0_no_sys)
 
 
+def test_coerce_handles_batch_encoding_and_encoding_shapes(extractor):
+    """Verify the BatchEncoding / Encoding shape adapters used on the spot.
+
+    HuggingFace's PreTrainedTokenizerFast returns a ``BatchEncoding``
+    (dict-like with ``.input_ids``) or a length-1 list of
+    ``tokenizers.Encoding`` (which carries ``.ids``) when
+    ``apply_chat_template(..., tokenize=True)`` is called. The extractor
+    has to normalise those into ``list[int]`` so its slicing arithmetic
+    is shape-agnostic.
+    """
+
+    class _BatchEncodingLike:
+        def __init__(self, ids: list[int]):
+            self.input_ids = ids
+
+    class _BatchEncodingLikeNested:
+        def __init__(self, ids: list[int]):
+            self.input_ids = [ids]
+
+    class _EncodingLike:
+        def __init__(self, ids: list[int]):
+            self.ids = ids
+
+    coerce = extractor._coerce_to_id_list
+
+    assert coerce([1, 2, 3]) == [1, 2, 3]
+    assert coerce((4, 5)) == [4, 5]
+    assert coerce(_BatchEncodingLike([10, 20, 30])) == [10, 20, 30]
+    assert coerce(_BatchEncodingLikeNested([10, 20, 30])) == [10, 20, 30]
+    assert coerce(_EncodingLike([7, 8, 9])) == [7, 8, 9]
+    assert coerce([_EncodingLike([7, 8, 9])]) == [7, 8, 9]
+    assert coerce([[1, 2, 3]]) == [1, 2, 3]
+
+    with pytest.raises(ValueError, match="unsupported shape"):
+        coerce(object())
+
+
 def test_empty_trajectory_yields_no_pairs(extractor, tokenizer):
     traj = _make_trajectory(
         "empty",

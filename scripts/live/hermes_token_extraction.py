@@ -62,7 +62,59 @@ class ChatTokenizer(Protocol):
         *,
         add_generation_prompt: bool = ...,
         tokenize: bool = ...,
-    ) -> list[int]: ...
+    ) -> object: ...
+
+
+def _coerce_to_id_list(out: object) -> list[int]:
+    """Coerce an ``apply_chat_template(..., tokenize=True)`` return into ``list[int]``.
+
+    Real HF tokenizers vary in their return shape across versions /
+    Fast-vs-Slow tokenizer flavours:
+
+      * ``list[int]`` — the canonical shape and the one the test
+        ``FakeTokenizer`` returns.
+      * ``BatchEncoding`` — what ``PreTrainedTokenizerFast`` returns when
+        ``return_dict`` defaults to True; flat ids live under
+        ``input_ids`` as either ``list[int]`` or ``list[list[int]]``.
+      * a list containing one ``tokenizers.Encoding`` — what some 4.x
+        versions return for a single-conversation input; the int ids
+        live under ``.ids``.
+
+    This helper normalises all of those to ``list[int]`` so the
+    extractor's slicing arithmetic is identical regardless of the
+    upstream tokenizer flavour. Raises ``ValueError`` on unexpected
+    shapes — surfaced loudly so a tokenizer regression can't pass for a
+    silent garbage encoding.
+    """
+    # canonical: a flat list of ints
+    if isinstance(out, (list, tuple)) and out and isinstance(out[0], int):
+        return list(out)  # type: ignore[arg-type]
+    # BatchEncoding (dict-like with .input_ids)
+    if hasattr(out, "input_ids"):
+        ids = out.input_ids  # type: ignore[attr-defined]
+        if ids and isinstance(ids, list) and isinstance(ids[0], list):
+            return list(ids[0])
+        if isinstance(ids, list) and (not ids or isinstance(ids[0], int)):
+            return list(ids)
+    # tokenizers.Encoding (has .ids)
+    if hasattr(out, "ids"):
+        return list(out.ids)  # type: ignore[attr-defined]
+    # list[Encoding] (length-1 batch from some HF versions)
+    if isinstance(out, (list, tuple)) and out and hasattr(out[0], "ids"):
+        return list(out[0].ids)  # type: ignore[attr-defined]
+    # list[list[int]] (length-1 batch)
+    if (
+        isinstance(out, (list, tuple))
+        and out
+        and isinstance(out[0], (list, tuple))
+        and out[0]
+        and isinstance(out[0][0], int)
+    ):
+        return list(out[0])  # type: ignore[arg-type]
+    raise ValueError(
+        f"apply_chat_template returned unsupported shape: type={type(out).__name__}, "
+        f"value head={out!r}"[:200]
+    )
 
 
 def _strip_think(text: str) -> str:
@@ -141,14 +193,14 @@ def extract_token_pairs(
             system_prompt=system_prompt,
         )
         response_text = _strip_think(step.content)
-        prompt_ids = list(
+        prompt_ids = _coerce_to_id_list(
             tokenizer.apply_chat_template(
                 prior_msgs,
                 add_generation_prompt=True,
                 tokenize=True,
             )
         )
-        full_ids = list(
+        full_ids = _coerce_to_id_list(
             tokenizer.apply_chat_template(
                 prior_msgs + [{"role": "assistant", "content": response_text}],
                 add_generation_prompt=False,
