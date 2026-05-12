@@ -1,7 +1,137 @@
 # PROGRESS.md — Agent Handoff State
 
 ## Last updated
-2026-05-12 (cycle 3 v2 task #1 shipped; task #2 blocked on streaming/SSE gap in proxy)
+2026-05-12 (cycle 3 v2 tasks #1/#2/#3 shipped; pivot to logprob-only dashboard
+per operator direction)
+
+---
+
+## Operator direction 2026-05-12
+
+> "Remove all the numbers from cycle-2 MoE, I think it was wrong. For now
+> complete the dashboard only with token prob shifts, and make sure you
+> update all docs and make sure we can reproduce all the results."
+
+Dashboard semantics for Hermes-Agent matrices changes:
+- **DROP** the cycle-2 single-prompt MoE `router_flip_rate` tiles
+  (4.3%/7.1%/4.1%/6.3%) from the headline.
+- Hermes-Agent matrix becomes **logprob-shift** based for BOTH Dense AND
+  MoE rollouts. Same metric on both: rollout-vs-trainer logprob delta
+  (or ESS) over the assistant-emitted response tokens, paired against
+  FSDP/Megatron teacher-force.
+- This is grounded in what vLLM 0.20.x's OpenAI HTTP entrypoint actually
+  exposes: per-token logprobs + token_ids. `routed_experts` is NOT
+  emitted on the OpenAI shim in any released vLLM version (verified by
+  `grep -rn routed_experts vllm/entrypoints/openai/` on 0.20.1 AND
+  0.20.2 — zero hits). The native `LLM.generate()` API path does emit
+  them (that's how cycle-2's `~/run_vllm_moe_rollout.py` got its
+  router_flip_rate numbers), but Hermes-Agent multi-turn loops use the
+  OpenAI HTTP path.
+
+---
+
+## Spot runbook (what the operator needs to reproduce)
+
+All work is on the spot host (`my-vllm-spot-instance`, g6e.12xlarge,
+4×L40S 48 GB each). The relevant files:
+
+### Top-level scripts on the spot (cycle-2 path, native API)
+
+| Path | Purpose |
+|------|---------|
+| `~/run_vllm_rollout.py` | Dense vLLM single-prompt rollout (native API) |
+| `~/run_vllm_moe_rollout.py` | MoE rollout with `routed_experts` capture (native `LLM.generate`, the only path that exposes them in 0.20.x) |
+| `~/run_fsdp_reference.py` | Dense FSDP teacher-force; reads `/tmp/rollouts.json`, writes `/tmp/trainers.json` |
+| `~/run_fsdp_moe_reference.py` | MoE FSDP teacher-force |
+| `~/run_megatron_reference.py` + `megatron_reference_launch.sh` | Dense Megatron teacher-force (inside slimerl/slime docker) |
+| `~/run_megatron_moe_reference.py` + `megatron_moe_reference_launch.sh` | MoE Megatron teacher-force |
+| `~/serve_qwen_for_agent.sh` | Basic vLLM serve (Dense, no routed-experts) |
+| `~/serve_for_capture.sh` | vLLM serve with `--enable-return-routed-experts` (MoE) + auto YaRN ROPE for 131K (now fixed: `ROPE_FLAG=()` array init) |
+| `~/prompts.json` | 8 cycle-2 prompts for single-prompt experiments |
+
+### Repo on the spot (cycle-3 v2 path, OpenAI HTTP via proxy)
+
+`~/streams-rollout-market/scripts/live/` contains:
+
+| Script | Purpose |
+|--------|---------|
+| `logprob_capture_proxy.py` | OpenAI proxy at :8001 → vLLM :8000; injects `logprobs=True, top_logprobs=1, return_token_ids=True, chat_template_kwargs.enable_thinking=False`; writes per-turn probes to `/tmp/hermes_probes_*.jsonl` |
+| `minimal_agent_driver.py` | Non-streaming OpenAI tool-using driver (preferred for capture: hermes-agent CLI uses `stream=True` which the proxy can't parse for routed_experts) |
+| `merge_probes_into_trajectories.py` | Sidecar JSONL + ShareGPT JSONL + tasks list → AgentTrajectory JSON per task |
+| `build_hermes_dense_input.py` | Walks AgentTrajectory dir → `/tmp/rollouts_hermes_<precision>.json` + index |
+| `pair_hermes_dense_reports.py` | Joins index + trainer `/tmp/trainers.json` → DenseMismatchReport per `(trajectory, assistant_turn)` |
+| `pair_hermes_moe_reports.py` | MoE counterpart (currently router-flip-rate; needs adapt or replace per pivot above) |
+| `publish_dashboards.py` | Re-renders `docs/index.html` |
+
+### End-to-end command sequence (single-host, all on the spot)
+
+```bash
+# 1. vLLM serve (MoE example — see serve_for_capture.sh comments for other models):
+MODEL=Qwen/Qwen3-30B-A3B TP=4 MAX_LEN=40960 bash ~/serve_for_capture.sh
+# or directly:
+vllm serve Qwen/Qwen3-30B-A3B --tensor-parallel-size 4 --enable-expert-parallel \
+  --enable-return-routed-experts --no-async-scheduling --dtype auto \
+  --max-model-len 40960 --gpu-memory-utilization 0.85 \
+  --enable-auto-tool-choice --tool-call-parser hermes --host 0.0.0.0 --port 8000
+
+# 2. logprob capture proxy (separate tmux session):
+cd ~/streams-rollout-market && source ~/rmenv/bin/activate
+python scripts/live/logprob_capture_proxy.py --upstream http://localhost:8000 \
+  --port 8001 --sidecar /tmp/hermes_probes_moe_bf16.jsonl --host 127.0.0.1
+
+# 3. drive the trajectory (use the in-repo minimal driver — non-streaming):
+python scripts/live/minimal_agent_driver.py \
+  --base-url http://localhost:8001 --model Qwen/Qwen3-30B-A3B \
+  --tasks scripts/live/agent_tasks_hermes.json --task-id no-op-trivia \
+  --out /tmp/minimal_sharegpt_moe_bf16.jsonl --max-steps 3 --max-tokens 200
+
+# 4. merge probes + sharegpt into AgentTrajectory:
+python3 -c "
+import json
+tasks = json.load(open('scripts/live/agent_tasks_hermes.json'))
+json.dump([t for t in tasks if t['task_id']=='no-op-trivia'], open('/tmp/one.json','w'))"
+python scripts/live/merge_probes_into_trajectories.py \
+  --sharegpt /tmp/minimal_sharegpt_moe_bf16.jsonl \
+  --probes /tmp/hermes_probes_moe_bf16.jsonl --tasks /tmp/one.json \
+  --model-id Qwen/Qwen3-30B-A3B --engine-label hermes-qwen3-30b-a3b-bf16 \
+  --engine-fingerprint sha256:hermes-qwen3-30b-a3b-bf16-tp4-l40s \
+  --out-dir runs/live/agent/hermes/qwen3-30b-a3b/bf16/
+
+# 5. build trainer input from trajectory:
+python scripts/live/build_hermes_dense_input.py \
+  --trajectory-dir runs/live/agent/hermes/qwen3-30b-a3b/bf16 \
+  --precision-class bf16 \
+  --out-rollouts /tmp/rollouts_hermes_moe_bf16.json
+cp /tmp/rollouts_hermes_moe_bf16.json /tmp/rollouts.json
+
+# 6. trainer teacher-force (FSDP, on spot, no docker):
+cd ~ && source rmenv/bin/activate && export HF_HOME=/home/ubuntu/hf-cache
+torchrun --nproc-per-node=4 --rdzv-endpoint=127.0.0.1:29510 ~/run_fsdp_reference.py
+# (or run_fsdp_moe_reference.py for MoE)
+
+# 7. pair into DenseMismatchReport:
+python scripts/live/pair_hermes_dense_reports.py \
+  --index /tmp/hermes_dense_index_bf16.json --trainers /tmp/trainers.json \
+  --trajectory-dir runs/live/agent/hermes/qwen3-30b-a3b/bf16 \
+  --out-dir runs/live/dense/hermes-qwen3-30b-a3b-bf16-vs-fsdp-bf16
+
+# 8. (rsync runs/ back to laptop, then) re-render:
+python scripts/live/publish_dashboards.py
+```
+
+### Pre-flight checklist
+
+- [ ] vLLM venv active: `source ~/rmenv/bin/activate` (Python 3.12,
+  torch 2.11+cu130, vllm 0.20.2 as of 2026-05-12).
+- [ ] HF cache: `~/hf-cache/hub/models--Qwen--Qwen3-{32B,32B-FP8,30B-A3B,30B-A3B-FP8}/`
+  all present (verified 2026-05-12).
+- [ ] Hermes-Agent installed at `~/.hermes/hermes-agent/` and
+  `~/.local/bin/hermes` (v0.13.0). Used optionally; the in-repo
+  `minimal_agent_driver.py` is the preferred capture driver.
+- [ ] Port 29500 free for torchrun (use `--rdzv-endpoint=127.0.0.1:29510`
+  if stale).
+- [ ] GPUs idle: `nvidia-smi --query-compute-apps=pid --format=csv`
+  should return nothing before launching vLLM serve.
 
 ---
 
