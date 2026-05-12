@@ -1,7 +1,27 @@
 # PROGRESS.md — Agent Handoff State
 
 ## Last updated
-2026-05-12 (cycle 3 v2 iter 2 setup-19 — scripts/live/README runbook updated)
+2026-05-12 (cycle 3 v2 iter 2 setup-20 — multi-task e2e test for hash pairing)
+
+## Cycle 3 v2 iter 2 — setup-20 commit (2026-05-12)
+
+`tests/test_hermes_dense_pipeline_e2e.py` gains a multi-task scenario
+that exercises the hash-based prompt_index pairing path setup-12
+enabled. Two synthetic tasks share one sidecar (realistic single-
+proxy-invocation, header-free mode); the merger pairs each task's
+probes back to its ShareGPT record purely by recomputing the same
+hash on the record's first ``from=human`` value.
+
+The test asserts:
+- Auto-derived prompt_index values are distinct strings per task.
+- The merger routes each task's probes to the correct trajectory
+  (verified via response_token_ids).
+- The full filler → builder → pair pipeline produces one report per
+  task, each at ESS=1.0 when trainer logprobs match.
+
+1 new test; **474 passing (+1 from 473)**.
+
+## Cycle 3 v2 iter 2 — setup-19 commit (2026-05-12)
 
 ## Cycle 3 v2 iter 2 — setup-19 commit (2026-05-12)
 

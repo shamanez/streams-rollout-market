@@ -243,6 +243,128 @@ def test_full_dense_pipeline_e2e(
     assert report.prompt_id == "math-q1-turn0"
 
 
+def test_full_dense_pipeline_multitask_hash_pairing(
+    proxy_mod: ModuleType,
+    merger_mod: ModuleType,
+    builder_mod: ModuleType,
+    pair_mod: ModuleType,
+    filler_mod: ModuleType,
+) -> None:
+    """Realistic multi-task run: two tasks share one sidecar (single
+    proxy invocation, header-free). Probes are auto-keyed by hash of
+    the first user message; the merger pairs each task's probes back
+    to the right ShareGPT record purely by hash recomputation.
+    Validates the setup-12 multi-task pairing path end-to-end."""
+    task_a_text = "What is 2+2?"
+    task_b_text = "What is 7*8?"
+    # Build two synthetic responses, one per task.
+    tokens_a = [
+        ("The", 791, -0.1),
+        (" answer", 4320, -0.2),
+        (" 4", 19, -0.05),
+    ]
+    tokens_b = [
+        ("The", 791, -0.1),
+        (" answer", 4320, -0.2),
+        (" 56", 5612, -0.05),
+    ]
+
+    # --- proxy: auto-derive prompt_index per task via hash ---------
+    sidecar_a = proxy_mod.extract_probes(
+        json.dumps({"messages": [{"role": "user", "content": task_a_text}]}).encode(),
+        _synth_vllm_response(tokens_a),
+        prompt_index=proxy_mod.derive_prompt_index(
+            json.dumps({"messages": [{"role": "user", "content": task_a_text}]}).encode()
+        ),
+        turn_idx=0,
+    )
+    sidecar_b = proxy_mod.extract_probes(
+        json.dumps({"messages": [{"role": "user", "content": task_b_text}]}).encode(),
+        _synth_vllm_response(tokens_b),
+        prompt_index=proxy_mod.derive_prompt_index(
+            json.dumps({"messages": [{"role": "user", "content": task_b_text}]}).encode()
+        ),
+        turn_idx=0,
+    )
+    assert sidecar_a is not None and sidecar_b is not None
+    # The two tasks hashed to different prompt_index values.
+    assert sidecar_a["prompt_index"] != sidecar_b["prompt_index"]
+    assert isinstance(sidecar_a["prompt_index"], str)
+
+    # --- merger: pairs by hash recomputation per sharegpt record ---
+    sharegpt_records = [
+        {
+            "prompt_index": 0,
+            "conversations": [
+                {"from": "system", "value": "sys"},
+                {"from": "human", "value": task_a_text},
+                {"from": "gpt", "value": "<think>\n</think>\nThe answer 4"},
+            ],
+            "completed": True,
+            "partial": False,
+        },
+        {
+            "prompt_index": 1,
+            "conversations": [
+                {"from": "system", "value": "sys"},
+                {"from": "human", "value": task_b_text},
+                {"from": "gpt", "value": "<think>\n</think>\nThe answer 56"},
+            ],
+            "completed": True,
+            "partial": False,
+        },
+    ]
+    tasks = [
+        {"task_id": "qa-add", "task_text": task_a_text, "available_tools": []},
+        {"task_id": "qa-mul", "task_text": task_b_text, "available_tools": []},
+    ]
+    trajectories = merger_mod.merge_to_trajectories(
+        sharegpt_records=sharegpt_records,
+        probe_records=[sidecar_a, sidecar_b],
+        tasks=tasks,
+        model_id="Qwen/Qwen3-32B",
+        engine_label="hermes-qwen3-32b-bf16",
+        engine_fingerprint="sha256:hermes-qwen3-32b-bf16-tp4-l40s",
+    )
+    # Each task's probes landed on the right trajectory.
+    a_step = trajectories[0].assistant_steps()[0]
+    b_step = trajectories[1].assistant_steps()[0]
+    assert a_step.response_token_ids == [t[1] for t in tokens_a]
+    assert b_step.response_token_ids == [t[1] for t in tokens_b]
+
+    # --- filler + builder + pair: full pipeline ---------------------
+    filled = []
+    for traj in trajectories:
+        f, _ = filler_mod.fill_trajectory(traj, _FakeTokenizer())
+        filled.append(f)
+    _, index = builder_mod.build_rollouts_and_index(filled, precision_class="bf16")
+    assert len(index["entries"]) == 2  # one per task
+    # Fake trainer matches each task's logprobs exactly → ESS=1 per turn.
+    fake_trainers = [
+        {
+            "trainer_logprobs": list(e["response_logprobs"]),
+            "engine": "fsdp",
+            "sharding": "FULL_SHARD",
+            "dtype": "bfloat16",
+            "world_size": 4,
+            "prompt_idx": e["prompt_idx"],
+        }
+        for e in index["entries"]
+    ]
+    reports = pair_mod.pair_reports(
+        index=index,
+        trainers=fake_trainers,
+        trajectories_by_run_id={t.run_id: t for t in filled},
+        precision_class="bf16",
+        trainer_engine_label="fsdp-bf16",
+    )
+    # One report per task, both at ESS=1.0.
+    assert len(reports) == 2
+    assert {r.prompt_id for r in reports} == {"qa-add-turn0", "qa-mul-turn0"}
+    for r in reports:
+        assert r.ess == pytest.approx(1.0)
+
+
 def test_full_dense_pipeline_propagates_divergence(
     proxy_mod: ModuleType,
     merger_mod: ModuleType,
