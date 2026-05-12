@@ -1,19 +1,26 @@
 # PROGRESS.md — Agent Handoff State
 
 ## Last updated
-2026-05-12 (cycle 3 armed — Hermes vs trainer engines)
+2026-05-12 (cycle 3 — iter 1/6 shipped: hermes_token_extraction)
 
 ## Current phase
-**Cycle 3 armed (correct experimental design).** Cycle 2's hermes-
-agent matrix had a scope error: it compared two vLLM samples (bf16
-vs fp8 + a same-seed noise floor) — measuring *sampling noise +
-precision*, not the *engine-vs-trainer* divergence that the Dense
-ESS and MoE router_flip_rate matrices already prove. Cycle 3 fixes
-this: re-feed each hermes-agent response token sequence through
-**FSDP-bf16 / Megatron-bf16** trainer references, compute the same
-token-level metrics already in use (ESS for Dense,
-`router_flip_rate` for MoE), and render two new 2×2 matrix sections
-({FSDP, Megatron} × {bf16, fp8}).
+**Cycle 3 in progress — 1/6 iterations shipped.** Token-extraction
+adapter is the seam between the Hermes-Agent `AgentTrajectory`
+contract and the `/tmp/rollout.json`-style payload that
+`run_fsdp_reference.py`, `run_fsdp_moe_reference.py`, and
+`run_megatron_moe_reference.py` already consume. The next five
+iterations are live spot-instance re-feeds + a final render +
+codex review.
+
+Cycle 2's hermes-agent matrix had a scope error: it compared two
+vLLM samples (bf16 vs fp8 + a same-seed noise floor) — measuring
+*sampling noise + precision*, not the *engine-vs-trainer*
+divergence that the Dense ESS and MoE router_flip_rate matrices
+already prove. Cycle 3 fixes this: re-feed each hermes-agent
+response token sequence through **FSDP-bf16 / Megatron-bf16**
+trainer references, compute the same token-level metrics already
+in use (ESS for Dense, `router_flip_rate` for MoE), and render
+two new 2×2 matrix sections ({FSDP, Megatron} × {bf16, fp8}).
 
 The vLLM trajectories already exist on disk (47 dense + 22 MoE);
 cycle 3 is re-feed + render, not new generation.
@@ -22,6 +29,20 @@ STEER.md is armed with the six cycle-3 iterations. Trajectory
 directories consolidated to one bf16 + one fp8 per model, TP held
 constant within model (Dense TP=4; MoE TP=2 to match fp8's
 `block_n` constraint).
+
+## Cycle 3 progress (1/6)
+
+- **iter 1 — `hermes_agent.token_extraction_adapter` ✅ (2026-05-12)**.
+  `scripts/live/hermes_token_extraction.py` with pure
+  `extract_token_pairs(trajectory, tokenizer)` + CLI that writes
+  `/tmp/hermes_tokens_<task_id>.json` per trajectory in the shape
+  the existing FSDP / Megatron reference scripts already consume.
+  7 new tests covering single-turn, two-turn-with-tool,
+  four-turn-multi-tool, `<think>`-strip invariant, rollouts shape
+  parity, system-prompt opt-in, empty-trajectory guard. Evidence:
+  `.claude/evidence/hermes_token_extraction/RUN.md` +
+  `pytest.log`. 436 tests passing (+7), ruff clean.
+- **iter 2/6 next — `hermes_agent.dense_refeed_fsdp`** (live, spot).
 
 ## Cycle 2 retrospective (what worked, what was wrong)
 **Hermes Agent cycle COMPLETE — 12 traffic-light tiles + codex PASS.**
@@ -233,15 +254,15 @@ one response. Open candidates for follow-up iterations:
    the OPBC only inspects logprob-level mismatch.
 
 ## Test status
-- pytest -q: **407 passed, 0 failed** (2026-05-12). +60 since prior
-  cycle: 35 in `test_hermes_agent_runner.py` (18 chat-completions +
-  17 ShareGPT), 11 in `test_agent_tasks_hermes_schema.py`, 10 in
-  `test_publish_dashboards_hermes_agent.py`, 4 in
-  `test_publish_dashboards_hermes_moe.py`.
+- pytest -q: **436 passed, 0 failed** (2026-05-12). +29 since the
+  prior 407: 7 in `test_hermes_token_extraction.py`, the remaining
+  22 from the broader Hermes shipping arc captured upstream.
 - ruff check .: clean.
-- `.claude/feature-results.json`: **29/29 entries pass:true.** All
-  6 new `hermes_agent.*` entries flipped to true with evidence
-  paths referenced from `evidence_log.jsonl`.
+- `.claude/feature-results.json`: **24/29 entries pass:true** after
+  the cycle-3 re-arm. Open: 5 `hermes_agent.*` entries
+  (`dense_refeed_fsdp`, `dense_refeed_megatron`,
+  `moe_refeed_fsdp_router`, `moe_refeed_megatron_router`,
+  `matrix_render_and_codex`).
 
 ## Next work (post-Hermes)
 
