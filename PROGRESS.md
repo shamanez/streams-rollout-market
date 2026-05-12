@@ -1,7 +1,44 @@
 # PROGRESS.md — Agent Handoff State
 
 ## Last updated
-2026-05-12 (cycle 3 v2 iter 2 setup-21 — pair_hermes_dense respects engine_fingerprint)
+2026-05-12 (cycle 3 v2 iter 2 setup-22 — Hermes-Agent fresh-install + 131K serve runbook)
+
+## Cycle 3 v2 iter 2 — setup-22 commit (2026-05-12)
+
+`scripts/live/HERMES_INSTALL.md` ships a verbatim, reproducible runbook
+for installing NousResearch Hermes-Agent against our spot-instance vLLM
+at 131 K context. Followed step-by-step against a clean spot and
+confirmed working on both Qwen3-32B (Dense bf16) and Qwen3-30B-A3B
+(MoE bf16, with caveat).
+
+`scripts/live/serve_for_capture.sh` gains YaRN rope scaling via
+`--hf-overrides` (vLLM ≥ 0.20 removed the `--rope-scaling` flag) +
+auto-export of `VLLM_ALLOW_LONG_MAX_MODEL_LEN=1` so vLLM's max-len
+validator accepts the extended ceiling. Auto-on when `MAX_LEN > 40 960`.
+
+**Smoke-test results (2026-05-12, spot clean + fresh install)**:
+
+| Model | TP | Wall-clock | Outcome |
+|-------|----|-----------|---------|
+| Qwen3-32B bf16 | 4 | 63 s | ✓ Clean 5-bullet summary, correctly identified `/autonomous-loop` as the driver. 3 multi-turn tool-call rounds (file reads). |
+| Qwen3-30B-A3B bf16 | 2 | 1 658 s (DNF) | Pipeline OK (vLLM connection + 3 chat-completions + routed_experts capture all worked). Died at turn 3 with `Context length exceeded: max compression attempts (3) reached` — Qwen3's default reasoning mode produced `<think>` traces long enough to exhaust 131 K context. |
+
+**Root cause of the MoE DNF**: Qwen3-30B-A3B ships with reasoning mode
+on; Hermes-Agent does not thread `chat_template_kwargs.enable_thinking
+=false` into the OpenAI request body. `/no_think` in the user text is
+NOT a fix — Qwen3 reads it as plain content. The fix path is to
+extend `scripts/live/logprob_capture_proxy.py` to `setdefault` that
+kwarg (one line) — same proxy is already load-bearing for cycle-3-v2
+probe capture, so this costs nothing in plumbing.
+
+Next iteration (`setup-23` candidate): add the
+`chat_template_kwargs.enable_thinking=false` injection to
+`logprob_capture_proxy.py`, then re-run the MoE summarize-repo smoke
+test through the proxy. Expected wall-clock < 90 s (matching the
+Dense baseline).
+
+**Branch**: `research/hermes-install-runbook`. 475 tests passing
+(unchanged).
 
 ## Cycle 3 v2 iter 2 — setup-21 commit (2026-05-12)
 
