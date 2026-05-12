@@ -22,12 +22,15 @@ to an upstream vLLM endpoint (the SSH-tunnelled spot serve), and:
     (``prompt_index``, ``turn_idx``) for downstream pairing.
 
 ``prompt_index`` and ``turn_idx`` come from request headers
-``X-Prompt-Index`` and ``X-Turn-Idx``. hermes-agent doesn't set them
-by default; the patched ``batch_runner`` (or a thin wrapper) is
-expected to stamp them onto each chat-completions request. As a
-fallback, the proxy assigns sequential ``turn_idx`` per request when
-the headers are absent and clusters all probes under a single
-``prompt_index=0``; downstream pairing accepts both shapes.
+``X-Prompt-Index`` and ``X-Turn-Idx`` when set (a patched batch_runner
+or thin wrapper can stamp them). When ``X-Turn-Idx`` is absent the
+proxy auto-derives it by counting prior assistant messages in the
+request's ``messages`` array — that count is exactly the index of the
+turn being generated, so hermes-agent doesn't need any modification.
+When ``X-Prompt-Index`` is absent it defaults to ``0``; running the
+proxy with a per-task sidecar (rotating the ``--sidecar`` path between
+task runs) is the simplest way to keep tasks separable without
+header wiring.
 
 The pure functions ``inject_logprobs(request_body)`` and
 ``extract_probes(request_body, response_body)`` carry all the
@@ -153,6 +156,34 @@ def extract_probes(
     return out
 
 
+def derive_turn_idx(request_body: bytes) -> int:
+    """Derive the assistant ``turn_idx`` for a chat-completions request.
+
+    The OpenAI chat-completions protocol does not expose request-level
+    metadata about *which* turn of an agent loop we're on. But the
+    information is implicit in the ``messages`` array: the number of
+    prior assistant messages in the request equals the index of the
+    assistant turn we're about to generate. The patched batch_runner
+    or proxy caller can therefore omit ``X-Turn-Idx`` and rely on
+    this derivation.
+
+    Returns ``0`` for non-JSON / malformed bodies (the same fallback
+    the legacy header-absent branch produced). Pure function.
+    """
+    if not request_body:
+        return 0
+    try:
+        body = json.loads(request_body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return 0
+    if not isinstance(body, dict):
+        return 0
+    messages = body.get("messages")
+    if not isinstance(messages, list):
+        return 0
+    return sum(1 for m in messages if isinstance(m, dict) and m.get("role") == "assistant")
+
+
 def _sidecar_lock_factory() -> threading.Lock:
     return threading.Lock()
 
@@ -220,8 +251,13 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             if turn_hdr is not None:
                 turn_idx = int(turn_hdr)
             else:
-                turn_idx = self.turn_counter[0]
-                self.turn_counter[0] += 1
+                # Auto-derive from the messages array — counting prior
+                # assistant messages gives the correct per-task turn
+                # index without requiring the caller to wire headers.
+                # Note: this assumes one (prompt_index, turn_idx) per
+                # request; if the caller batches multiple turns into
+                # one request, the X-Turn-Idx header should be set.
+                turn_idx = derive_turn_idx(body)
             record = extract_probes(body, resp_body, prompt_index=prompt_idx, turn_idx=turn_idx)
             if record is not None:
                 with self.sidecar_lock:

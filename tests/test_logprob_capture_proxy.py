@@ -83,6 +83,53 @@ def test_inject_logprobs_passes_empty_body_through(proxy: ModuleType) -> None:
     assert proxy.inject_logprobs(b"") == b""
 
 
+# --- derive_turn_idx --------------------------------------------------------
+
+
+def test_derive_turn_idx_counts_prior_assistant_messages(proxy: ModuleType) -> None:
+    """The turn index for the next-to-be-generated assistant turn is
+    exactly the count of prior assistant messages in the request's
+    messages array."""
+    body = json.dumps(
+        {
+            "model": "Qwen/Qwen3-32B",
+            "messages": [
+                {"role": "system", "content": "sys"},
+                {"role": "user", "content": "q"},
+                {"role": "assistant", "content": "first answer"},
+                {"role": "tool", "content": "tool result"},
+                {"role": "assistant", "content": "second answer"},
+                {"role": "tool", "content": "tool result 2"},
+            ],
+        }
+    ).encode()
+    # Two prior assistants -> we're about to generate turn 2.
+    assert proxy.derive_turn_idx(body) == 2
+
+
+def test_derive_turn_idx_first_request_yields_zero(proxy: ModuleType) -> None:
+    """The very first chat-completions call for a task has no prior
+    assistant messages — turn_idx must be 0."""
+    body = json.dumps(
+        {
+            "model": "Qwen/Qwen3-32B",
+            "messages": [
+                {"role": "system", "content": "sys"},
+                {"role": "user", "content": "q"},
+            ],
+        }
+    ).encode()
+    assert proxy.derive_turn_idx(body) == 0
+
+
+def test_derive_turn_idx_handles_missing_messages(proxy: ModuleType) -> None:
+    """A body without a ``messages`` field (or non-JSON) falls back
+    to 0 — never crashes."""
+    assert proxy.derive_turn_idx(b'{"model": "x"}') == 0
+    assert proxy.derive_turn_idx(b"not json") == 0
+    assert proxy.derive_turn_idx(b"") == 0
+
+
 # --- extract_probes ---------------------------------------------------------
 
 
@@ -270,3 +317,63 @@ def test_end_to_end_proxy_records_sidecar(proxy: ModuleType, tmp_path: Path) -> 
     assert rec["turn_idx"] == 2
     assert rec["response_logprobs"] == [-0.1, -0.2, -0.05]
     assert rec["response_token_ids"] == [791, 4320, 19]
+
+
+def test_end_to_end_proxy_auto_derives_turn_idx_without_header(
+    proxy: ModuleType, tmp_path: Path
+) -> None:
+    """When the caller doesn't set X-Turn-Idx, the proxy must auto-
+    derive it by counting prior assistant messages in the request's
+    messages array — so multi-turn agent loops record correct turn
+    indices without header wiring."""
+    upstream = _FakeUpstream()
+    server, up_port = upstream.start()
+    sidecar = tmp_path / "probes.jsonl"
+
+    handler_cls = type(
+        "ProxyHandlerNoHeader",
+        (proxy._ProxyHandler,),
+        {
+            "upstream": f"http://127.0.0.1:{up_port}",
+            "sidecar_path": sidecar,
+            "sidecar_lock": proxy._sidecar_lock_factory(),
+            "turn_counter": [0],
+        },
+    )
+    proxy_server = proxy.ThreadingHTTPServer(("127.0.0.1", 0), handler_cls)
+    proxy_port = proxy_server.server_address[1]
+    threading.Thread(target=proxy_server.serve_forever, daemon=True).start()
+    try:
+        # The request has 2 prior assistant messages → next is turn 2.
+        req = urllib_request.Request(
+            f"http://127.0.0.1:{proxy_port}/v1/chat/completions",
+            data=json.dumps(
+                {
+                    "model": "Qwen/Qwen3-32B",
+                    "messages": [
+                        {"role": "system", "content": "sys"},
+                        {"role": "user", "content": "q"},
+                        {"role": "assistant", "content": "turn 0"},
+                        {"role": "tool", "content": "r1"},
+                        {"role": "assistant", "content": "turn 1"},
+                        {"role": "tool", "content": "r2"},
+                    ],
+                }
+            ).encode(),
+            method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        urllib_request.urlopen(req).read()
+    finally:
+        proxy_server.shutdown()
+        proxy_server.server_close()
+        server.shutdown()
+        server.server_close()
+
+    lines = [ln for ln in sidecar.read_text().splitlines() if ln.strip()]
+    assert len(lines) == 1
+    rec = json.loads(lines[0])
+    # X-Prompt-Index absent → defaults to 0.
+    assert rec["prompt_index"] == 0
+    # turn_idx auto-derived from 2 prior assistant messages.
+    assert rec["turn_idx"] == 2

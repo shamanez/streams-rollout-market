@@ -1,7 +1,34 @@
 # PROGRESS.md — Agent Handoff State
 
 ## Last updated
-2026-05-12 (cycle 3 v2 iter 2 setup-10 — Hermes-first headline + legacy appendix)
+2026-05-12 (cycle 3 v2 iter 2 setup-11 — proxy auto-derives turn_idx from messages)
+
+## Cycle 3 v2 iter 2 — setup-11 commit (2026-05-12)
+
+The capture proxy's `turn_idx` derivation was a bug for multi-task
+runs: the legacy fallback used a global counter that incremented
+across **every** chat-completions request, so two tasks would land
+their turn 0 records at indices 0 and N (N = total prior turns from
+prior tasks). The merger keys on `(prompt_index, turn_idx)` — with
+`prompt_index=0` everywhere (no X-Prompt-Index header) this conflated
+turns across the whole run.
+
+Fixed by a pure `derive_turn_idx(request_body)` that counts prior
+assistant messages in the request's `messages` array. That count is
+exactly the index of the turn being generated. So:
+
+  - Hermes-agent's first request for task K → `turn_idx = 0`.
+  - Its second request (after the first tool round-trip) → `turn_idx = 1`.
+  - First request for task K+1 → `turn_idx = 0` again.
+
+Combined with rotating the `--sidecar` path between tasks (one
+sidecar per task), the proxy now produces correctly-keyed records
+without requiring any modification to hermes-agent.
+
+- 3 new unit tests for `derive_turn_idx` + 1 new e2e test verifying
+  the header-absent path. **446 passing (+4 from 442)**.
+
+## Cycle 3 v2 iter 2 — setup-10 commit (2026-05-12)
 
 ## Cycle 3 v2 iter 2 — setup-10 commit (2026-05-12)
 
