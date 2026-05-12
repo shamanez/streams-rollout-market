@@ -4,9 +4,12 @@
 #
 # Sibling of scripts/live/megatron_reference_launch.sh (which targets
 # the dense Qwen3-32B checkpoint). Bind-mounts the MoE torch-dist
-# checkpoint under ~/megatron_conversion/megatron_ckpt into the slimerl/
+# checkpoint under $CKPT_ROOT/qwen3-30b-a3b/megatron into the slimerl/
 # slime container as /root/Qwen3-30B-A3B_torch_dist (matching the path
 # convention the inside-container runner expects).
+#
+# Portable: every path is env-driven with $CKPT_ROOT defaulting to
+# $HOME/checkpoint. To target a fresh spot, run bootstrap.sh first.
 #
 # Calls run_megatron_moe_reference.py with --emit-router so the script
 # writes BOTH /host_tmp/trainer_megatron-bf16.json (per-response-token
@@ -26,11 +29,12 @@
 #   /tmp/megatron_router.json        — Megatron MoE router trace (length R)
 set -euo pipefail
 
-CKPT_DIR="${CKPT_DIR:-$HOME/megatron_conversion/megatron_ckpt}"
-HF_MODEL_DIR="${HF_MODEL_DIR:-$HOME/megatron_conversion/hf_model}"
+CKPT_ROOT="${CKPT_ROOT:-$HOME/checkpoint}"
+CKPT_DIR="${CKPT_DIR:-$CKPT_ROOT/qwen3-30b-a3b/megatron}"
+HF_MODEL_DIR="${HF_MODEL_DIR:-$(readlink -f "$CKPT_ROOT/qwen3-30b-a3b/hf" 2>/dev/null || echo "$CKPT_ROOT/qwen3-30b-a3b/hf")}"
 ROLLOUT_FILE_HOST="${ROLLOUT_FILE_HOST:-/tmp/rollout.json}"
 RUNNER_PY="${RUNNER_PY:-$(dirname "$(readlink -f "$0")")/run_megatron_moe_reference.py}"
-RUNNER_SH="${RUNNER_SH:-$HOME/megatron_conversion/run_megatron_reference_runner.sh}"
+RUNNER_SH="${RUNNER_SH:-$(dirname "$(readlink -f "$0")")/megatron_qwen3_32b_dense_runner.sh}"
 IMAGE="${IMAGE:-slimerl/slime:latest}"
 
 if [[ ! -d "$CKPT_DIR/release" ]]; then

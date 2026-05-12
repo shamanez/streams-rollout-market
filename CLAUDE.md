@@ -51,37 +51,62 @@ stop/start — never hardcode it).
 
 ### Spot one-time setup (per fresh provisioning)
 
-The spot is `g6e.12xlarge` (4× L40S 48 GB, 384 GB RAM, Ubuntu 24.04,
-Python 3.12 in `~/rmenv`). Three install pieces:
+The spot is `g6e.12xlarge` (4× L40S 48 GB, 384 GB RAM, Ubuntu 24.04).
+**The spot is treated as ephemeral** — every artifact we care about
+either lives in the repo or is reproducible by `bootstrap_spot.sh +
+restore_megatron_checkpoints.sh`.
 
-1. **Hermes-Agent CLI** at `~/.local/bin/hermes` → installs into
-   `~/.hermes/hermes-agent/`. Verbatim steps:
-   `scripts/live/HERMES_INSTALL.md`. Verified end-to-end working
-   against vLLM at 131 K context on 2026-05-12.
+Three install pieces on a fresh spot, in this order:
+
+1. **Push the repo** to the spot:
+   ```bash
+   ssh my-vllm-spot-instance 'mkdir -p ~/streams-rollout-market'
+   rsync -av --exclude='__pycache__' --exclude='.git' --exclude='runs/' \
+         --exclude='docs/' --exclude='.claude/evidence/' \
+         ./ my-vllm-spot-instance:~/streams-rollout-market/
+   ```
 2. **vLLM venv** at `~/rmenv/` (Python 3.12, torch 2.11+cu130, vllm
-   0.20.2). Re-create with:
+   0.20.2):
    ```bash
    ssh my-vllm-spot-instance 'python3.12 -m venv ~/rmenv && source ~/rmenv/bin/activate && pip install vllm==0.20.2 transformers requests'
    ```
-3. **HF model cache** at `~/hf-cache/hub/models--Qwen--<repo>/`
-   (canonical HF layout — check this path, NOT `~/hf-cache/<repo>/`).
-   Models needed:
-    - `Qwen/Qwen3-32B` (Dense)
-    - `Qwen/Qwen3-30B-A3B` (MoE)
-    - optional FP8 siblings for precision-shift tiles
-   Each is ~60 GB. To pre-fetch:
+3. **Bootstrap the directory layout + HF cache + symlinks**:
    ```bash
-   ssh my-vllm-spot-instance 'source ~/rmenv/bin/activate && export HF_HOME=/home/ubuntu/hf-cache && hf download Qwen/Qwen3-32B && hf download Qwen/Qwen3-30B-A3B'
+   ssh my-vllm-spot-instance 'FETCH_HF=1 bash ~/streams-rollout-market/scripts/live/bootstrap_spot.sh'
    ```
+   This creates `~/checkpoint/{qwen3-30b-a3b,qwen3-32b}/{hf,megatron}/`,
+   downloads the Qwen3 models if needed (sets `FETCH_HF=1`), and
+   symlinks `<model>/hf` → the canonical `~/hf-cache/hub/.../snapshots/<sha>/`
+   path. Re-running is safe.
+4. **Restore the Megatron distcp checkpoints** (~117 GB total). Two
+   options:
+   * From the laptop backup (~30 min over typical home WAN):
+     ```bash
+     bash scripts/live/restore_megatron_checkpoints.sh
+     ```
+   * Re-convert from the HF cache (~80 min total, GPU-bound):
+     ```bash
+     ssh my-vllm-spot-instance 'bash ~/streams-rollout-market/scripts/live/megatron_qwen3_32b_launch.sh'
+     ssh my-vllm-spot-instance 'bash ~/streams-rollout-market/scripts/live/megatron_qwen3_30b_a3b_launch.sh'
+     ```
+5. **Hermes-Agent CLI** (optional — only needed for the streaming
+   fidelity-test path). The cycle-3 v2 pipeline uses
+   `minimal_agent_driver.py` instead, which does not require the
+   hermes CLI. Install steps: `scripts/live/HERMES_INSTALL.md`.
 
-The repo's trainer-side scripts live at the spot's home dir (not in
-the repo bind-mount) for historical reasons. Push the current revision
-once after each `git pull` on the laptop:
-```bash
-rsync -av scripts/live/ my-vllm-spot-instance:~/streams-rollout-market/scripts/live/
-scp scripts/live/run_*.py scripts/live/megatron_*.sh scripts/live/serve_for_capture.sh \
-    my-vllm-spot-instance:~/
-```
+**Canonical paths after bootstrap:**
+
+| What | Where |
+|---|---|
+| Repo (trainer + driver scripts) | `~/streams-rollout-market/` |
+| HF model cache | `~/hf-cache/hub/models--Qwen--<repo>/snapshots/<sha>/` |
+| Per-model convenience root | `~/checkpoint/<model-slug>/{hf,megatron}/` |
+| vLLM venv | `~/rmenv/` |
+
+**Env vars every launcher honors:**
+`CKPT_ROOT` (default `$HOME/checkpoint`), `HF_HOME` (default
+`$HOME/hf-cache`). Override these to target alternate locations on a
+host that doesn't follow the default layout.
 
 ### One full pipeline pass (single bf16 trajectory per model)
 
@@ -159,10 +184,10 @@ ssh my-vllm-spot-instance 'pkill -9 -f "vllm serve" 2>&1; sleep 5
     pids=$(nvidia-smi --query-compute-apps=pid --format=csv,noheader | grep -v "^$")
     [ -n "$pids" ] && kill -9 $pids; sleep 5'
 scp /tmp/rollouts_hermes_dense_bf16.json my-vllm-spot-instance:/tmp/rollouts.json
-ssh my-vllm-spot-instance 'cd ~ && source rmenv/bin/activate &&
-    export HF_HOME=/home/ubuntu/hf-cache && export OMP_NUM_THREADS=1 &&
+ssh my-vllm-spot-instance 'source ~/rmenv/bin/activate &&
+    export HF_HOME=$HOME/hf-cache && export OMP_NUM_THREADS=1 &&
     torchrun --nproc-per-node=4 --rdzv-endpoint=127.0.0.1:29510 \
-        ~/run_fsdp_reference.py'                          # ~3 min total
+        ~/streams-rollout-market/scripts/live/run_fsdp_reference.py'  # ~3 min
 
 # Megatron Dense (docker, ~5 min):
 ssh my-vllm-spot-instance 'python3 -c "
@@ -173,7 +198,7 @@ single = {\"model\": d[\"model\"], \"prompt_token_ids\": d[\"prompt_token_ids\"]
           \"prompt_text\": d.get(\"task_text\", \"\"), \"seed\": 1234}
 json.dump(single, open(\"/tmp/rollout.json\", \"w\"))
 "
-bash ~/megatron_reference_launch.sh'
+bash ~/streams-rollout-market/scripts/live/megatron_reference_launch.sh'
 
 # === 7. (laptop) Pull trainer JSONs, pair each (rollout, trainer) cell ===
 rsync -a my-vllm-spot-instance:/tmp/trainers.json /tmp/trainers_hermes_dense_fsdp_bf16.json
@@ -208,21 +233,19 @@ The MoE leg of the pipeline is identical with three substitutions:
    --enable-return-routed-experts --no-async-scheduling`)
 2. steps 4 + 5 — use the `runs/live/agent/hermes/qwen3-30b-a3b/`
    tree and the `qwen3-30b-a3b` index suffix.
-3. step 6 — `~/run_fsdp_moe_reference.py` ALSO works but writes
-   `/tmp/fsdp_router.json` (routed_experts, not logprobs). For the
-   logprob-shift dashboard tile we use the SAME `~/run_fsdp_reference.py`
-   script (it autoloads any HF causal-LM, including Qwen3MoE).
-   Megatron MoE: `~/megatron_moe_reference_launch.sh`.
+3. step 6 — for the logprob-shift dashboard tile use the SAME
+   `~/streams-rollout-market/scripts/live/run_fsdp_reference.py`
+   (autoloads any HF causal-LM, including Qwen3MoE). Megatron MoE:
+   `bash ~/streams-rollout-market/scripts/live/megatron_moe_reference_launch.sh`.
 
-> **Note** (2026-05-12): Megatron MoE requires the
-> `~/megatron_conversion/megatron_ckpt/release/` directory to contain
-> the converted Qwen3-30B-A3B torch-dist shards. On a fresh spot
-> reprovisioning the dir may be present but empty (HF→Megatron MoE
-> conversion not run). Re-run the conversion via
-> `~/megatron_conversion/launch_qwen3_30b_a3b.sh` (if present) or
-> follow the conversion runbook before the MoE Megatron leg can
-> succeed. The dashboard tile for `(Hermes MoE × Megatron)` renders
-> as `TBD` until this is done.
+> **Note**: Megatron MoE requires
+> `$CKPT_ROOT/qwen3-30b-a3b/megatron/release/` to contain the
+> converted Qwen3-30B-A3B torch-dist shards. On a fresh spot, run
+> `bootstrap_spot.sh` first; if the dir is empty, either restore from
+> the laptop backup (`restore_megatron_checkpoints.sh`) or re-convert
+> from the HF cache (`megatron_qwen3_30b_a3b_launch.sh`). The
+> dashboard tile for `(Hermes MoE × Megatron)` renders as `TBD` until
+> this is done.
 
 The Megatron trainer JSON is a single dict, not a list. After pulling
 back to the laptop, wrap it before passing to `pair_hermes_dense_reports.py`:

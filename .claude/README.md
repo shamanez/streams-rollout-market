@@ -10,16 +10,28 @@ tracking). The thesis:
 > check on its own claims, and a way for the next session to pick up
 > cleanly where this one left off.
 
-## Current state (2026-05-12)
+## Operator workflow
 
-- **`feature-results.json`**: 23/23 entries `passes: true`. The
-  STEER cycle that drove the dashboard to 8 green/amber matrix tiles
-  is complete; `STEER.md` self-deleted per its own stop clause.
-- **`evidence/`**: one subdirectory per flipped entry (rollout +
-  trainer JSONs + dashboard renders + codex verdicts).
-- **Next work** lives in `../PROGRESS.md` "Next work" and
-  `../docs/future_research.md`. Re-arm STEER with
-  `bash scripts/steer.sh "<directive>"` to redirect the loop.
+The intended end-to-end flow:
+
+1. **Plan** — enter Plan Mode (`Shift+Tab`), describe the initiative
+   in plain English. Claude drafts a plan and calls `ExitPlanMode`.
+   You hit Accept.
+2. **Seed** — `/seed-from-plan` (no arguments). The skill picks up
+   the plan you just Accepted from conversation context, writes
+   `STEER.md` (the plan verbatim) and `.claude/feature-results.json`
+   (one `passes:false` entry per iteration it auto-detects from the
+   plan markdown), and commits.
+   * Optional: `/seed-from-plan path/to/file.md` if the plan was
+     saved as a file earlier.
+3. **Drive** — `/autonomous-loop`. The loop walks the queue: pick
+   first `passes:false` entry, implement, test, evaluate, flip
+   `passes:true` (only when evidence exists and is recorded), commit,
+   move on. Halts cleanly when the queue is drained.
+
+There is no required plan template — Plan Mode markdown in any
+reasonable shape works. The skill auto-detects iteration boundaries
+from headings or numbered lists.
 
 ## Primitive → file map
 
@@ -46,21 +58,21 @@ Local extensions:
 Every entry starts as:
 
 ```json
-"<key>": { "passes": false, "evidence": null, "directive": "<task spec>" }
+"<slug>": { "passes": false, "evidence": null, "directive": "<task spec>" }
 ```
 
 The autonomous loop reads the first `false` entry, runs the implementer
-agent against its `directive`, captures evidence under `.claude/evidence/`,
+against its `directive`, captures evidence under `.claude/evidence/`,
 then writes a new version of the JSON file flipping that entry to
 `{ "passes": true, "evidence": "<path>" }`.
 
-The PreToolUse hook `scripts/verify-result-write.sh` intercepts the write
-and exits non-zero unless:
+The PreToolUse hook `scripts/verify-result-write.sh` intercepts the
+write and exits non-zero unless:
 
 1. The evidence path exists on disk.
 2. The evidence path (or its basename) appears in
-   `evidence/evidence_log.jsonl` (the rolling log of `pytest`/`ruff` and
-   other `track-evidence.sh`-captured events).
+   `evidence/evidence_log.jsonl` (the rolling log of `pytest`/`ruff`
+   and other `track-evidence.sh`-captured events).
 
 Agents cannot mark work complete without observable proof.
 
@@ -68,21 +80,22 @@ Agents cannot mark work complete without observable proof.
 
 | skill                  | what it does                                              |
 |------------------------|-----------------------------------------------------------|
-| `autonomous-loop`      | Self-pacing loop; reads STEER.md → feature-results.json   |
-| `implement-feature`    | Contract-first feature implementation; flips one entry    |
+| `seed-from-plan`       | Translate a plan markdown into STEER.md + feature-results.|
+| `autonomous-loop`      | Self-pacing loop; reads STEER.md + feature-results.json.  |
+| `implement-feature`    | Contract-first implementation; flips one entry.           |
 | `build-and-test`       | `pytest -q && ruff check . && ruff format --check .`      |
-| `evaluate`             | Fresh-context evaluator subagent                          |
-| `codex-review`         | Delegate review to Codex CLI (token-saving)               |
-| `session-handoff`      | Update PROGRESS.md, commit, close out                     |
+| `evaluate`             | Fresh-context evaluator subagent.                         |
+| `codex-review`         | Delegate review to Codex CLI (token-saving).              |
+| `session-handoff`      | Update PROGRESS.md, commit, close out.                    |
 
 ## Subagents
 
 | agent                  | role                                                       |
 |------------------------|------------------------------------------------------------|
-| `evaluator.md`         | Read-only grader — no Write/Edit (cwc canonical)           |
-| `implementer.md`       | Opus, Write/Edit/Bash; contract-first                      |
-| `code-reviewer.md`     | Reviews diffs for AGENTS.md compliance                     |
-| `test-runner.md`       | Haiku; runs build-and-test                                 |
+| `evaluator.md`         | Read-only grader — no Write/Edit (cwc canonical).          |
+| `implementer.md`       | Opus, Write/Edit/Bash; contract-first.                     |
+| `code-reviewer.md`     | Reviews diffs for AGENTS.md compliance.                    |
+| `test-runner.md`       | Haiku; runs build-and-test.                                |
 
 ## Operator controls
 
@@ -97,10 +110,16 @@ Resume:
 rm AGENT_STOP
 ```
 
-Redirect mid-run:
+Redirect mid-run (rewrites STEER.md only — does not change the queue):
 ```bash
-bash .claude/scripts/steer.sh "Run n=30 dense matrix next"
-# or write STEER.md directly
+bash .claude/scripts/steer.sh "<new directive>"
+```
+
+Start a NEW initiative (writes STEER.md AND seeds the queue):
+```bash
+# 1. Shift+Tab → enter Plan Mode → describe the initiative → Accept
+# 2. /seed-from-plan         (no args — reads plan from this conversation)
+# 3. /autonomous-loop
 ```
 
 ## Hooks (declared in `settings.json`)

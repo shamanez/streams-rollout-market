@@ -13,18 +13,17 @@
 #   bash ~/megatron_reference_launch.sh
 #
 # Default mounts (host → container):
-#   ~/megatron_conversion/qwen3_32b_torch_dist  → /root/Qwen3-32B_torch_dist (ro)
-#   <runner script>                              → /root/run_megatron_reference.py (ro)
-#   <work dir>                                   → /tmp_work
+#   $CKPT_ROOT/qwen3-32b/megatron  → /root/Qwen3-32B_torch_dist (ro)
+#   <runner script>                → /root/run_megatron_reference.py (ro)
+#   <work dir>                     → /tmp_work
 #
-# This script lives under scripts/live/ in the repo; copy it (plus the
-# Python runner) to the spot before invoking:
-#   scp scripts/live/megatron_reference_launch.sh \
-#       scripts/live/run_megatron_reference.py \
-#       my-vllm-spot-instance:~/
+# Portable: every path is env-driven; $CKPT_ROOT defaults to
+# $HOME/checkpoint. Run scripts/live/bootstrap_spot.sh on a fresh spot
+# to materialize the directory layout this script expects.
 set -euo pipefail
 
-CKPT_DIR="${CKPT_DIR:-$HOME/megatron_conversion/qwen3_32b_torch_dist}"
+CKPT_ROOT="${CKPT_ROOT:-$HOME/checkpoint}"
+CKPT_DIR="${CKPT_DIR:-$CKPT_ROOT/qwen3-32b/megatron}"
 ROLLOUT_FILE_HOST="${ROLLOUT_FILE_HOST:-/tmp/rollout.json}"
 TRAINER_OUT_HOST="${TRAINER_OUT_HOST:-/tmp/trainer_megatron-bf16.json}"
 RUNNER="${RUNNER:-$(dirname "$(readlink -f "$0")")/run_megatron_reference.py}"

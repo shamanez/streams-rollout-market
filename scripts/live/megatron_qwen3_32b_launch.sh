@@ -7,21 +7,19 @@
 # held host-absolute symlinks that pointed outside the container's
 # filesystem, so tokenizer.json was dangling).
 #
-# Usage on the spot host:
-#   ~/megatron_conversion/launch_qwen3_32b.sh
+# Usage on the spot host (from the rsync'd repo path):
+#   bash ~/streams-rollout-market/scripts/live/megatron_qwen3_32b_launch.sh
 #
-# This script lives under scripts/live/ in the repo; copy it (plus the
-# inside-container runner) to the spot before invoking:
-#   scp scripts/live/megatron_qwen3_32b_launch.sh \
-#       my-vllm-spot-instance:~/megatron_conversion/launch_qwen3_32b.sh
-#   scp scripts/live/megatron_qwen3_32b_runner.sh \
-#       my-vllm-spot-instance:~/megatron_conversion/runner_qwen3_32b.sh
+# Portable: every path is env-driven. To target a fresh spot, run
+# scripts/live/bootstrap_spot.sh first so $CKPT_ROOT/qwen3-32b/megatron
+# exists and the HF cache is materialized.
 set -euo pipefail
 
 HF_REPO="${HF_REPO:-$HOME/hf-cache/hub/models--Qwen--Qwen3-32B}"
-CKPT_DIR="${CKPT_DIR:-$HOME/megatron_conversion/qwen3_32b_torch_dist}"
-LOG_DIR="${LOG_DIR:-$HOME/megatron_conversion/logs}"
-RUNNER="${RUNNER:-$HOME/megatron_conversion/runner_qwen3_32b.sh}"
+CKPT_ROOT="${CKPT_ROOT:-$HOME/checkpoint}"
+CKPT_DIR="${CKPT_DIR:-$CKPT_ROOT/qwen3-32b/megatron}"
+LOG_DIR="${LOG_DIR:-$CKPT_ROOT/logs}"
+RUNNER="${RUNNER:-$(dirname "$(readlink -f "$0")")/megatron_qwen3_32b_runner.sh}"
 IMAGE="${IMAGE:-slimerl/slime:latest}"
 
 if [[ ! -d "$HF_REPO/snapshots" ]]; then

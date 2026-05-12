@@ -62,247 +62,26 @@ def test_rendered_index_headline_has_no_endpoint_dashboard_string():
     assert "Agent trajectory dashboard" in headline
 
 
-def test_rendered_index_contains_dense_matrix_and_placeholder():
-    """Per operator direction 2026-05-12 ('Remove all the numbers from
-    cycle-2 MoE'), the cycle-2 single-prompt MoE router_flip_rate matrix
-    is retired entirely and replaced with a TBD placeholder. The cycle-2
-    Dense ESS matrix survives in a collapsible legacy appendix because
-    ESS is still a token-prob-shift metric per the pivot."""
+def test_rendered_index_router_flip_rate_placeholder_visible():
+    """The expert-routing TBD slot must render in the headline so readers
+    know the metric is coming. Documents the vLLM 0.20.x OpenAI shim
+    limitation (no routed_experts) as the why."""
     card_data = [{**c, "ready": False, "payload": {}} for c in publish_dashboards.CARDS]
     page = publish_dashboards.render_index(card_data)
-    assert "data-section=\"dense-matrix\"" in page
-    # MoE matrix retired — must NOT appear in the index.
-    assert "data-section=\"moe-matrix\"" not in page
-    # Placeholder for the expert-routing TBD work renders in its place.
-    assert "data-section=\"router-flip-rate-placeholder\"" in page
-    assert "Dense (Qwen3-32B)" in page
-    # The Hermes Agent MoE matrix above the fold is the only MoE surface
-    # in the headline now.
-    assert "Hermes Agent — MoE (Qwen3-30B-A3B)" in page
-    # The Dense matrix tile grid still emits the row labels FSDP and MEGATRON.
-    assert "FSDP" in page
-    assert "MEGATRON" in page
-
-
-def test_rendered_index_matrix_renders_real_dense_payload():
-    """When the dense card carries engine-pair + per-row data, the dense
-    matrix surfaces at least one tile with a numeric ESS value."""
-    dense_payload = {
-        "num_runs": 2,
-        "rows": [
-            {
-                "model_id": "Qwen/Qwen3-32B",
-                "rollout_engine": "vllm",
-                "trainer_engine": "fsdp",
-                "precision_class": "bf16",
-                "device_bucket": "L40S (g6e.12xlarge)",
-                "ess": 0.998,
-            },
-            {
-                "model_id": "Qwen/Qwen3-32B",
-                "rollout_engine": "vllm",
-                "trainer_engine": "fsdp",
-                "precision_class": "fp8",
-                "device_bucket": "L40S (g6e.12xlarge)",
-                "ess": 0.992,
-            },
-        ],
-    }
-    card_data = []
-    for c in publish_dashboards.CARDS:
-        if c["slug"] == "dense":
-            card_data.append({**c, "ready": True, "filename": "dense_dashboard.html",
-                              "summary": "", "payload": dense_payload})
-        else:
-            card_data.append({**c, "ready": False, "payload": {}})
-    page = publish_dashboards.render_index(card_data)
-    assert "data-chart=\"matrix-tile\"" in page
-    # FSDP × (bf16 · L40S) tile should render an ESS value (>0.99 → green).
-    assert "0.9980" in page or "0.998" in page or "0.992" in page
-    assert "mx-good" in page or "mx-warn" in page
-
-
-def test_megatron_placeholder_when_no_megatron_reports():
-    """STEER `dashboard.megatron_placeholder`: with zero Megatron reports
-    ingested, every Megatron row tile in both matrices renders the literal
-    'TBD — pending HF→Megatron conversion' placeholder string."""
-    # A real-ish dense payload with FSDP-only rows; no Megatron rows.
-    dense_payload = {
-        "rows": [
-            {
-                "model_id": "Qwen/Qwen3-32B",
-                "rollout_engine": "vllm",
-                "trainer_engine": "fsdp",
-                "precision_class": "bf16",
-                "device_bucket": "L40S (g6e.12xlarge)",
-                "ess": 0.998,
-            },
-            {
-                "model_id": "Qwen/Qwen3-32B",
-                "rollout_engine": "vllm",
-                "trainer_engine": "fsdp",
-                "precision_class": "fp8",
-                "device_bucket": "L40S (g6e.12xlarge)",
-                "ess": 0.992,
-            },
-        ],
-    }
-    # Router payload also FSDP-only.
-    router_payload = {
-        "rows": [
-            {
-                "model_id": "Qwen/Qwen3-30B-A3B",
-                "rollout_engine": "vllm",
-                "trainer_engine": "fsdp",
-                "precision_class": "bf16",
-                "device_bucket": "L40S (g6e.12xlarge)",
-                "router_flip_rate": 0.04,
-            },
-        ],
-    }
-    card_data = []
-    for c in publish_dashboards.CARDS:
-        if c["slug"] == "dense":
-            card_data.append({**c, "ready": True, "filename": "dense_dashboard.html",
-                              "summary": "", "payload": dense_payload})
-        elif c["slug"] == "router":
-            card_data.append({**c, "ready": True, "filename": "router_dashboard.html",
-                              "summary": "", "payload": router_payload})
-        else:
-            card_data.append({**c, "ready": False, "payload": {}})
-    page = publish_dashboards.render_index(card_data)
-    # Placeholder literal exactly as the STEER directive requires.
-    placeholder = publish_dashboards.MEGATRON_PLACEHOLDER
-    assert placeholder == "TBD — pending HF→Megatron conversion"
-    # Megatron row tiles must show the placeholder. Cycle-2 MoE matrix
-    # retired (2026-05-12 operator direction), so we only count Megatron
-    # tiles in the Dense matrix — 2 tiles (bf16 + fp8 column).
-    occurrences = page.count(placeholder)
-    assert occurrences >= 2, (
-        f"expected ≥2 Megatron placeholder tiles in the Dense matrix; "
-        f"got {occurrences}"
-    )
-    # The placeholder tile is the TBD style — greyed / dashed.
-    assert "mx-tile mx-tbd" in page
-    # Every Megatron row tile must contain the placeholder. We use the
-    # data-trainer="megatron" marker emitted by `_matrix_tile`.
-    import re
-
-    megatron_tiles = re.findall(
-        r'<a class="mx-tile[^"]*"[^>]*data-trainer="megatron"[^>]*>(.*?)</a>',
-        page,
-        flags=re.DOTALL,
-    )
-    assert megatron_tiles, "expected at least one Megatron row tile"
-    for tile_inner in megatron_tiles:
-        assert placeholder in tile_inner, (
-            f"Megatron tile missing placeholder: {tile_inner!r}"
-        )
-
-
-def test_dense_and_moe_matrices_are_model_bound():
-    """STEER `dashboard.matrix_per_model`: each matrix only ingests rows
-    whose `model_id` belongs to that matrix's model. A Qwen3-30B-A3B row
-    accidentally living in `dense_dashboard.json` must not surface in the
-    Dense matrix, and a Qwen3-32B row in `router_dashboard.json` must not
-    surface in the MoE matrix.
-    """
-    import re
-
-    dense_payload = {
-        "rows": [
-            {
-                "model_id": "Qwen/Qwen3-32B",
-                "rollout_engine": "vllm",
-                "trainer_engine": "fsdp",
-                "precision_class": "bf16",
-                "device_bucket": "L40S (g6e.12xlarge)",
-                "ess": 0.9981,
-            },
-            {
-                # Cross-model contaminant: MoE row that must NOT land in dense.
-                "model_id": "Qwen/Qwen3-30B-A3B",
-                "rollout_engine": "vllm",
-                "trainer_engine": "megatron-lm",
-                "precision_class": "bf16",
-                "device_bucket": "L40S (g6e.12xlarge)",
-                "ess": 0.4242,
-            },
-        ],
-    }
-    router_payload = {
-        "rows": [
-            {
-                "model_id": "Qwen/Qwen3-30B-A3B",
-                "rollout_engine": "vllm",
-                "trainer_engine": "megatron",
-                "precision_class": "bf16",
-                "device_bucket": "L40S (g6e.12xlarge)",
-                "router_flip_rate": 0.0723,
-            },
-            {
-                # Cross-model contaminant: dense row that must NOT land in MoE.
-                "model_id": "Qwen/Qwen3-32B",
-                "rollout_engine": "vllm",
-                "trainer_engine": "fsdp",
-                "precision_class": "bf16",
-                "device_bucket": "L40S (g6e.12xlarge)",
-                "router_flip_rate": 0.9999,
-            },
-        ],
-    }
-    card_data = []
-    for c in publish_dashboards.CARDS:
-        if c["slug"] == "dense":
-            card_data.append({**c, "ready": True, "filename": "dense_dashboard.html",
-                              "summary": "", "payload": dense_payload})
-        elif c["slug"] == "router":
-            card_data.append({**c, "ready": True, "filename": "router_dashboard.html",
-                              "summary": "", "payload": router_payload})
-        else:
-            card_data.append({**c, "ready": False, "payload": {}})
-    page = publish_dashboards.render_index(card_data)
-
-    dense_match = re.search(
-        r'<section class="mx-section" data-section="dense-matrix">(.*?)</section>',
-        page,
-        flags=re.DOTALL,
-    )
-    assert dense_match, "expected Dense matrix section to render"
-    dense_section = dense_match.group(1)
-
-    # Dense matrix: keeps the Qwen3-32B ESS value, drops the MoE row's value.
-    assert "0.9981" in dense_section
-    assert "0.4242" not in dense_section, (
-        "MoE-model row leaked into the Dense matrix"
-    )
-
-    # Cycle-2 MoE router_flip_rate matrix retired entirely (operator
-    # direction 2026-05-12). The router_payload above is still ingested
-    # so the JSON pipeline stays stable, but the matrix is no longer
-    # rendered. The router-flip-rate placeholder appears instead.
-    assert 'data-section="moe-matrix"' not in page
     assert 'data-section="router-flip-rate-placeholder"' in page
-    # The cycle-2 MoE numbers (7.2%) must NOT appear anywhere in the
-    # rendered page now.
-    assert "7.2%" not in page, (
-        "cycle-2 MoE router_flip_rate leaked into the rendered index"
-    )
-
-    # The cross-model Megatron row in dense_payload would otherwise have
-    # populated the Megatron row of the Dense matrix; with the filter the
-    # Megatron row in Dense must still render the TBD placeholder.
-    placeholder = publish_dashboards.MEGATRON_PLACEHOLDER
-    megatron_tiles_in_dense = re.findall(
-        r'<a class="mx-tile[^"]*"[^>]*data-trainer="megatron"[^>]*>(.*?)</a>',
-        dense_section,
-        flags=re.DOTALL,
-    )
-    assert megatron_tiles_in_dense, "expected Megatron row tiles in Dense matrix"
-    for inner in megatron_tiles_in_dense:
-        assert placeholder in inner, (
-            "Dense Megatron tile lost its placeholder — MoE row contaminated it"
-        )
+    placeholder_start = page.find('data-section="router-flip-rate-placeholder"')
+    section_end = page.find("</section>", placeholder_start)
+    section_html = page[placeholder_start:section_end]
+    assert "Router flip rate" in section_html
+    assert "TBD" in section_html
+    assert "routed_experts" in section_html
+    assert "vLLM" in section_html
+    # The legacy cycle-2 matrices are retired entirely.
+    assert "data-section=\"dense-matrix\"" not in page
+    assert "data-section=\"moe-matrix\"" not in page
+    # The Hermes Agent matrices remain the headline.
+    assert "Hermes Agent — Dense (Qwen3-32B)" in page
+    assert "Hermes Agent — MoE (Qwen3-30B-A3B)" in page
 
 
 def test_rendered_index_with_ready_cards_has_no_endpoint_link():

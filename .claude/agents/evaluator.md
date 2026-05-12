@@ -27,7 +27,7 @@ Grade the quality of recent work without modifying any files.
    c. **Test check**: do corresponding test files exist? Read test output from `.claude/evidence/evidence_log.jsonl`
    d. **Firewall check**: does code violate AGENTS.md? (no trainer code outside tests/examples)
    e. **Contract coherence**: if contracts.py changed, are docs/fixtures/tests updated together?
-   f. **Plan alignment**: does the implementation match the task in `docs/git_plan_v2.md`?
+   f. **Plan alignment**: does the implementation match the directive in the entry's `.claude/feature-results.json` record (or the originating plan file referenced from `STEER.md`)?
 5. Run `pytest -q --tb=short` to verify tests actually pass
 6. Run `ruff check .` to verify lint passes
 

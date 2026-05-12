@@ -768,93 +768,6 @@ margin:.4rem 0 .35rem 0;overflow:hidden}
 def render_index(card_data: list[dict]) -> str:
     by_slug = {c.get("slug"): c for c in card_data}
     dense_payload = (by_slug.get("dense") or {}).get("payload") or {}
-    router_payload = (by_slug.get("router") or {}).get("payload") or {}
-    dense_blurb = (
-        "<p><strong>What this measures.</strong> We hand a single "
-        "prompt to vLLM (the rollout side), let it generate 128 tokens, and "
-        "capture the per-token sampled-token logprob. The same "
-        "<code>(prompt + response)</code> is then teacher-forced through the "
-        "trainer-side reference (FSDP or Megatron in bf16) on the same "
-        "L40S host. Each tile reports the mean <strong>ESS</strong> over the "
-        "response — how usable that rollout would be for off-policy training. "
-        "Green (ESS &gt; 0.99) means the two engines agree token-for-token; "
-        "lower values mean the trainer would need stronger off-policy "
-        "correction or would have to drop the rollout. Columns are the "
-        "rollout-side precision · device; rows are the trainer-side reference. "
-        "Click any tile to drill into the per-run detail.</p>"
-    )
-    moe_blurb = (
-        "<p><strong>What this measures.</strong> Same recipe as the dense "
-        "matrix, but instead of comparing logprobs we compare <em>which "
-        "experts</em> each engine picked. vLLM emits the top-k MoE router "
-        "decisions per <code>(token, layer)</code> via "
-        "<code>enable_return_routed_experts=True</code>; the trainer-side "
-        "reference (FSDP or Megatron) teacher-forces the same "
-        "<code>(prompt + response)</code> with router hooks and captures its "
-        "own choices. Each tile reports the mean "
-        "<strong>router_flip_rate</strong> — fraction of "
-        "<code>(token, layer)</code> cells where the engines' top-1 expert "
-        "disagrees. Lower is better; the marketplace problem becomes visible "
-        "above ~5% (amber): at that point ~5% of the gradient signal would "
-        "land on the wrong expert without router-aware off-policy correction. "
-        "Click any tile to drill into the per-run detail.</p>"
-    )
-    dense_matrix = _render_matrix(
-        title="Dense (Qwen3-32B)",
-        model="Qwen/Qwen3-32B",
-        payload=dense_payload,
-        metric_key="ess",
-        kind="dense",
-        detail_href="dense_dashboard.html",
-        section_slug="dense-matrix",
-        model_substring="Qwen3-32B",
-        blurb_html=dense_blurb,
-    )
-    # Cycle-2 single-prompt MoE router_flip_rate matrix retired from the
-    # public surface per operator direction 2026-05-12 ("Remove all the
-    # numbers from cycle-2 MoE, I think it was wrong"). The
-    # router_dashboard CLI still runs and writes JSON under
-    # runs/live/router/ for offline inspection. ``router_payload`` and
-    # ``moe_blurb`` are bound above so the JSON ingestion path stays
-    # identical (and to feed the click-through link from the legacy card
-    # row lower on the page). The actual matrix is replaced by the
-    # ``router-flip-rate-placeholder`` section below the headline.
-    _ = (router_payload, moe_blurb)
-    # The agent_payload (final_answer_match / tool_call_jaccard from
-    # agent_dashboard.json) is retained for the per-tile click-through
-    # detail page but no longer drives the headline Hermes matrices.
-    # Per operator direction 2026-05-12 ("complete the dashboard only
-    # with token prob shifts"), the headline Hermes-Agent tiles read
-    # from the dense_dashboard aggregator (mean_ess +
-    # mean_delta_logprob_abs).
-    agent_payload = (by_slug.get("agent") or {}).get("payload") or {}
-    _ = agent_payload
-    hermes_dense_blurb = (
-        "<p><strong>What this measures.</strong> Real "
-        "<a href='https://github.com/NousResearch/hermes-agent'>Nous Hermes "
-        "Agent</a> multi-turn trajectories against the same vLLM serves used "
-        "by the dense + MoE matrices above. Each task in our 12-prompt suite "
-        "is run once at <code>bf16</code> (the trainer-equivalent reference), "
-        "once at <code>fp8</code> (the precision-shifted rollout), and a "
-        "second time at <code>bf16</code> with a different sampling seed "
-        "(the noise floor). The left tile compares fp8-vs-bf16 — the "
-        "load-bearing marketplace signal. The right tile compares "
-        "bf16-vs-bf16-different-seed — what divergence we get from sampling "
-        "alone, with no engine/precision change. The tile's headline "
-        "metric is <strong>final_answer_match</strong> (k-of-12 tasks where "
-        "rollout and trainer landed on the same final answer); the bar "
-        "shows mean <strong>tool_call_jaccard</strong>. Green ≥80%, amber "
-        "50-80%, red &lt;50%. If the precision-effect tile is materially "
-        "more divergent than the noise-floor tile, fp8 inference changes "
-        "what the agent <em>actually does</em>, not just its per-token "
-        "logprobs.</p>"
-    )
-    # Per operator direction 2026-05-12 ("complete the dashboard only
-    # with token prob shifts"), both Hermes-Agent matrices now render
-    # ESS over Hermes-multi-turn response tokens against the trainer
-    # teacher-force. The blurbs above describe the underlying
-    # measurement; the matrix itself is two tiles (FSDP, Megatron) per
-    # model. Tiles with no trainer-force pass yet render TBD.
     hermes_dense_blurb = (
         "<p><strong>What this measures.</strong> A real "
         "<a href='https://github.com/NousResearch/hermes-agent'>Hermes-Agent</a> "
@@ -953,12 +866,6 @@ def render_index(card_data: list[dict]) -> str:
         ".kpi .l{font-size:.72rem;color:var(--muted);text-transform:uppercase;"
         "letter-spacing:.04em;margin-top:.1rem}"
         "footer{margin-top:2.5rem;color:var(--muted);font-size:.82rem;text-align:center}"
-        ".legacy-archive{margin-top:2rem;background:#fafafa;border:1px dashed var(--border);"
-        "border-radius:14px;padding:1rem 1.25rem}"
-        ".legacy-archive>summary{cursor:pointer;font-weight:600;color:var(--muted);"
-        "font-size:.95rem;list-style-position:inside}"
-        ".legacy-archive .legacy-note{color:var(--muted);font-size:.88rem;"
-        "margin:.5rem 0 1rem 0;font-style:italic}"
         # Router-flip-rate placeholder styling — a visible "TBD" slot in
         # the dashboard, deliberately not hidden behind a <details>. We
         # want readers to know the metric is coming, not assume the
@@ -1026,22 +933,6 @@ def render_index(card_data: list[dict]) -> str:
         "and <code>docs/future_research.md</code> for the planned wiring."
         "</p>"
         "</section>"
-        # Legacy single-prompt Dense ESS matrix kept in a collapsible
-        # appendix. It's still a token-prob-shift metric (matches the
-        # dashboard direction) and ESS numbers from cycle-2 are
-        # methodologically sound — they came from the same proxy +
-        # FSDP/Megatron teacher-force seam Hermes uses. The cycle-2 MoE
-        # numbers are NOT kept here (per operator direction; placeholder
-        # section above documents why).
-        "<details class='legacy-archive' data-section='legacy-single-prompt'>"
-        "<summary>Legacy single-prompt Dense matrix (archived)</summary>"
-        "<p class='legacy-note'>"
-        "Cycle-2 single-prompt token-level ESS for Dense (Qwen3-32B). "
-        "Kept for reference; the Hermes-Agent multi-turn Dense matrix above "
-        "is the load-bearing marketplace signal."
-        "</p>"
-        f"{dense_matrix}"
-        "</details>"
         f"<div class='grid'>{''.join(cards_html)}</div>"
         "<footer>Generated from runs/live/. Each dashboard is regenerated by running the "
         "lab + dashboard CLIs in the source repo. <a href='glossary.html' "
