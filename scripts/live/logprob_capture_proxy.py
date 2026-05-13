@@ -187,18 +187,39 @@ def extract_probes(
         out["prompt_token_ids"] = list(prompt_tids)
     # MoE routed_experts: per the vLLM docs
     # (https://docs.vllm.ai/en/latest/training/routed_experts_replay/),
-    # this is a TOP-LEVEL field on each choice, NOT a per-token field
-    # under logprobs.content[*]. Shape: ``[gen_len, num_moe_layers,
-    # top_k]`` of int16 expert IDs in ``[0, num_experts)``. JSON path:
-    # ``choices[0].routed_experts``. vLLM also stamps
-    # ``prompt_routed_experts`` at the response top level (shape
-    # ``[prompt_len, num_moe_layers, top_k]``) — captured here too so
-    # downstream router-pair scripts can build a full RouterTrace
-    # against the prompt+response concatenation if they want.
+    # this is a TOP-LEVEL field on each choice with shape
+    # ``[gen_len, num_moe_layers, top_k]``. On the *patched* vLLM
+    # 0.20.2 wheel running here, the engine emits the **combined
+    # prefill+decode** routing buffer of shape
+    # ``[prompt_len + gen_len - 1, num_moe_layers, top_k]`` — i.e.
+    # routing at every position from prompt[1:] onward — and does not
+    # do the "split at prompt_len" the upstream docs describe (that
+    # split lives on the prompt_routed_experts path, which the engine
+    # in this wheel does not populate). Trim to the gen-side tail so
+    # downstream router-pair code aligns against the trainer's
+    # ``routed_position_indices(prompt_len, response_len)`` window.
     if choice is not None:
         routed = choice.get("routed_experts")
         if isinstance(routed, list) and routed:
+            usage = rsp.get("usage") if isinstance(rsp, dict) else None
+            completion_tokens = None
+            if isinstance(usage, dict):
+                ct = usage.get("completion_tokens")
+                if isinstance(ct, int) and ct > 0:
+                    completion_tokens = ct
+            # Fallback: response_token_ids length captures the same
+            # number when ``return_token_ids=true`` is set (it is, by
+            # the proxy's request augmentation).
+            if completion_tokens is None:
+                rt = out.get("response_token_ids")
+                if isinstance(rt, list) and rt:
+                    completion_tokens = len(rt)
+            if completion_tokens is not None and completion_tokens < len(routed):
+                routed = routed[-completion_tokens:]
             out["response_routed_experts"] = routed
+    # ``prompt_routed_experts`` is not emitted by the wheel's engine
+    # but we still pass through the field if a future engine starts
+    # populating it.
     prompt_routed = rsp.get("prompt_routed_experts")
     if isinstance(prompt_routed, list) and prompt_routed:
         out["prompt_routed_experts"] = prompt_routed

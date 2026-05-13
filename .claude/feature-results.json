@@ -10,8 +10,8 @@
     "directive": "Spot — serve Qwen3-30B-A3B with router replay flag.\n\nModify `scripts/live/megatron_moe_reference_launch.sh` is **not** what serves vLLM — that's the trainer side. The serving side is currently embedded in `CLAUDE.md`'s \"step 1\" snippet. Add a new launcher:\n\n- New file: `scripts/live/vllm_serve_moe_dev.sh` — equivalent of CLAUDE.md step 1 for the MoE leg, but sourcing `~/rmenv-dev/` and passing:\n  - `--enable-return-routed-experts`\n  - `--enable-expert-parallel`\n  - `--no-async-scheduling` (required: routed_experts is incompatible with async sched per the docs)\n  - `--tensor-parallel-size 4 --dtype auto --max-model-len 40960 --gpu-memory-utilization 0.85 --host 0.0.0.0 --port 8000`\n- No request-side changes needed. The proxy already injects `logprobs=True, top_logprobs=1, return_token_ids=True`; the routed-experts trace rides along on the response automatically.\n\nVerification (from plan §Verification step 2, second bullet): curl `vllm serve` directly (without the proxy) and assert `choices[0].routed_experts` is a 3-D list shaped `[*, 48, 8]` and `prompt_routed_experts` is similar."
   },
   "spot_start_capture_proxy": {
-    "passes": false,
-    "evidence": null,
+    "passes": true,
+    "evidence": ".claude/evidence/iter03_capture_proxy/iter03.md",
     "directive": "Spot — start the existing capture proxy on port 8001 (unchanged).\n\n`scripts/live/logprob_capture_proxy.py` already extracts `choice.routed_experts` and `rsp.prompt_routed_experts` into the sidecar JSONL. No code change. Smoke-test with `curl http://localhost:8001/v1/chat/completions` and confirm the sidecar entry has a non-null `response_routed_experts` of shape `[gen_len, 48, 8]`.\n\nVerification (from plan §Verification step 3): drive one chat-completions request via curl on port 8001, then `tail -1 /tmp/hermes_probes.jsonl` and confirm `response_routed_experts` and `prompt_routed_experts` are populated."
   },
   "spot_drive_no_op_trivia": {
