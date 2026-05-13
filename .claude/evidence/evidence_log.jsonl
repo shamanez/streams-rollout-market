@@ -80,3 +80,6 @@
 {"timestamp":"20260513T083322Z","command":"git status && echo \"}
 {"timestamp":"20260513T083428Z","command":"echo \"}
 {"timestamp":"20260513T083520Z","command":"rm docs/git_plan_v2.md docs/problem_design_survey.md docs/k_of_n_reload_quorum.md docs/evaluation_plan.md\necho \"}
+{"timestamp":"20260513T092836Z","command":"python -m pytest -q tests/test_engine_filter.py tests/test_router_dashboard.py tests/test_graphs_first.py tests/test_publish_dashboards.py 2>&1 | tail -20\necho \"}
+{"timestamp":"20260513T092843Z","command":"python -m pytest -q 2>&1 | tail -5\necho \"}
+{"timestamp":"20260513T092853Z","command":"python -m pytest -q tests/test_run_dir_name.py::test_run_dir_name_unique_across_rapid_calls 2>&1 | tail -15"}

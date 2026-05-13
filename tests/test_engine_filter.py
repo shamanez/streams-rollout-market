@@ -50,6 +50,10 @@ def test_is_headline_pair_classification():
     assert is_headline_pair("vllm-bf16", "fsdp")
     assert is_headline_pair("vllm", "megatron-lm")
     assert is_headline_pair("vLLM-FP8", "FSDP")
+    # Hermes-Agent wraps vLLM under the hood; its engine label
+    # ("hermes-qwen3-30b-a3b-bf16") should reach the headline.
+    assert is_headline_pair("hermes-qwen3-30b-a3b-bf16", "fsdp-bf16-moe")
+    assert is_headline_pair("hermes-qwen3-30b-a3b-fp8", "megatron-bf16-moe")
     assert not is_headline_pair("sglang", "fsdp")
     assert not is_headline_pair("vllm", "hf-transformers")
     assert not is_headline_pair("sglang", "hf-transformers")
@@ -155,6 +159,27 @@ def test_router_dashboard_purges_blocked_engines_from_html():
     payload = dashboard.as_dict()
     assert payload["num_runs"] == 4
     assert len(payload["engine_pairs"]) == 4
+
+
+def test_router_dashboard_renders_appendix_for_non_blocked_non_headline_pair():
+    """Non-headline pairs that are not on the blocklist (e.g. a third-party
+    rollout engine we haven't tagged yet) belong in the rendered appendix,
+    not silently dropped. Hermes-Agent rollouts are now on the headline, so
+    we use a synthetic ``rolloutX`` rollout label to exercise this path."""
+    reports = [
+        _router_report("vllm", "fsdp", idx=1),
+        _router_report("rolloutX", "fsdp", idx=2),
+    ]
+    dashboard = build_router_dashboard(reports)
+    page = render_router_html(dashboard)
+    assert "data-section=\"all-engines\"" in page
+    assert APPENDIX_HEADER in page
+    # The unfamiliar engine label appears inside the appendix block.
+    appendix_idx = page.find("data-section=\"all-engines\"")
+    assert page.find("rolloutX", appendix_idx) > appendix_idx
+    # Headline still carries the vllm/fsdp pair.
+    headline_idx = page.find("data-section=\"headline-engines\"")
+    assert 0 <= headline_idx < appendix_idx
 
 
 def _agent_report(rollout: str, trainer: str, *, idx: int) -> TrajectoryDivergenceReport:
