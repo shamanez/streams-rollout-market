@@ -1,0 +1,12 @@
+[
+  {
+    "task_id": "cwc-repo-quality-loop",
+    "task_text": "The local repo at /home/ubuntu/hermes-traj/cwc-long-running-agents/ ships example primitives for long-running Claude agents. (1) Use read_file on /home/ubuntu/hermes-traj/cwc-long-running-agents/README.md to learn the three primitives of the repo's 'quality loop' and name them in one sentence. (2) Use read_file on /home/ubuntu/hermes-traj/cwc-long-running-agents/claude-code-config/.claude/hooks/kill-switch.sh and state in one sentence what filename the kill-switch checks for to halt the agent. Final answer: one short paragraph stitching both findings together.",
+    "expected_tools": ["read_file"]
+  },
+  {
+    "task_id": "cwc-repo-which-hook-commits",
+    "task_text": "The repo at /home/ubuntu/hermes-traj/cwc-long-running-agents/ has a hooks directory under claude-code-config/.claude/hooks/. (1) Use read_file on /home/ubuntu/hermes-traj/cwc-long-running-agents/claude-code-config/README.md to find the table that maps hook files to their primitives, and identify which hook file commits work at the end of every session. (2) Use read_file on the file you identified, and state in one sentence what git command it would run. Final answer: name the hook file and its core git operation in one short paragraph.",
+    "expected_tools": ["read_file"]
+  }
+]
