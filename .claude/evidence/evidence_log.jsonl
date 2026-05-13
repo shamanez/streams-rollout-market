@@ -70,3 +70,8 @@
 {"timestamp":"20260513T041922Z","command":"wc -l CLAUDE.md docs/REPRODUCE.md; echo \"}
 {"timestamp":"20260513T042633Z","command":"tar tzf /tmp/operator_kit.tgz; echo \"}
 {"timestamp":"20260513T042704Z","iter":"bundle_operator_serve_kit","evidence":".claude/evidence/iter01_operator_kit/iter01.md"}
+{"timestamp":"20260513T042919Z","command":"pytest -q tests/test_remote_capture_driver.py 2>&1 | tail -20"}
+{"timestamp":"20260513T042925Z","command":"pytest -q 2>&1 | tail -3 && ruff check . 2>&1 | tail -3"}
+{"timestamp":"20260513T042930Z","command":"ruff check . 2>&1 | head -15"}
+{"timestamp":"20260513T042941Z","command":"pytest -q 2>&1 | tail -3 && ruff check . 2>&1 | tail -2"}
+{"timestamp":"20260513T043210Z","iter":"client_side_capture_driver","evidence":".claude/evidence/iter02_client_capture/iter02.md"}
