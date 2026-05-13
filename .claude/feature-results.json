@@ -30,8 +30,8 @@
     "directive": "### 6. spot_megatron_teacher_force_both_precisions\n\nSame as iter 5 but Megatron. Write `/tmp/rollout.json` for the bf16 batch first, run `megatron_moe_reference_launch.sh`, capture `/tmp/trainer_megatron-bf16-moe-bf16-rollouts.json` and `/tmp/megatron_router-bf16-rollouts.json`. Repeat with the fp8 batch. Use the same patched launcher (already fixed to dereference HF symlinks). Acceptance: both batches produce valid router traces."
   },
   "laptop_pair_all_reports": {
-    "passes": false,
-    "evidence": null,
+    "passes": true,
+    "evidence": ".claude/evidence/iter07_pair_all/iter07.md",
     "directive": "### 7. laptop_pair_all_reports\n\nPull all four trainer outputs to the laptop. Run `pair_hermes_moe_reports.py` four times with the matching `--rollout-engine-label hermes-qwen3-30b-a3b-{bf16,fp8}` and `--trainer-engine-label {fsdp,megatron}-bf16-moe`. This produces 4 × 6 = 24 `router_mismatch_report.json` files under `runs/live/router/<rollout-vs-trainer>/<run>/`. Acceptance: 24 reports written, all with `router_flip_rate` and `token_expert_disagreement_rate` populated."
   },
   "laptop_aggregate_republish_2x2_matrix": {
