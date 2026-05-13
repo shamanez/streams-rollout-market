@@ -1,0 +1,55 @@
+{"timestamp":"20260512T121405Z","command":"echo \"}
+{"timestamp":"20260512T121541Z","command":"pytest tests/test_publish_dashboards.py tests/test_publish_dashboards_hermes_v2.py -q 2>&1 | tail -30"}
+{"timestamp":"20260512T121735Z","command":"grep -n \"}
+{"timestamp":"20260512T121800Z","command":"python scripts/live/publish_dashboards.py 2>&1 | tail -3\necho \"}
+{"timestamp":"20260512T121842Z","command":"python scripts/live/publish_dashboards.py 2>&1 | tail -3\necho\necho \"}
+{"timestamp":"20260512T124023Z","command":"for f in .claude/scripts/*.sh; do\n  echo \"}
+{"timestamp":"20260512T124426Z","command":"pytest -q --tb=no 2>&1 | tail -5 && echo \"}
+{"timestamp":"20260512T125256Z","command":"pytest -q --tb=no 2>&1 | tail -5 && echo \"}
+{"timestamp":"20260512T125302Z","command":"ruff check . 2>&1 | head -20"}
+{"timestamp":"20260512T125316Z","command":"ruff check . 2>&1 | tail -3"}
+{"timestamp":"20260512T125325Z","command":"ruff check . 2>&1 | tail -3"}
+{"timestamp":"20260512T130548Z","command":"pytest -q --tb=no 2>&1 | tail -3 && ruff check . 2>&1 | tail -3\necho \"}
+{"timestamp":"20260512T131307Z","command":"find /Users/shamane/Documents/streams-rollout-market -type f \\( -name \"}
+{"timestamp":"20260512T131331Z","command":"grep -r \"}
+{"timestamp":"20260512T133054Z","command":"ls AGENT_STOP STEER.md 2>&1; echo \"}
+{"timestamp":"20260512T133711Z","command":"rsync -av --exclude='__pycache__' --exclude='.git' --exclude='runs/' --exclude='docs/' --exclude='.claude/evidence/' --exclude='.venv/' --exclude='*.pyc' --exclude='.pytest_cache' --exclude='.ruff_cache' ./ my-vllm-spot-instance:~/streams-rollout-market/ 2>&1 | tail -8"}
+{"timestamp":"20260513T000020Z","command":"cat .claude/evidence/evidence_log.jsonl | tail -5; echo \"}
+{"timestamp":"20260513T000023Z","command":"cat .claude/scripts/verify-gate.sh 2>/dev/null | head -50"}
+{"timestamp":"20260513T000030Z","command":"pytest -q --tb=no 2>&1 | tail -3 && ruff check . 2>&1 | tail -3 && bash .claude/scripts/verify-gate.sh"}
+{"timestamp":"20260513T000038Z","command":"cat .claude/scripts/track-evidence.sh 2>/dev/null | head -30"}
+{"timestamp":"20260513T000045Z","iteration":"spot_build_vllm_dev_routed_experts","evidence":".claude/evidence/iter01_spot_vllm_dev/iter01.md","summary":"vllm-dev wheel + HTTP shim patch -> routed_experts in CompletionResponseChoice + ChatCompletionResponseChoice"}
+{"timestamp":"20260513T001414Z","iteration":"spot_serve_moe_router_replay","evidence":".claude/evidence/iter02_serve_moe_dev/iter02.md","summary":"vllm_serve_moe_dev.sh + curl smoke: choices[0].routed_experts is [20,48,8] for Qwen3-30B-A3B"}
+{"timestamp":"20260513T001414Z","command":"pytest -q --tb=no 2>&1 | tail -3 && ruff check . 2>&1 | tail -3 && bash .claude/scripts/verify-gate.sh && TS=$(date -u +%Y%m%dT%H%M%SZ) && printf '{\"}
+{"timestamp":"20260513T001914Z","command":"pytest -q tests/test_hermes_moe_pipeline_e2e.py --tb=short 2>&1 | tail -15"}
+{"timestamp":"20260513T002305Z","iteration":"spot_start_capture_proxy","evidence":".claude/evidence/iter03_capture_proxy/iter03.md","summary":"proxy on 8001 + trim patch; sidecar response_routed_experts aligns with response_token_ids"}
+{"timestamp":"20260513T002305Z","command":"pytest -q --tb=short 2>&1 | tail -5 && ruff check . 2>&1 | tail -3 && bash .claude/scripts/verify-gate.sh && TS=$(date -u +%Y%m%dT%H%M%SZ) && printf '{\"}
+{"timestamp":"20260513T003821Z","iteration":"spot_drive_no_op_trivia","evidence":".claude/evidence/iter04_drive_no_op_trivia/iter04.md","summary":"no-op-trivia answered; probe routed=[22,48,8] aligned with response_token_ids"}
+{"timestamp":"20260513T003821Z","command":"pytest -q --tb=no 2>&1 | tail -3 && ruff check . 2>&1 | tail -3 && bash .claude/scripts/verify-gate.sh && TS=$(date -u +%Y%m%dT%H%M%SZ) && printf '{\"}
+{"timestamp":"20260513T003933Z","iteration":"laptop_merge_probes","evidence":".claude/evidence/iter05_merge_probes/iter05.md","summary":"trajectory JSON has response_routed_experts [22,48,8] aligned with response_token_ids"}
+{"timestamp":"20260513T003933Z","command":"pytest -q --tb=no 2>&1 | tail -3 && ruff check . 2>&1 | tail -3 && bash .claude/scripts/verify-gate.sh && TS=$(date -u +%Y%m%dT%H%M%SZ) && printf '{\"}
+{"timestamp":"20260513T005414Z","iteration":"spot_trainer_router_traces","evidence":".claude/evidence/iter06_trainer_router/iter06.md","summary":"FSDP MoE trainer router trace expert_ids [510, 48, 8]; Megatron deferred until distcp shards present"}
+{"timestamp":"20260513T005414Z","command":"cp /tmp/trainers_hermes_moe_fsdp_bf16.json .claude/evidence/iter06_trainer_router/trainers_fsdp_bf16.json && pytest -q --tb=no 2>&1 | tail -3 && ruff check . 2>&1 | tail -3 && bash .claude/scripts/verify-gate.sh && TS=$(date -u +%Y%m%dT%H%M%SZ) && printf '{\"}
+{"timestamp":"20260513T005515Z","command":"pytest -q tests/test_hermes_moe_pipeline_e2e.py --tb=short 2>&1 | tail -8 && pytest -q --tb=no 2>&1 | tail -3"}
+{"timestamp":"20260513T005616Z","iteration":"laptop_pair_rollout_vs_trainer","evidence":".claude/evidence/iter07_pair_router/iter07.md","summary":"router_flip_rate=0.0350 (green) on hermes-MoE vs FSDP, 22 tokens 48 layers"}
+{"timestamp":"20260513T005616Z","command":"pytest -q --tb=no 2>&1 | tail -3 && ruff check . 2>&1 | tail -3 && bash .claude/scripts/verify-gate.sh && TS=$(date -u +%Y%m%dT%H%M%SZ) && printf '{\"}
+{"timestamp":"20260513T005935Z","command":"pytest -q tests/test_publish_dashboards.py --tb=short 2>&1 | tail -20"}
+{"timestamp":"20260513T010024Z","command":"pytest -q --tb=no 2>&1 | tail -5 && ruff check . 2>&1 | tail -3 && bash .claude/scripts/verify-gate.sh"}
+{"timestamp":"20260513T010109Z","iteration":"laptop_aggregate_republish_dashboard","evidence":".claude/evidence/iter08_dashboard/iter08.md","summary":"docs/index.html: TBD section replaced by live hermes-agent-moe-router-matrix with FSDP green tile at 3.50{"timestamp":"20260513T010123Z","iteration":"laptop_aggregate_republish_dashboard","evidence":".claude/evidence/iter08_dashboard/iter08.md","summary":"index.html: TBD section replaced by live hermes-agent-moe-router-matrix with FSDP green 3.50%"}
+{"timestamp":"20260513T010123Z","command":"TS=$(date -u +%Y%m%dT%H%M%SZ); printf '%s\\n' '{\"}
+{"timestamp":"20260513T010308Z","command":"pytest -q --tb=no 2>&1 | tail -3 && echo \"}
+{"timestamp":"20260513T012950Z","command":"pytest -q tests/test_publish_dashboards.py --tb=short 2>&1 | tail -10"}
+{"timestamp":"20260513T013002Z","command":"pytest -q --tb=no 2>&1 | tail -5 && ruff check . 2>&1 | tail -3 && python scripts/live/publish_dashboards.py 2>&1 | tail -2"}
+{"timestamp":"20260513T013740Z","command":"pytest -q --tb=short 2>&1 | tail -25"}
+{"timestamp":"20260513T013755Z","command":"pytest -q --tb=no 2>&1 | tail -3 && ruff check . 2>&1 | tail -5"}
+{"timestamp":"20260513T013759Z","command":"pytest -q --tb=short tests/test_marketplace_simulation.py 2>&1 | tail -25"}
+{"timestamp":"20260513T013824Z","command":"pytest -q --tb=short 2>&1 | tail -10 && ruff check . 2>&1 | tail -3"}
+{"timestamp":"20260513T013830Z","command":"ruff check . 2>&1 | head -15"}
+{"timestamp":"20260513T013838Z","command":"ruff check . --fix 2>&1 | tail -3 && ruff check . 2>&1 | tail -3 && pytest -q --tb=no 2>&1 | tail -3"}
+{"timestamp":"20260513T020954Z","command":"pytest -q 2>&1 | tail -8 && ruff check . 2>&1 | tail -3"}
+{"timestamp":"20260513T021815Z","command":"pytest -q 2>&1 | tail -5 && ruff check . 2>&1 | tail -3"}
+{"timestamp":"20260513T021818Z","command":"pytest -q tests/test_run_dir_name.py::test_run_dir_name_unique_across_rapid_calls 2>&1 | tail -25"}
+{"timestamp":"20260513T021826Z","command":"pytest -q 2>&1 | tail -3"}
+{"timestamp":"20260513T023404Z","command":"ls .claude/evidence/ 2>&1 | head -10; echo \"}
+{"timestamp":"20260513T023444Z","iter":"spot_pull_qwen3_moe_fp8","evidence":".claude/evidence/iter01_fp8_download/iter01.md"}
+{"timestamp":"20260513T023444Z","command":"echo \"}

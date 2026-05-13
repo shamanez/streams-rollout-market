@@ -1,7 +1,7 @@
 {
   "spot_pull_qwen3_moe_fp8": {
-    "passes": false,
-    "evidence": null,
+    "passes": true,
+    "evidence": ".claude/evidence/iter01_fp8_download/iter01.md",
     "directive": "### 1. spot_pull_qwen3_moe_fp8: download Qwen/Qwen3-30B-A3B-FP8 to the spot\n\nFetch the FP8 quantized MoE weights from HuggingFace into the spot's `~/hf-cache/`. Use the existing huggingface-cli (or `from huggingface_hub import snapshot_download`) in `~/rmenv-dev/`. Verify the cache layout matches the bf16 model's: `~/hf-cache/hub/models--Qwen--Qwen3-30B-A3B-FP8/snapshots/<sha>/` with `config.json`, `tokenizer.json`, `*.safetensors`. Then create a convenience symlink at `~/checkpoint/qwen3-30b-a3b-fp8/hf` → the snapshot dir (matching the bootstrap layout). Acceptance: `ls ~/checkpoint/qwen3-30b-a3b-fp8/hf/config.json` exists and reports `\"quantization_config\": {\"quant_method\": \"fp8\"...}`."
   },
   "spot_smoke_test_moe_fp8_serve": {
