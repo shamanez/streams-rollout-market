@@ -98,7 +98,7 @@ rm -f /tmp/megatron_router.json /tmp/trainer_megatron-bf16.json 2>/dev/null || \
   sudo rm -f /tmp/megatron_router.json /tmp/trainer_megatron-bf16.json 2>/dev/null || true
 
 docker run --rm \
-  --gpus all --ipc=host \
+  --gpus all \
   --shm-size=64g \
   --ulimit memlock=-1 --ulimit stack=67108864 \
   -v "$CKPT_DIR":/root/Qwen3-30B-A3B_torch_dist:ro \
