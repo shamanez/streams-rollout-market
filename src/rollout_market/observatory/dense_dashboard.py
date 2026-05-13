@@ -34,7 +34,7 @@ from ._dashboard_style import (
     traffic_light_tile,
 )
 from ._device import device_bucket_label
-from ._engine_filter import is_headline_pair
+from ._engine_filter import APPENDIX_HEADER, is_blocked_pair, is_headline_pair
 from ._glossary import render_glossary_card
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -403,12 +403,30 @@ def render_html(dashboard: DenseDashboard) -> str:
     ])
 
     headline_view = _dense_engine_view(headline_aggs, headline_rows, "headline")
-    # Per the inference-only redirect, sglang/HF rows never reach the
-    # rendered HTML. They still flow through `as_dict()` for JSON
-    # consumers, but the public dashboards only show vLLM × {FSDP,
-    # Megatron}. Drop the appendix block from the rendered surface.
-    appendix_block = ""
-    _ = appendix_aggs, appendix_rows  # ingestion side-effect only
+    # Render an "All engines (full data)" appendix for non-headline pairs that
+    # aren't blocked outright (sglang rollouts, HF-as-trainer rows). Blocked
+    # pairs stay out of the rendered HTML entirely per the engine-filter
+    # contract; their data still survives in the underlying JSON.
+    visible_appendix_aggs = [
+        a for a in appendix_aggs if not is_blocked_pair(a.rollout_engine, a.trainer_engine)
+    ]
+    visible_appendix_rows = [
+        r for r in appendix_rows if not is_blocked_pair(r.rollout_engine, r.trainer_engine)
+    ]
+    if visible_appendix_aggs:
+        appendix_view = _dense_engine_view(
+            visible_appendix_aggs, visible_appendix_rows, "appendix"
+        )
+        appendix_block = (
+            "<details data-section=\"all-engines\" class=\"card\" open>"
+            f"<summary><strong>{APPENDIX_HEADER}</strong> — non-headline "
+            f"rollout/trainer pairs ({len(visible_appendix_rows)} run"
+            f"{'s' if len(visible_appendix_rows) != 1 else ''}).</summary>"
+            f"{appendix_view}"
+            "</details>"
+        )
+    else:
+        appendix_block = ""
 
     glossary = render_glossary_card([
         "ESS",
@@ -462,7 +480,8 @@ def render_html(dashboard: DenseDashboard) -> str:
     lede = (
         f"{len(headline_rows)} headline run{'s' if len(headline_rows) != 1 else ''} "
         f"({len(headline_aggs)} engine pair{'' if len(headline_aggs) == 1 else 's'}); "
-        f"{len(appendix_rows)} additional run{'s' if len(appendix_rows) != 1 else ''} "
+        f"{len(visible_appendix_rows)} additional run"
+        f"{'s' if len(visible_appendix_rows) != 1 else ''} "
         f"in the full-engine appendix. Devices observed: {devices_str}. "
         "Numbers are token-level logprob mismatch on the same checkpoint "
         "served by two engines."
