@@ -227,16 +227,32 @@ python -m http.server -d docs 8000 &
 open http://localhost:8000/
 ```
 
-The MoE leg of the pipeline is identical with three substitutions:
-1. step 1 — `Qwen/Qwen3-30B-A3B` instead of `Qwen/Qwen3-32B`
-   (no `--tool-call-parser hermes`, optional `--enable-expert-parallel
-   --enable-return-routed-experts --no-async-scheduling`)
+The MoE leg of the pipeline is identical with four substitutions:
+1. step 1 — serve from the patched dev venv instead of the prod
+   `~/rmenv/`:
+   `bash ~/streams-rollout-market/scripts/live/vllm_serve_moe_dev.sh`.
+   The launcher sources `~/rmenv-dev/` (vllm-0.20.2 wheel with the
+   four-file HTTP-shim patch from
+   `scripts/live/patch_vllm_routed_experts_http.py`) and passes
+   `--enable-return-routed-experts --enable-expert-parallel
+   --no-async-scheduling --enable-auto-tool-choice --tool-call-parser
+   hermes`. The patched shim is what exposes `choices[0].routed_experts`
+   on the OpenAI HTTP response — the field the proxy reads to populate
+   `response_routed_experts` in the sidecar.
 2. steps 4 + 5 — use the `runs/live/agent/hermes/qwen3-30b-a3b/`
    tree and the `qwen3-30b-a3b` index suffix.
-3. step 6 — for the logprob-shift dashboard tile use the SAME
-   `~/streams-rollout-market/scripts/live/run_fsdp_reference.py`
-   (autoloads any HF causal-LM, including Qwen3MoE). Megatron MoE:
+3. step 6 — for the logprob-shift / router-flip dashboard tiles use
+   `~/streams-rollout-market/scripts/live/run_fsdp_moe_reference.py`
+   (drives the MoE forward with `output_router_logits=True`, runs
+   `torch.topk` per layer to recover top-k expert IDs at the same
+   prediction positions vLLM captured). Megatron MoE:
    `bash ~/streams-rollout-market/scripts/live/megatron_moe_reference_launch.sh`.
+4. step 7 — pair via
+   `scripts/live/pair_hermes_moe_reports.py` (router) in addition to
+   `pair_hermes_dense_reports.py` (logprob). The pair script slices
+   the trainer's `[prompt+gen-1, layers, top_k]` trace to the last
+   `len(response_routed_experts)` entries so it aligns with the
+   proxy-trimmed rollout window.
 
 > **Note**: Megatron MoE requires
 > `$CKPT_ROOT/qwen3-30b-a3b/megatron/release/` to contain the
@@ -280,16 +296,27 @@ shell snippets above in order.)
 ### Why this matters (architecture detail)
 
 vLLM 0.20.x's OpenAI HTTP entrypoint emits `prompt_token_ids` +
-per-choice `token_ids` + per-token `logprobs` — that's the entire
-capture surface used here. `routed_experts` is exposed only on the
-native `LLM.generate()` API path in this vLLM version (`grep -rn
-routed_experts vllm/entrypoints/openai/` returns zero hits in 0.20.1
-and 0.20.2). That's why the dashboard's router-flip-rate section is a
-**TBD placeholder** — it will return once we either (a) upgrade vLLM
-to a build that wires routed_experts through the OpenAI shim, or (b)
-add a second native-API forward pass that re-feeds the captured token
-IDs to harvest routing. See `docs/future_research.md` for the planned
-wiring.
+per-choice `token_ids` + per-token `logprobs` out of the box. It does
+**not** emit `routed_experts` on the response — that field only exists
+on the native `LLM.generate()` API. The `routed_experts_replay` docs
+([github](https://github.com/vllm-project/vllm/blob/a7b801e26d6b9d96bb49e939c0b6b3acf1d85796/docs/training/routed_experts_replay.md))
+describe a commit on vLLM main that adds the HTTP-shim wiring, but
+that commit requires a CUDA 13 toolkit (our spot has 12.0).
+`scripts/live/patch_vllm_routed_experts_http.py` is a four-file
+surgical patch that achieves the same outcome on a prebuilt nightly
+wheel: it adds `routed_experts: list[list[list[int]]]` to
+`CompletionResponseChoice` and `ChatCompletionResponseChoice`, and
+threads `output.routed_experts.tolist()` into the three response
+construction sites in the wheel's `entrypoints/openai/` shim.
+
+The patch covers gen-side routing only (the wheel's `RequestOutput`
+does not carry `prompt_routed_experts`). For the marketplace metric
+`router_flip_rate` that is sufficient because the metric runs on
+response tokens. The proxy trims the engine's combined prefill+decode
+routing buffer down to `usage.completion_tokens` entries (the gen
+tail) so the sidecar's `response_routed_experts` is 1:1 with
+`response_token_ids` — the invariant `pair_hermes_moe_reports.py`
+depends on.
 
 ### Hermes-Agent CLI vs minimal_agent_driver.py
 

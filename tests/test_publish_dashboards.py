@@ -62,26 +62,67 @@ def test_rendered_index_headline_has_no_endpoint_dashboard_string():
     assert "Agent trajectory dashboard" in headline
 
 
-def test_rendered_index_router_flip_rate_placeholder_visible():
-    """The expert-routing TBD slot must render in the headline so readers
-    know the metric is coming. Documents the vLLM 0.20.x OpenAI shim
-    limitation (no routed_experts) as the why."""
+def test_rendered_index_hermes_router_matrix_empty_payload_renders_tbd():
+    """With no real router_dashboard payload, the router matrix still
+    renders — both trainer rows fall through to the TBD tile renderer.
+    The legacy yellow ``router-flip-rate-placeholder`` section is gone."""
     card_data = [{**c, "ready": False, "payload": {}} for c in publish_dashboards.CARDS]
     page = publish_dashboards.render_index(card_data)
-    assert 'data-section="router-flip-rate-placeholder"' in page
-    placeholder_start = page.find('data-section="router-flip-rate-placeholder"')
-    section_end = page.find("</section>", placeholder_start)
-    section_html = page[placeholder_start:section_end]
-    assert "Router flip rate" in section_html
-    assert "TBD" in section_html
-    assert "routed_experts" in section_html
-    assert "vLLM" in section_html
-    # The legacy cycle-2 matrices are retired entirely.
-    assert "data-section=\"dense-matrix\"" not in page
-    assert "data-section=\"moe-matrix\"" not in page
+    # New live router matrix is present.
+    assert 'data-section="hermes-agent-moe-router-matrix"' in page
+    matrix_start = page.find('data-section="hermes-agent-moe-router-matrix"')
+    matrix_end = page.find("</section>", matrix_start)
+    matrix_html = page[matrix_start:matrix_end]
+    assert "Hermes Agent — MoE router (Qwen3-30B-A3B)" in matrix_html
+    # Empty payload → both rows are TBD tiles.
+    assert "FSDP" in matrix_html and "MEGATRON" in matrix_html
+    assert matrix_html.count("mx-tbd") >= 2
+    # Old yellow placeholder is gone.
+    assert 'data-section="router-flip-rate-placeholder"' not in page
+    # The legacy cycle-2 matrices stay retired.
+    assert 'data-section="dense-matrix"' not in page
+    assert 'data-section="moe-matrix"' not in page
     # The Hermes Agent matrices remain the headline.
     assert "Hermes Agent — Dense (Qwen3-32B)" in page
     assert "Hermes Agent — MoE (Qwen3-30B-A3B)" in page
+
+
+def test_rendered_index_hermes_router_matrix_with_real_payload():
+    """With a populated router payload, the matrix shows a real
+    flip-rate tile for the FSDP row; Megatron stays TBD until that
+    leg is provisioned. Color band follows the plan thresholds: 3.5%
+    → green."""
+    fsdp_payload = {
+        "engine_pairs": [
+            {
+                "rollout_engine": "hermes-qwen3-30b-a3b-bf16",
+                "trainer_engine": "fsdp-bf16-moe",
+                "count": 1,
+                "mean_router_flip_rate": 0.035,
+                "mean_token_expert_disagreement_rate": 1.0,
+                "worst_layer_flip_rate": 0.136,
+                "total_tokens": 22,
+                "layer_count": 48,
+            }
+        ],
+        "rows": [],
+        "num_runs": 1,
+    }
+    card_data = []
+    for c in publish_dashboards.CARDS:
+        if c["slug"] == "router":
+            card_data.append({**c, "ready": False, "payload": fsdp_payload})
+        else:
+            card_data.append({**c, "ready": False, "payload": {}})
+    page = publish_dashboards.render_index(card_data)
+    matrix_start = page.find('data-section="hermes-agent-moe-router-matrix"')
+    matrix_end = page.find("</section>", matrix_start)
+    matrix_html = page[matrix_start:matrix_end]
+    # FSDP tile carries the green class + percentage value.
+    assert "mx-good" in matrix_html
+    assert "3.50%" in matrix_html
+    # Megatron tile stays TBD.
+    assert "mx-tbd" in matrix_html
 
 
 def test_rendered_index_with_ready_cards_has_no_endpoint_link():

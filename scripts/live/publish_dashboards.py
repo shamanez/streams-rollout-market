@@ -159,13 +159,11 @@ _HEADLINES: dict[str, list[tuple[str, callable]]] = {
             ),
         ),
     ],
-    # The cycle-2 MoE router_flip_rate KPIs (e.g. "7.1% worst top-1 flip
-    # rate") were retired per operator direction 2026-05-12 ("Remove all
-    # the numbers from cycle-2 MoE, I think it was wrong"). The router
-    # card's kpi-row is intentionally empty until the planned native-API
-    # replay path produces fresh Hermes-multi-turn routing numbers — see
-    # the router-flip-rate-placeholder section above the fold and
-    # docs/future_research.md for the wiring.
+    # The MoE router KPIs are surfaced on the headline matrix
+    # (``hermes-agent-moe-router-matrix``) and on the per-pair
+    # ``router_dashboard.html`` detail page. The card kpi-row here is
+    # intentionally empty so the headline matrix is the single source
+    # of truth for flip-rate at the headline level.
     "router": [],
     "dense": [
         (
@@ -579,6 +577,139 @@ def _hermes_logprob_tile(
     )
 
 
+def _hermes_router_tile(
+    *,
+    label: str,
+    pair: dict | None,
+    href: str,
+    column_label: str,
+) -> str:
+    """Hermes-Agent MoE-router tile.
+
+    Shows mean ``router_flip_rate`` (top-1 expert disagreement between
+    rollout and trainer router decisions over response tokens) per
+    engine_pair entry of ``router_dashboard.json``. Color bands match
+    the plan thresholds: green ≤ 5%, amber 5–15%, red > 15%. Bar width
+    encodes the *agreement* fraction (1 − flip_rate) so green tiles
+    visually fill toward the right; that mirrors the ESS tile above
+    where higher is better.
+
+    Missing pair → TBD tile (trainer-force not run for this cell).
+    """
+    if pair is None:
+        return (
+            f'<a class="mx-tile mx-tbd" href="{_html.escape(href)}" '
+            f'data-chart="hermes-router-tile" '
+            f'data-trainer="{_html.escape(label)}" '
+            f'data-column="{_html.escape(column_label)}">'
+            f"<div class='mx-col'>{_html.escape(column_label)}</div>"
+            f"<div class='mx-value'>TBD</div>"
+            f"<div class='mx-bar'><div class='mx-bar-fill' style='width:0%'></div></div>"
+            f"<div class='mx-sub'>no trainer-force run yet</div>"
+            f"</a>"
+        )
+    flip = float(pair.get("mean_router_flip_rate") or 0.0)
+    worst_layer = float(pair.get("worst_layer_flip_rate") or 0.0)
+    count = int(pair.get("count") or 0)
+    total_tokens = int(pair.get("total_tokens") or 0)
+    if flip <= 0.05:
+        kind_class = "good"
+    elif flip <= 0.15:
+        kind_class = "warn"
+    else:
+        kind_class = "bad"
+    bar_pct = max(0.0, min(1.0, 1.0 - flip)) * 100
+    sub = (
+        f"n={count} run(s) · {total_tokens} tok · "
+        f"worst layer {worst_layer * 100:.1f}%"
+    )
+    return (
+        f'<a class="mx-tile mx-{kind_class}" href="{_html.escape(href)}" '
+        f'data-chart="hermes-router-tile" '
+        f'data-trainer="{_html.escape(label)}" '
+        f'data-column="{_html.escape(column_label)}">'
+        f"<div class='mx-col'>{_html.escape(column_label)}</div>"
+        f"<div class='mx-value'>{flip * 100:.2f}%</div>"
+        f"<div class='mx-bar'><div class='mx-bar-fill' style='width:{bar_pct:.1f}%'></div></div>"
+        f"<div class='mx-sub'>{_html.escape(sub)}</div>"
+        f"</a>"
+    )
+
+
+def _select_hermes_router_cells(
+    router_payload: dict,
+    *,
+    rollout_engine: str,
+    trainer_engines: tuple[str, ...] = ("fsdp-bf16-moe", "megatron-bf16-moe"),
+) -> list[tuple[str, dict | None]]:
+    """Per-trainer engine_pair entries from ``router_dashboard.json``.
+
+    Returns ``[(trainer_label, pair_or_None), ...]`` in the order given by
+    ``trainer_engines``. Mirrors ``_select_hermes_logprob_cells`` for the
+    dense-matrix path but reads ``router_dashboard.json``'s
+    ``engine_pairs`` instead.
+    """
+    pairs_by_trainer: dict[str, dict] = {
+        (p.get("trainer_engine") or "").lower(): p
+        for p in router_payload.get("engine_pairs", [])
+        if (p.get("rollout_engine") or "") == rollout_engine
+    }
+    return [(t, pairs_by_trainer.get(t.lower())) for t in trainer_engines]
+
+
+def _render_hermes_router_matrix(
+    *,
+    title: str,
+    section_slug: str,
+    router_payload: dict,
+    rollout_engine: str,
+    detail_href: str,
+    blurb_html: str,
+    trainer_engines: tuple[str, ...] = ("fsdp-bf16-moe", "megatron-bf16-moe"),
+) -> str:
+    """Render the Hermes-Agent MoE-router matrix.
+
+    Same layout as ``_render_hermes_logprob_matrix`` (one row per
+    trainer-ref, single ``bf16 · L40S`` column), but the tile values are
+    ``router_flip_rate`` percentages with thresholds green/amber/red at
+    5% / 15%. Reads ``runs/live/router_dashboard/router_dashboard.json``
+    (the output of ``rollout_market.cli.router_dashboard``), which
+    aggregates every ``runs/live/router/**/router_mismatch_report.json``.
+
+    Tiles missing a (rollout, trainer) cell render as TBD until the
+    operator runs the corresponding teacher-force pass.
+    """
+    cells = _select_hermes_router_cells(
+        router_payload, rollout_engine=rollout_engine, trainer_engines=trainer_engines
+    )
+    grid_html = ["<div class='mx-grid'>"]
+    grid_html.append("<div class='mx-grid-head'>")
+    grid_html.append("<div class='mx-trainer-head'>trainer-ref</div>")
+    grid_html.append("<div class='mx-col-head'>bf16 · L40S</div>")
+    grid_html.append("</div>")
+    for trainer_label, pair in cells:
+        pretty = (trainer_label.split("-")[0] or trainer_label).upper()
+        grid_html.append("<div class='mx-row'>")
+        grid_html.append(f"<div class='mx-trainer'>{_html.escape(pretty)}</div>")
+        grid_html.append(
+            _hermes_router_tile(
+                label=pretty,
+                pair=pair,
+                href=detail_href,
+                column_label=f"{rollout_engine}",
+            )
+        )
+        grid_html.append("</div>")
+    grid_html.append("</div>")
+    return (
+        f'<section class="mx-section" data-section="{section_slug}">'
+        f"<h2>{_html.escape(title)}</h2>"
+        f"<div class='mx-blurb'>{blurb_html}</div>"
+        f"{''.join(grid_html)}"
+        f"</section>"
+    )
+
+
 def _select_hermes_logprob_cells(
     dense_payload: dict,
     *,
@@ -768,6 +899,7 @@ margin:.4rem 0 .35rem 0;overflow:hidden}
 def render_index(card_data: list[dict]) -> str:
     by_slug = {c.get("slug"): c for c in card_data}
     dense_payload = (by_slug.get("dense") or {}).get("payload") or {}
+    router_payload = (by_slug.get("router") or {}).get("payload") or {}
     hermes_dense_blurb = (
         "<p><strong>What this measures.</strong> A real "
         "<a href='https://github.com/NousResearch/hermes-agent'>Hermes-Agent</a> "
@@ -788,10 +920,23 @@ def render_index(card_data: list[dict]) -> str:
         "the Dense matrix above measures — divergence in next-token "
         "predictions between rollout and trainer engines over the agent's "
         "response tokens — applied to MoE forward passes. Router-flip-rate "
-        "(<em>which experts</em> each engine picked) is the placeholder "
-        "section below: it's the marketplace metric for crowdsourced MoE "
-        "rollouts but is gated on vLLM exposing <code>routed_experts</code> "
-        "on the OpenAI HTTP endpoint, which 0.20.x does not.</p>"
+        "(<em>which experts</em> each engine picked) is the matrix below: "
+        "it's the marketplace metric for crowdsourced MoE rollouts.</p>"
+    )
+    hermes_moe_router_blurb = (
+        "<p><strong>Which experts each engine picked.</strong> "
+        "<code>router_flip_rate</code> is the rate at which a rollout's "
+        "top-1 expert disagrees with the trainer's top-1 expert at the "
+        "same <code>(response_token, layer)</code> position over the "
+        "agent's response tokens — the marketplace question for "
+        "crowdsourced MoE rollouts. Color bands: green ≤ 5%, amber 5–15%, "
+        "red &gt; 15%. The rollout side captures routing via the patched "
+        "vLLM HTTP shim and the proxy's <code>response_routed_experts</code> "
+        "trim (kept aligned 1:1 with response tokens); the trainer side "
+        "either runs HF with <code>output_router_logits=True</code> + "
+        "<code>torch.topk</code> on the FSDP side or hooks "
+        "<code>mlp.router</code> per layer on the Megatron side. TBD tiles "
+        "are trainer-force passes still on the queue.</p>"
     )
     # ``dense_payload`` already holds the aggregated dense_dashboard.json
     # (engine_pairs + rows). Both Hermes matrices read from the same
@@ -811,6 +956,14 @@ def render_index(card_data: list[dict]) -> str:
         rollout_engine="hermes-qwen3-30b-a3b-bf16",
         detail_href="dense_dashboard.html",
         blurb_html=hermes_moe_blurb,
+    )
+    hermes_moe_router_matrix = _render_hermes_router_matrix(
+        title="Hermes Agent — MoE router (Qwen3-30B-A3B)",
+        section_slug="hermes-agent-moe-router-matrix",
+        router_payload=router_payload,
+        rollout_engine="hermes-qwen3-30b-a3b-bf16",
+        detail_href="router_dashboard.html",
+        blurb_html=hermes_moe_router_blurb,
     )
     cards_html = []
     for c in card_data:
@@ -866,17 +1019,6 @@ def render_index(card_data: list[dict]) -> str:
         ".kpi .l{font-size:.72rem;color:var(--muted);text-transform:uppercase;"
         "letter-spacing:.04em;margin-top:.1rem}"
         "footer{margin-top:2.5rem;color:var(--muted);font-size:.82rem;text-align:center}"
-        # Router-flip-rate placeholder styling — a visible "TBD" slot in
-        # the dashboard, deliberately not hidden behind a <details>. We
-        # want readers to know the metric is coming, not assume the
-        # MoE-routing story is closed.
-        "section[data-section='router-flip-rate-placeholder']{"
-        "margin-top:2rem;background:#fffbea;border:1px dashed #c4a23a;"
-        "border-radius:14px;padding:1rem 1.25rem}"
-        "section[data-section='router-flip-rate-placeholder']>h2{"
-        "margin:.1rem 0 .6rem 0;font-size:1.1rem;color:#7c5a14}"
-        "section[data-section='router-flip-rate-placeholder'] .tbd-note{"
-        "color:#5a4a14;font-size:.92rem;margin:.4rem 0;line-height:1.55}"
         + _MATRIX_STYLES + "</style></head><body>"
         "<header>"
         "<h1>streams-rollout-market — live dashboards</h1>"
@@ -891,48 +1033,13 @@ def render_index(card_data: list[dict]) -> str:
         # Cycle 3 v2: Hermes-Agent multi-turn matrices carry the headline;
         # the legacy single-prompt Dense matrix moves into a collapsible
         # appendix below the fold per STEER.md's "Hermes-only dashboard"
-        # directive. The cycle-2 single-prompt MoE router_flip_rate
-        # matrix has been retired entirely from the public surface and
-        # replaced with the ``router-flip-rate-placeholder`` slot below.
-        f"{hermes_dense_matrix}{hermes_moe_matrix}"
-        # Router-flip-rate (expert routing) placeholder. Per operator
-        # direction 2026-05-12 the cycle-2 single-prompt MoE
-        # router_flip_rate tiles are removed from the public surface;
-        # the metric returns once we drive the native-API "replay" path
-        # documented in PROGRESS.md (Hermes captures token IDs via the
-        # OpenAI proxy, then a side pass through vLLM's native
-        # ``LLM.generate(prompt_token_ids=...)`` harvests
-        # ``routed_experts`` for those exact tokens — vLLM 0.20.x's
-        # OpenAI HTTP entrypoint does not expose the field). Until then
-        # this section is an explicit TBD slot, not silently empty, so
-        # readers know it's coming.
-        '<section class="matrix-section" data-section="router-flip-rate-placeholder">'
-        "<h2>Router flip rate (TBD)</h2>"
-        "<p class='tbd-note'>"
-        "<strong>Status:</strong> placeholder, returning soon. "
-        "Top-1 expert-id disagreement between rollout and trainer per "
-        "<code>(token, layer)</code> over the MoE response tokens — "
-        "expressed as <strong>router_flip_rate</strong>, the marketplace "
-        "metric for whether crowdsourced MoE rollouts route to the same "
-        "experts the trainer would. The earlier cycle-2 single-prompt "
-        "numbers (4.3%/7.1%/4.1%/6.3% across the four <code>(rollout, "
-        "trainer)</code> cells) have been retired pending a "
-        "multi-turn-agent re-run on the cycle-3 v2 pipeline."
-        "</p>"
-        "<p class='tbd-note'>"
-        "<strong>Why TBD:</strong> vLLM 0.20.x's OpenAI HTTP entrypoint "
-        "does not emit <code>routed_experts</code> on the response shape "
-        "(verified on 0.20.1 and 0.20.2: <code>grep -rn routed_experts "
-        "vllm/entrypoints/openai/</code> returns zero hits). The field "
-        "is only available on the native <code>LLM.generate()</code> "
-        "API path (which <code>~/run_vllm_moe_rollout.py</code> uses "
-        "for cycle-2). For Hermes-Agent multi-turn captures we need a "
-        "second native-API forward pass over the captured "
-        "<code>(prompt_token_ids + response_token_ids)</code> to "
-        "harvest the routing trace — see <code>PROGRESS.md</code> "
-        "and <code>docs/future_research.md</code> for the planned wiring."
-        "</p>"
-        "</section>"
+        # directive. The MoE-router matrix now ships live alongside the
+        # logprob-shift matrix (the wheel + HTTP-shim patch from iter 01
+        # enables the rollout side; the FSDP forward provides the
+        # trainer side). Megatron tile renders as TBD until the
+        # ~/checkpoint/qwen3-30b-a3b/megatron/release/ distcp shards
+        # are restored on the spot.
+        f"{hermes_dense_matrix}{hermes_moe_matrix}{hermes_moe_router_matrix}"
         f"<div class='grid'>{''.join(cards_html)}</div>"
         "<footer>Generated from runs/live/. Each dashboard is regenerated by running the "
         "lab + dashboard CLIs in the source repo. <a href='glossary.html' "
