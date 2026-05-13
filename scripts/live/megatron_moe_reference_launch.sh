@@ -81,9 +81,18 @@ fi
 # `../../blobs/<hash>` outside the mount, so a naive bind-mount makes
 # `tokenizer.json` etc. unreadable inside the container. Dereference
 # into a flat directory and bind-mount that instead.
-HF_FLAT="$(mktemp -d)"
-chmod -R a+rwx "$HF_FLAT"
-cp -rL "$HF_MODEL_DIR"/. "$HF_FLAT"/
+#
+# HF_FLAT_REUSE: optional preexisting dereferenced HF dir (e.g.
+# ~/hf-flat-qwen3-30b-a3b-bf16) — skips the ~60 s cp -rL when set,
+# letting multiple back-to-back launches reuse one dereferenced copy.
+if [[ -n "${HF_FLAT_REUSE:-}" && -f "${HF_FLAT_REUSE}/config.json" ]]; then
+  HF_FLAT="$HF_FLAT_REUSE"
+  echo "[launch] reusing HF_FLAT_REUSE=$HF_FLAT (skipping cp -rL)"
+else
+  HF_FLAT="$(mktemp -d)"
+  chmod -R a+rwx "$HF_FLAT"
+  cp -rL "$HF_MODEL_DIR"/. "$HF_FLAT"/
+fi
 
 echo "[launch] CKPT_DIR=$CKPT_DIR"
 echo "[launch] ROLLOUT_FILE_HOST=$ROLLOUT_FILE_HOST"
