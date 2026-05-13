@@ -15,8 +15,8 @@
     "directive": "Spot — start the existing capture proxy on port 8001 (unchanged).\n\n`scripts/live/logprob_capture_proxy.py` already extracts `choice.routed_experts` and `rsp.prompt_routed_experts` into the sidecar JSONL. No code change. Smoke-test with `curl http://localhost:8001/v1/chat/completions` and confirm the sidecar entry has a non-null `response_routed_experts` of shape `[gen_len, 48, 8]`.\n\nVerification (from plan §Verification step 3): drive one chat-completions request via curl on port 8001, then `tail -1 /tmp/hermes_probes.jsonl` and confirm `response_routed_experts` and `prompt_routed_experts` are populated."
   },
   "spot_drive_no_op_trivia": {
-    "passes": false,
-    "evidence": null,
+    "passes": true,
+    "evidence": ".claude/evidence/iter04_drive_no_op_trivia/iter04.md",
     "directive": "Spot — drive `no-op-trivia` through `minimal_agent_driver.py` (unchanged).\n\nAlready non-streaming (the hermes CLI is streaming and would lose the routed_experts top-level field, since the docs note streaming is unsupported). One command, identical to the dense Hermes recipe but with `--model Qwen/Qwen3-30B-A3B` and the MoE trajectory dir.\n\nUse `--base-url http://localhost:8001 --model Qwen/Qwen3-30B-A3B --tasks scripts/live/agent_tasks_hermes.json --task-id no-op-trivia --out /tmp/minimal_sharegpt.jsonl --max-steps 5 --max-tokens 512 --timeout 180`."
   },
   "laptop_merge_probes": {
