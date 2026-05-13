@@ -35,8 +35,8 @@
     "directive": "### 7. laptop_pair_all_reports\n\nPull all four trainer outputs to the laptop. Run `pair_hermes_moe_reports.py` four times with the matching `--rollout-engine-label hermes-qwen3-30b-a3b-{bf16,fp8}` and `--trainer-engine-label {fsdp,megatron}-bf16-moe`. This produces 4 × 6 = 24 `router_mismatch_report.json` files under `runs/live/router/<rollout-vs-trainer>/<run>/`. Acceptance: 24 reports written, all with `router_flip_rate` and `token_expert_disagreement_rate` populated."
   },
   "laptop_aggregate_republish_2x2_matrix": {
-    "passes": false,
-    "evidence": null,
+    "passes": true,
+    "evidence": ".claude/evidence/iter08_2x2_matrix/iter08.md",
     "directive": "### 8. laptop_aggregate_republish_2x2_matrix\n\nRe-aggregate via `python -m rollout_market.cli.router_dashboard --reports-glob 'runs/live/router/**/router_mismatch_report.json' --out-dir runs/live/router_dashboard`. The aggregator already keys on `(rollout_engine, trainer_engine)` pairs, so the 2x2 matrix populates automatically. Republish via `publish_dashboards.py`. Update `_select_hermes_router_cells` in publish_dashboards.py if a new column header (`bf16 + fp8 - L40S`) is required. Acceptance: `docs/index.html` shows a 2x2 router matrix with 4 traffic-light tiles, each tile reporting `n >= 3 run(s)` and a flip-rate value; `docs/router_dashboard.html` shows per-precision per-trainer breakdown; tests + ruff green."
   }
 }

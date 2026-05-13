@@ -642,43 +642,61 @@ def _render_hermes_router_matrix(
     title: str,
     section_slug: str,
     router_payload: dict,
-    rollout_engine: str,
+    rollout_engines: tuple[str, ...] = ("hermes-qwen3-30b-a3b-bf16",),
     detail_href: str,
     blurb_html: str,
     trainer_engines: tuple[str, ...] = ("fsdp-bf16-moe", "megatron-bf16-moe"),
+    column_labels: tuple[str, ...] | None = None,
 ) -> str:
     """Render the Hermes-Agent MoE-router matrix.
 
     Same layout as ``_render_hermes_logprob_matrix`` (one row per
-    trainer-ref, single ``bf16 · L40S`` column), but the tile values are
-    ``router_flip_rate`` percentages with thresholds green/amber/red at
-    5% / 15%. Reads ``runs/live/router_dashboard/router_dashboard.json``
-    (the output of ``rollout_market.cli.router_dashboard``), which
-    aggregates every ``runs/live/router/**/router_mismatch_report.json``.
+    trainer-ref) but with one column per *rollout precision* — so the
+    cycle-FP8 layout becomes 2 cols (bf16, fp8) × 2 rows (FSDP,
+    Megatron). The tile values are ``router_flip_rate`` percentages
+    with thresholds green/amber/red at 5% / 15%. Reads
+    ``runs/live/router_dashboard/router_dashboard.json`` (output of
+    ``rollout_market.cli.router_dashboard``).
 
     Tiles missing a (rollout, trainer) cell render as TBD until the
     operator runs the corresponding teacher-force pass.
     """
-    cells = _select_hermes_router_cells(
-        router_payload, rollout_engine=rollout_engine, trainer_engines=trainer_engines
-    )
+    # Resolve column header labels — default to the engine slug.
+    if column_labels is None:
+        column_labels = tuple(
+            r.removeprefix("hermes-qwen3-30b-a3b-") + " · L40S" for r in rollout_engines
+        )
+    assert len(column_labels) == len(rollout_engines), "column_labels mismatch"
+
+    # cells_by_rollout[rollout_engine] -> [(trainer_label, pair_or_None), ...]
+    cells_by_rollout: dict[str, list[tuple[str, dict | None]]] = {
+        r: _select_hermes_router_cells(
+            router_payload, rollout_engine=r, trainer_engines=trainer_engines
+        )
+        for r in rollout_engines
+    }
+
     grid_html = ["<div class='mx-grid'>"]
     grid_html.append("<div class='mx-grid-head'>")
     grid_html.append("<div class='mx-trainer-head'>trainer-ref</div>")
-    grid_html.append("<div class='mx-col-head'>bf16 · L40S</div>")
+    for col_label in column_labels:
+        grid_html.append(f"<div class='mx-col-head'>{_html.escape(col_label)}</div>")
     grid_html.append("</div>")
-    for trainer_label, pair in cells:
+
+    for trainer_idx, (trainer_label, _) in enumerate(cells_by_rollout[rollout_engines[0]]):
         pretty = (trainer_label.split("-")[0] or trainer_label).upper()
         grid_html.append("<div class='mx-row'>")
         grid_html.append(f"<div class='mx-trainer'>{_html.escape(pretty)}</div>")
-        grid_html.append(
-            _hermes_router_tile(
-                label=pretty,
-                pair=pair,
-                href=detail_href,
-                column_label=f"{rollout_engine}",
+        for rollout_engine in rollout_engines:
+            pair = cells_by_rollout[rollout_engine][trainer_idx][1]
+            grid_html.append(
+                _hermes_router_tile(
+                    label=pretty,
+                    pair=pair,
+                    href=detail_href,
+                    column_label=rollout_engine,
+                )
             )
-        )
         grid_html.append("</div>")
     grid_html.append("</div>")
     return (
@@ -971,7 +989,11 @@ def render_index(card_data: list[dict]) -> str:
         title="Hermes Agent — MoE router (Qwen3-30B-A3B)",
         section_slug="hermes-agent-moe-router-matrix",
         router_payload=router_payload,
-        rollout_engine="hermes-qwen3-30b-a3b-bf16",
+        rollout_engines=(
+            "hermes-qwen3-30b-a3b-bf16",
+            "hermes-qwen3-30b-a3b-fp8",
+        ),
+        column_labels=("vLLM bf16 · L40S", "vLLM fp8 · L40S"),
         detail_href="router_dashboard.html",
         blurb_html=hermes_moe_router_blurb,
     )
