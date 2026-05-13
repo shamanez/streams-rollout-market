@@ -167,10 +167,16 @@ def test_router_dashboard_is_graphs_first():
     _headline_assertions(page)
 
 
-def test_agent_dashboard_is_graphs_first():
+def test_agent_dashboard_is_plain_viewer_not_graphs_first():
+    """The agent page is now a plain trajectory viewer — no Chart.js
+    canvas, no traffic-light row, no raw-numbers details/table. Those
+    were comparison-mode artefacts; the viewer is intentionally
+    plain."""
     dashboard = build_agent_dashboard([_agent(1), _agent(2)])
-    page = render_agent_html(dashboard)
-    _headline_assertions(page)
+    page = render_agent_html(dashboard, trajectory_dir="/tmp/_nonexistent_agent_dir_")
+    assert "Agent trajectory viewer" in page
+    assert "<canvas" not in page
+    assert "data-chart=\"traffic-light-row\"" not in page
 
 
 def test_marketplace_simulation_is_graphs_first():
@@ -179,11 +185,14 @@ def test_marketplace_simulation_is_graphs_first():
 
 
 def test_traffic_light_tile_appears_in_headline_dashboards():
-    """The three matrix dashboards must emit a row of traffic-light tiles."""
+    """The matrix dashboards must emit a row of traffic-light tiles.
+
+    The agent page is excluded — it's a plain trajectory viewer now,
+    not a comparison matrix.
+    """
     for builder, reports, renderer in [
         (build_dense_dashboard, [_dense(1)], render_dense_html),
         (build_router_dashboard, [_router(1)], render_router_html),
-        (build_agent_dashboard, [_agent(1)], render_agent_html),
     ]:
         dashboard = builder(reports)
         page = renderer(dashboard)

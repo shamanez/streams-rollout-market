@@ -288,10 +288,15 @@ def test_router_dashboard_buckets_missing_device():
     assert "<th>device</th>" in page
 
 
-def test_agent_dashboard_buckets_missing_device():
-    rep = compute_trajectory_divergence(_trajectory("vllm"), _trajectory("fsdp"))
-    dashboard = build_agent_dashboard([rep])
-    page = render_agent_html(dashboard)
-    assert "Devices observed" in page
-    assert DEFAULT_DEVICE_BUCKET in page
-    assert "<th>device</th>" in page
+def test_agent_dashboard_viewer_renders_empty_state():
+    """The agent page is now a plain trajectory viewer, not a
+    comparison dashboard — the device-axis comparison tables are
+    gone. With no trajectories on disk the viewer emits the
+    empty-state message instead."""
+    dashboard = build_agent_dashboard([])
+    page = render_agent_html(dashboard, trajectory_dir="/tmp/_nonexistent_agent_dir_")
+    assert "Agent trajectory viewer" in page
+    assert "Captured trajectories (0)" in page
+    # Comparison-era tables are gone.
+    assert "<th>device</th>" not in page
+    assert "Devices observed" not in page
