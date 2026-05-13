@@ -1,42 +1,37 @@
 {
-  "spot_pull_qwen3_moe_fp8": {
-    "passes": true,
-    "evidence": ".claude/evidence/iter01_fp8_download/iter01.md",
-    "directive": "### 1. spot_pull_qwen3_moe_fp8: download Qwen/Qwen3-30B-A3B-FP8 to the spot\n\nFetch the FP8 quantized MoE weights from HuggingFace into the spot's `~/hf-cache/`. Use the existing huggingface-cli (or `from huggingface_hub import snapshot_download`) in `~/rmenv-dev/`. Verify the cache layout matches the bf16 model's: `~/hf-cache/hub/models--Qwen--Qwen3-30B-A3B-FP8/snapshots/<sha>/` with `config.json`, `tokenizer.json`, `*.safetensors`. Then create a convenience symlink at `~/checkpoint/qwen3-30b-a3b-fp8/hf` → the snapshot dir (matching the bootstrap layout). Acceptance: `ls ~/checkpoint/qwen3-30b-a3b-fp8/hf/config.json` exists and reports `\"quantization_config\": {\"quant_method\": \"fp8\"...}`."
+  "bundle_operator_serve_kit": {
+    "passes": false,
+    "evidence": null,
+    "directive": "### 1. bundle_operator_serve_kit: package the serve script for a remote operator\n\nBundle exactly what a third-party GPU operator needs to start serving Qwen3-30B-A3B with the `routed_experts` HTTP shim: `vllm_serve_moe_dev.sh`, `patch_vllm_routed_experts_http.py`, and a short `OPERATOR_QUICKSTART.md` that lists the prerequisites (Python 3.12, CUDA driver, a venv recipe) and the three commands they actually run (create venv, apply patch, source venv + serve). Write a `scripts/live/operator_kit/` directory or a `make operator-kit` target that produces a self-contained tarball at `/tmp/operator_kit.tgz`. Acceptance: `tar tzf /tmp/operator_kit.tgz` lists at least the three files; the README explains why each step is needed."
   },
-  "spot_smoke_test_moe_fp8_serve": {
-    "passes": true,
-    "evidence": ".claude/evidence/iter02_fp8_smoke/iter02.md",
-    "directive": "### 2. spot_smoke_test_moe_fp8_serve: vLLM-dev FP8 serve + routed_experts probe\n\nAdapt `scripts/live/vllm_serve_moe_dev.sh` (or write a sibling `vllm_serve_moe_fp8_dev.sh`) to launch Qwen3-30B-A3B-FP8 with the patched dev wheel, `--enable-return-routed-experts`, `--enable-expert-parallel`, `--no-async-scheduling`. After `/v1/models` returns 200, call `/v1/chat/completions` directly with a single user turn and verify the response carries `choices[0].routed_experts` with shape `[gen_tokens, 48, 8]`. Acceptance: routed_experts shape correct, GPU memory usage roughly half of the bf16 case (FP8 is half the precision width)."
+  "client_side_capture_driver": {
+    "passes": false,
+    "evidence": null,
+    "directive": "### 2. client_side_capture_driver: new driver that extracts probes from response JSON\n\nWrite `scripts/live/remote_capture_driver.py` — same OpenAI tool-using loop as `minimal_agent_driver.py` but reads `choices[0].routed_experts`, `prompt_token_ids`, `choices[0].token_ids`, and `choices[0].logprobs.token_logprobs` directly from each chat completion response and emits one line per assistant turn to a local sidecar JSONL — same shape as the existing `logprob_capture_proxy.py` writes (so downstream `merge_probes_into_trajectories.py` consumes it unchanged). Acceptance: a unit test under `tests/test_remote_capture_driver.py` mocks a chat completion response and verifies the sidecar JSONL shape matches `extract_probes`'s output schema field-for-field."
   },
-  "spot_drive_fp8_task_batch": {
-    "passes": true,
-    "evidence": ".claude/evidence/iter03_fp8_batch/iter03.md",
-    "directive": "### 4. spot_drive_fp8_task_batch: capture matching fp8 MoE trajectories (run FIRST after iter 2 re-sort, while FP8 serve is hot)\n\nRepeat iter 3 against the FP8 serve from iter 2 over the *same* 6 tasks. Output trajectories under `runs/live/agent/hermes/qwen3-30b-a3b/fp8/` (note the `/fp8/` subdir keeps the precision in the path). Build `/tmp/rollouts_fp8.json`. Acceptance: 6 fp8 trajectory JSONs, all with `response_routed_experts` populated."
+  "tunnel_smoke_against_spot": {
+    "passes": false,
+    "evidence": null,
+    "directive": "### 3. tunnel_smoke_against_spot: SSH-forward the spot's :8000 and verify\n\nSet up an SSH local port-forward (`ssh -fNL 8001:localhost:8000 my-vllm-spot-instance`) so the laptop's `localhost:8001` reaches the spot's vLLM. Start `vllm_serve_moe_dev.sh` on the spot, drive the new client-capture driver against `http://localhost:8001` from the laptop on one task (`no-op-trivia`), and confirm the resulting sidecar JSONL is byte-equivalent to what the proxy would have written (modulo timestamps and request_ids). Acceptance: a single trajectory captured fully client-side, with `response_routed_experts` shape `[gen_tokens, 48, 8]` and `response_logprobs` length = `response_token_ids` length."
   },
-  "spot_drive_bf16_task_batch": {
-    "passes": true,
-    "evidence": ".claude/evidence/iter04_bf16_batch/iter04.md",
-    "directive": "### 3. spot_drive_bf16_task_batch: capture 4-6 bf16 MoE trajectories (run AFTER FP8 batch — switch launchers, kept proxy running)\n\nDrive the bf16 MoE (the existing `vllm_serve_moe_dev.sh` path) via `minimal_agent_driver.py` against a fixed task list — pick 4 tasks from `scripts/live/agent_tasks_hermes.json` (e.g. `math-tokens-per-gpu-day`, `code-fix-factorial`, `mixed-research-and-math`, `plan-3step-experiment`) plus the 2 `agent_tasks_cwc_repo.json` tasks = 6 tasks total. Run each one through the proxy on port 8001 so per-token logprobs + routed_experts land in `/tmp/hermes_probes.jsonl`. Merge into `runs/live/agent/hermes/qwen3-30b-a3b/bf16/` and build `/tmp/rollouts_bf16.json` for the trainer side. Acceptance: 6 trajectory JSONs under `runs/live/agent/hermes/qwen3-30b-a3b/bf16/` each with non-null `response_routed_experts`."
+  "drive_6_task_batch_remote_style": {
+    "passes": false,
+    "evidence": null,
+    "directive": "### 4. drive_6_task_batch_remote_style: capture the cycle-FP8 task set client-side\n\nRe-run the 6-task batch from cycle FP8 (4 hermes + 2 cwc) through the SSH tunnel, captured client-side. Write trajectories to `runs/live/agent/remote/qwen3-30b-a3b/bf16/` so they don't trample the existing local-rollout dir. Build a corresponding `/tmp/rollouts_remote_bf16.json`. Acceptance: 6 trajectory JSONs, each with non-null `response_routed_experts` on every assistant turn."
   },
-  "spot_fsdp_teacher_force_both_precisions": {
-    "passes": true,
-    "evidence": ".claude/evidence/iter05_fsdp_both/iter05.md",
-    "directive": "### 5. spot_fsdp_teacher_force_both_precisions\n\nPush both `/tmp/rollouts_bf16.json` and `/tmp/rollouts_fp8.json` through `scripts/live/run_fsdp_moe_reference.py`. The trainer always runs in **bf16** (FSDP weights are loaded from the bf16 HF dir; we only vary the rollout side). Outputs: `/tmp/trainers_fsdp_moe_bf16_rollouts.json` and `/tmp/trainers_fsdp_moe_fp8_rollouts.json` plus their `_router.json` siblings. Acceptance: each output has shape `[gen_tokens, 48, 8]` matching the corresponding rollout window."
+  "teacher_force_remote_rollouts": {
+    "passes": false,
+    "evidence": null,
+    "directive": "### 5. teacher_force_remote_rollouts: FSDP + Megatron over the remote batch\n\nPush `/tmp/rollouts_remote_bf16.json` through both `run_fsdp_moe_reference.py` and `megatron_moe_reference_launch.sh` on the spot (the same scripts cycle FP8 used; trainer is always bf16). Reuse `HF_FLAT_REUSE=~/hf-flat-qwen3-30b-a3b-bf16` so the Megatron container starts in under a minute. Outputs: `/tmp/trainers_fsdp_moe_remote_bf16.json` and `/tmp/megatron_router-remote_bf16.json`. Acceptance: both written, shape matches the local-rollout outputs of cycle FP8 iters 5+6."
   },
-  "spot_megatron_teacher_force_both_precisions": {
-    "passes": true,
-    "evidence": ".claude/evidence/iter06_megatron_both/iter06.md",
-    "directive": "### 6. spot_megatron_teacher_force_both_precisions\n\nSame as iter 5 but Megatron. Write `/tmp/rollout.json` for the bf16 batch first, run `megatron_moe_reference_launch.sh`, capture `/tmp/trainer_megatron-bf16-moe-bf16-rollouts.json` and `/tmp/megatron_router-bf16-rollouts.json`. Repeat with the fp8 batch. Use the same patched launcher (already fixed to dereference HF symlinks). Acceptance: both batches produce valid router traces."
+  "pair_remote_results": {
+    "passes": false,
+    "evidence": null,
+    "directive": "### 6. pair_remote_results: pair the 2 remote × trainer combos\n\nRun `pair_hermes_moe_reports.py` twice — once for FSDP, once for Megatron — against the remote rollouts and trainer outputs. Engine label `hermes-qwen3-30b-a3b-bf16-remote` so the dashboard can tell the rows apart from the existing local-rollout cells. Out under `runs/live/router/hermes-qwen3-30b-a3b-bf16-remote-vs-...`. Acceptance: ~12 `router_mismatch_report.json` files written; each has `router_flip_rate` populated."
   },
-  "laptop_pair_all_reports": {
-    "passes": true,
-    "evidence": ".claude/evidence/iter07_pair_all/iter07.md",
-    "directive": "### 7. laptop_pair_all_reports\n\nPull all four trainer outputs to the laptop. Run `pair_hermes_moe_reports.py` four times with the matching `--rollout-engine-label hermes-qwen3-30b-a3b-{bf16,fp8}` and `--trainer-engine-label {fsdp,megatron}-bf16-moe`. This produces 4 × 6 = 24 `router_mismatch_report.json` files under `runs/live/router/<rollout-vs-trainer>/<run>/`. Acceptance: 24 reports written, all with `router_flip_rate` and `token_expert_disagreement_rate` populated."
-  },
-  "laptop_aggregate_republish_2x2_matrix": {
-    "passes": true,
-    "evidence": ".claude/evidence/iter08_2x2_matrix/iter08.md",
-    "directive": "### 8. laptop_aggregate_republish_2x2_matrix\n\nRe-aggregate via `python -m rollout_market.cli.router_dashboard --reports-glob 'runs/live/router/**/router_mismatch_report.json' --out-dir runs/live/router_dashboard`. The aggregator already keys on `(rollout_engine, trainer_engine)` pairs, so the 2x2 matrix populates automatically. Republish via `publish_dashboards.py`. Update `_select_hermes_router_cells` in publish_dashboards.py if a new column header (`bf16 + fp8 - L40S`) is required. Acceptance: `docs/index.html` shows a 2x2 router matrix with 4 traffic-light tiles, each tile reporting `n >= 3 run(s)` and a flip-rate value; `docs/router_dashboard.html` shows per-precision per-trainer breakdown; tests + ruff green."
+  "dashboard_add_remote_row": {
+    "passes": false,
+    "evidence": null,
+    "directive": "### 7. dashboard_add_remote_row: render the remote-rollout row on the matrix\n\nExtend `_render_hermes_router_matrix` (or add a sibling section) to include a second matrix labelled \"Remote-served rollouts (over HTTP, client-side capture)\" with one row per trainer × `hermes-qwen3-30b-a3b-bf16-remote` column. Republish. Acceptance: `docs/index.html` shows BOTH the existing local matrix and a new remote matrix; the remote-rollout flip rates agree with the local-rollout ones to within 1 pp on the same trainer (a strong plumbing-consistency check). Tests + ruff green."
   }
 }
