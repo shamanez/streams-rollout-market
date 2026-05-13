@@ -1,13 +1,62 @@
 # PROGRESS.md — Agent Handoff State
 
 ## Last updated
-2026-05-13 — **cycle FP8 complete** (2nd autonomous cycle on this
-repo). STEER.md retired. All eight queue entries `passes:true`.
+2026-05-13 — **cycle Remote-vLLM in progress**: 2 of 7 iterations
+landed (operator kit + client-side capture driver). Operator paused
+mid-cycle to resume in a new session. Cycle FP8 (the previous one)
+remains complete and merged.
 
-## Status
-Idle. The 2×2 router matrix on `docs/index.html` is now populated
-end-to-end: bf16 + fp8 vLLM rollouts × FSDP-bf16 + Megatron-bf16
-trainers. Spot is torn down (3 MiB / GPU).
+## Status — to resume
+
+Next iteration: **iter 3 `tunnel_smoke_against_spot`** (see
+STEER.md). To resume the cycle in a fresh session:
+
+```bash
+/autonomous-loop
+```
+
+The loop reads STEER.md + `.claude/feature-results.json` and picks
+the first `passes:false` entry — which is iter 3.
+
+### What iter 3 needs
+
+* Spot powered on with vLLM-MoE bf16 serving on port 8000. Start
+  it with:
+  ```bash
+  ssh my-vllm-spot-instance 'cd ~ && tmux new-session -d -s vllm \
+      bash ~/streams-rollout-market/scripts/live/vllm_serve_moe_dev.sh'
+  ```
+* Laptop-side SSH local port-forward so `localhost:8001` reaches
+  the spot's `:8000` (proves the over-HTTP capture path):
+  ```bash
+  ssh -fNL 8001:localhost:8000 my-vllm-spot-instance
+  ```
+* The new client-side driver (`scripts/live/remote_capture_driver.py`)
+  pointed at `http://localhost:8001` with one task
+  (`no-op-trivia`), then verify the sidecar JSONL line has
+  `response_routed_experts` shape `[gen_tokens, 48, 8]` and
+  `response_logprobs` length matching `response_token_ids`.
+
+After iter 3, iters 4–7 are straightforward (drive 6-task batch,
+teacher-force locally on spot, pair, dashboard).
+
+## Cycle Remote-vLLM iterations (in order)
+
+1. `bundle_operator_serve_kit` ✓ — operator quickstart + tarball
+   build script under `scripts/live/operator_kit/`.
+2. `client_side_capture_driver` ✓ — `scripts/live/remote_capture_driver.py`
+   + 2 unit tests verifying the sidecar shape matches the proxy's
+   `extract_probes` output exactly.
+3. `tunnel_smoke_against_spot` ← **resume here**
+4. `drive_6_task_batch_remote_style`
+5. `teacher_force_remote_rollouts`
+6. `pair_remote_results`
+7. `dashboard_add_remote_row`
+
+## Cycle FP8 final result (the matrix)
+
+|              | vLLM bf16 rollout | vLLM fp8 rollout |
+|--------------|------------------:|-----------------:|
 
 ## Cycle FP8 final result (the matrix)
 
