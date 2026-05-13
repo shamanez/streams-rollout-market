@@ -53,3 +53,4 @@
 {"timestamp":"20260513T023404Z","command":"ls .claude/evidence/ 2>&1 | head -10; echo \"}
 {"timestamp":"20260513T023444Z","iter":"spot_pull_qwen3_moe_fp8","evidence":".claude/evidence/iter01_fp8_download/iter01.md"}
 {"timestamp":"20260513T023444Z","command":"echo \"}
+{"timestamp":"20260513T023905Z","iter":"spot_smoke_test_moe_fp8_serve","evidence":".claude/evidence/iter02_fp8_smoke/iter02.md"}
