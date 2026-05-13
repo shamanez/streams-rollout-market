@@ -85,14 +85,6 @@ def _agent_summary(payload: dict) -> str:
     return " | ".join(parts)
 
 
-def _market_summary(payload: dict) -> str:
-    return (
-        f"jobs={payload.get('jobs_total', 0)}, "
-        f"submissions={payload.get('submissions', 0)}, "
-        f"by_state={payload.get('livestore_by_state', {})}"
-    )
-
-
 CARDS = [
     {
         "slug": "dense",
@@ -112,19 +104,11 @@ CARDS = [
     },
     {
         "slug": "agent",
-        "title": "Agent trajectory dashboard",
-        "blurb": "Multi-step tool-using Qwen3-32B runs across 4 engine cells: first-divergence step, tool-call Jaccard, final-answer match rate.",
+        "title": "Agent trajectory viewer",
+        "blurb": "Click through to inspect one captured Hermes-Agent trajectory turn-by-turn — the prompt, the response tokens vLLM generated, and the tool calls embedded in the response. The training-inference mismatch on these tokens is what the matrices above measure.",
         "html_src": "agent_dashboard/agent_dashboard.html",
         "json_src": "agent_dashboard/agent_dashboard.json",
         "summary_fn": _agent_summary,
-    },
-    {
-        "slug": "marketplace",
-        "title": "Marketplace simulation",
-        "blurb": "Synthetic 7-worker simulation (honest / noisy / stale / 4 toxic) driving the full validators + OPBC + LiveStore + audit stack.",
-        "html_glob": "../*/marketplace_simulation.html",
-        "json_glob": "../*/marketplace_simulation.json",
-        "summary_fn": _market_summary,
     },
 ]
 
@@ -145,20 +129,12 @@ def _resolve_html_json(card: dict) -> tuple[Path, Path] | None:
 
 
 _HEADLINES: dict[str, list[tuple[str, callable]]] = {
-    "agent": [
-        (
-            "worst answer-match rate",
-            lambda p: (
-                f"{min((x['final_answer_match_rate'] for x in p.get('engine_pairs', [])), default=0) * 100:.0f}%"
-            ),
-        ),
-        (
-            "worst tool-jaccard",
-            lambda p: (
-                f"{min((x['mean_tool_call_jaccard'] for x in p.get('engine_pairs', [])), default=0):.2f}"
-            ),
-        ),
-    ],
+    # Agent card is a trajectory viewer, not a metric card — no KPIs.
+    # Trainer-inference mismatch is captured by the dense/router
+    # matrices above; tool-call / answer-match details are not part
+    # of the "what could differ between inference and training"
+    # framing (trainer only sees the tokens the rollout generated).
+    "agent": [],
     # The MoE router KPIs are surfaced on the headline matrix
     # (``hermes-agent-moe-router-matrix``) and on the per-pair
     # ``router_dashboard.html`` detail page. The card kpi-row here is
@@ -167,19 +143,23 @@ _HEADLINES: dict[str, list[tuple[str, callable]]] = {
     "router": [],
     "dense": [
         (
+            # ESS = Effective Sample Size. Sequence-level usability:
+            # the fraction of the response the trainer can reuse after
+            # importance correction. One bad token tanks the whole
+            # sequence's ESS.
             "worst ESS",
             lambda p: f"{min((x['mean_ess'] for x in p.get('engine_pairs', [])), default=0):.4f}",
         ),
         (
-            "worst max|log_ratio|",
+            # Worst single-token spike across the response — the
+            # sequence-level complement to ESS. ESS averages; this
+            # catches one catastrophic token even when the average
+            # looks fine.
+            "worst-token |Δlogprob|",
             lambda p: (
                 f"{max((x['worst_max_abs_log_ratio'] for x in p.get('engine_pairs', [])), default=0):.3f}"
             ),
         ),
-    ],
-    "marketplace": [
-        ("submissions", lambda p: str(p.get("submissions", 0))),
-        ("rejected", lambda p: str(p.get("livestore_by_state", {}).get("rejected", 0))),
     ],
 }
 
@@ -905,38 +885,68 @@ def render_index(card_data: list[dict]) -> str:
         "<a href='https://github.com/NousResearch/hermes-agent'>Hermes-Agent</a> "
         "multi-turn trajectory captured through the proxy at "
         "<code>scripts/live/logprob_capture_proxy.py</code>, then "
-        "teacher-forced through FSDP and Megatron in bf16. Each tile reports "
-        "the mean <strong>ESS</strong> over the agent's response tokens — "
-        "how usable that rollout would be for off-policy training. Green "
-        "(ESS &gt; 0.99) means rollout and trainer agree token-for-token; "
-        "amber (0.95–0.99) means the trainer needs stronger off-policy "
-        "correction; red (&lt; 0.95) means the rollout would be dropped. "
-        "TBD tiles are trainer-force passes still on the queue.</p>"
+        "teacher-forced through FSDP and Megatron in bf16 over the "
+        "<em>same</em> token IDs the rollout produced. The trainer only "
+        "ever sees those tokens, so the relevant question is whether the "
+        "two engines assign each token the same probability.</p>"
+        "<p><strong>Per-token</strong> mismatch is the gap "
+        "<code>|logπ_trainer(r_t) − logπ_rollout(r_t)|</code> at each "
+        "response position. <strong>Sequence-level</strong> mismatch is "
+        "the tile value: <strong>ESS</strong> = <em>Effective Sample "
+        "Size</em>, the fraction of the response the trainer can reuse "
+        "after importance correction "
+        "(<code>1 / E[exp(2·Σ Δlogp)]</code> over response tokens). "
+        "ESS = 1.0 means the engines agree on the whole sequence; lower "
+        "ESS means a single bad token can tank reuse of the whole "
+        "trajectory.</p>"
+        "<p>Color bands: green (ESS &gt; 0.99) = rollout and trainer "
+        "agree token-for-token; amber (0.95–0.99) = trainer needs "
+        "stronger off-policy correction; red (&lt; 0.95) = rollout "
+        "would be dropped. The card below the matrices surfaces the "
+        "<em>worst-token</em> |Δlogprob| spike — a sequence-level "
+        "robustness check that ESS averaging can hide.</p>"
     )
     hermes_moe_blurb = (
-        "<p><strong>Same recipe, MoE rollouts.</strong> Hermes-Agent "
+        "<p><strong>Same metric, MoE rollouts.</strong> Hermes-Agent "
         "trajectory over Qwen3-30B-A3B, teacher-forced through FSDP and "
-        "Megatron in bf16. The logprob-shift here measures the same thing "
-        "the Dense matrix above measures — divergence in next-token "
-        "predictions between rollout and trainer engines over the agent's "
-        "response tokens — applied to MoE forward passes. Router-flip-rate "
-        "(<em>which experts</em> each engine picked) is the matrix below: "
-        "it's the marketplace metric for crowdsourced MoE rollouts.</p>"
+        "Megatron in bf16. The per-token and sequence-level mismatch "
+        "story is identical to the dense case above — MoE forward passes "
+        "produce a logprob per token just like dense ones do, so ESS "
+        "means the same thing here. The MoE-specific signal is the "
+        "router matrix below.</p>"
     )
     hermes_moe_router_blurb = (
-        "<p><strong>Which experts each engine picked.</strong> "
-        "<code>router_flip_rate</code> is the rate at which a rollout's "
-        "top-1 expert disagrees with the trainer's top-1 expert at the "
-        "same <code>(response_token, layer)</code> position over the "
-        "agent's response tokens — the marketplace question for "
-        "crowdsourced MoE rollouts. Color bands: green ≤ 5%, amber 5–15%, "
-        "red &gt; 15%. The rollout side captures routing via the patched "
-        "vLLM HTTP shim and the proxy's <code>response_routed_experts</code> "
-        "trim (kept aligned 1:1 with response tokens); the trainer side "
-        "either runs HF with <code>output_router_logits=True</code> + "
-        "<code>torch.topk</code> on the FSDP side or hooks "
-        "<code>mlp.router</code> per layer on the Megatron side. TBD tiles "
-        "are trainer-force passes still on the queue.</p>"
+        "<p><strong>Why MoE needs a second metric.</strong> An MoE FFN "
+        "doesn't compute one big matrix per token; it routes the token "
+        "through a small subset of <em>experts</em> and combines their "
+        "outputs. In Qwen3-30B-A3B: <strong>48 transformer layers, each "
+        "with its own 128 experts</strong> (no sharing across layers). "
+        "Per token per layer, a gate network picks the top 8 experts and "
+        "assigns each a routing weight. The layer output is the "
+        "weighted sum of those 8 experts' outputs.</p>"
+        "<p><strong>What can go wrong even when logprobs agree.</strong> "
+        "Two engines can pick <em>different</em> experts at the same "
+        "<code>(token, layer)</code> position and still produce nearly "
+        "identical layer outputs — and therefore identical next-token "
+        "logprobs. This happens because experts at the same layer learn "
+        "overlapping subspaces of knowledge (so two paths through the "
+        "layer can be functionally equivalent). ESS sees the output and "
+        "says <em>fine, reuse this rollout</em>; but at training time, "
+        "the gradient lands on the experts the <em>trainer</em> would "
+        "have activated, not the ones the rollout actually activated — "
+        "so the wrong weights get updated.</p>"
+        "<p><strong>How we measure it.</strong> "
+        "<code>router_flip_rate</code> is the rate at which the "
+        "rollout's top-1 expert disagrees with the trainer's top-1 "
+        "expert at the same <code>(response_token, layer)</code> "
+        "position. Color bands: green ≤ 5%, amber 5–15%, red &gt; 15%. "
+        "Rollout side: patched vLLM HTTP shim emits "
+        "<code>choices[0].routed_experts</code>; the proxy trims to the "
+        "gen-token tail. Trainer side: FSDP runs HF with "
+        "<code>output_router_logits=True</code> + <code>torch.topk</code> "
+        "per layer; Megatron hooks <code>mlp.router</code> directly. We "
+        "currently only compare expert <em>identities</em>, not their "
+        "routing weights — the weight-disagreement signal is a follow-up.</p>"
     )
     # ``dense_payload`` already holds the aggregated dense_dashboard.json
     # (engine_pairs + rows). Both Hermes matrices read from the same
@@ -1022,7 +1032,7 @@ def render_index(card_data: list[dict]) -> str:
         + _MATRIX_STYLES + "</style></head><body>"
         "<header>"
         "<h1>streams-rollout-market — live dashboards</h1>"
-        "<p>Real-data observatory for the rollout marketplace. Five lenses on how engine "
+        "<p>Real-data observatory for the rollout marketplace. Lenses on how engine "
         "and precision choices change what an LLM-driven agent <em>actually does</em>.</p>"
         "<p style='margin-top:.6rem;display:flex;gap:1.2rem;justify-content:center;flex-wrap:wrap'>"
         "<a href='glossary.html' style='color:var(--accent);text-decoration:none;font-size:.92rem'>📖 What do these metrics mean?</a>"
