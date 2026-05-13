@@ -1,7 +1,7 @@
 {
   "bundle_operator_serve_kit": {
-    "passes": false,
-    "evidence": null,
+    "passes": true,
+    "evidence": ".claude/evidence/iter01_operator_kit/iter01.md",
     "directive": "### 1. bundle_operator_serve_kit: package the serve script for a remote operator\n\nBundle exactly what a third-party GPU operator needs to start serving Qwen3-30B-A3B with the `routed_experts` HTTP shim: `vllm_serve_moe_dev.sh`, `patch_vllm_routed_experts_http.py`, and a short `OPERATOR_QUICKSTART.md` that lists the prerequisites (Python 3.12, CUDA driver, a venv recipe) and the three commands they actually run (create venv, apply patch, source venv + serve). Write a `scripts/live/operator_kit/` directory or a `make operator-kit` target that produces a self-contained tarball at `/tmp/operator_kit.tgz`. Acceptance: `tar tzf /tmp/operator_kit.tgz` lists at least the three files; the README explains why each step is needed."
   },
   "client_side_capture_driver": {
