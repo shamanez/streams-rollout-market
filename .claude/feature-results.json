@@ -5,8 +5,8 @@
     "directive": "### 1. bundle_operator_serve_kit: package the serve script for a remote operator\n\nBundle exactly what a third-party GPU operator needs to start serving Qwen3-30B-A3B with the `routed_experts` HTTP shim: `vllm_serve_moe_dev.sh`, `patch_vllm_routed_experts_http.py`, and a short `OPERATOR_QUICKSTART.md` that lists the prerequisites (Python 3.12, CUDA driver, a venv recipe) and the three commands they actually run (create venv, apply patch, source venv + serve). Write a `scripts/live/operator_kit/` directory or a `make operator-kit` target that produces a self-contained tarball at `/tmp/operator_kit.tgz`. Acceptance: `tar tzf /tmp/operator_kit.tgz` lists at least the three files; the README explains why each step is needed."
   },
   "client_side_capture_driver": {
-    "passes": false,
-    "evidence": null,
+    "passes": true,
+    "evidence": ".claude/evidence/iter02_client_capture/iter02.md",
     "directive": "### 2. client_side_capture_driver: new driver that extracts probes from response JSON\n\nWrite `scripts/live/remote_capture_driver.py` — same OpenAI tool-using loop as `minimal_agent_driver.py` but reads `choices[0].routed_experts`, `prompt_token_ids`, `choices[0].token_ids`, and `choices[0].logprobs.token_logprobs` directly from each chat completion response and emits one line per assistant turn to a local sidecar JSONL — same shape as the existing `logprob_capture_proxy.py` writes (so downstream `merge_probes_into_trajectories.py` consumes it unchanged). Acceptance: a unit test under `tests/test_remote_capture_driver.py` mocks a chat completion response and verifies the sidecar JSONL shape matches `extract_probes`'s output schema field-for-field."
   },
   "tunnel_smoke_against_spot": {
