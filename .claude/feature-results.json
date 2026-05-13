@@ -25,8 +25,8 @@
     "directive": "Laptop — merge probes into the AgentTrajectory (unchanged).\n\n`scripts/live/merge_probes_into_trajectories.py` already includes `response_routed_experts` in `_PROBE_KEYS`. The output `runs/live/agent/hermes/qwen3-30b-a3b/bf16/no-op-trivia.json` will, for the first time, have a non-null `response_routed_experts` on its assistant step(s).\n\nSteps: rsync `/tmp/minimal_sharegpt.jsonl` and `/tmp/hermes_probes.jsonl` back from the spot; carve a one-task `tasks_one.json` for `no-op-trivia`; run `merge_probes_into_trajectories.py --sharegpt … --probes … --tasks … --model-id Qwen/Qwen3-30B-A3B --engine-label hermes-qwen3-30b-a3b-bf16 --engine-fingerprint sha256:hermes-qwen3-30b-a3b-bf16-tp4-l40s --out-dir runs/live/agent/hermes/qwen3-30b-a3b/bf16/`.\n\nVerification (from plan §Verification step 4): the merged trajectory JSON has a non-null `response_routed_experts` on its assistant step."
   },
   "spot_trainer_router_traces": {
-    "passes": false,
-    "evidence": null,
+    "passes": true,
+    "evidence": ".claude/evidence/iter06_trainer_router/iter06.md",
     "directive": "Spot — trainer-side router traces over the SAME captured token IDs.\n\n- **FSDP**: `scripts/live/run_fsdp_moe_reference.py` already exists and is `output_router_logits=True`-aware. We push the trajectory's `(prompt_token_ids, response_token_ids)` into `/tmp/rollouts.json`, run via `torchrun --nproc-per-node=4`, and pull `/tmp/fsdp_router.json` back to the laptop.\n- **Megatron**: `scripts/live/megatron_moe_reference_launch.sh` already runs `run_megatron_moe_reference.py --emit-router` inside docker with `PYTHONPATH=/root/Megatron-LM/`. Forward hooks on `mlp.router` already produce `/tmp/megatron_router.json` of shape `[token][layer][top_k]`. Reuse as-is.\n- Both already align positions via `routed_position_indices()` (`prompt_len + response_len - 1` predicting positions).\n\nBefore running trainers: kill `vllm serve` on the spot (it holds all 4 GPUs)."
   },
   "laptop_pair_rollout_vs_trainer": {
