@@ -1,13 +1,83 @@
 # PROGRESS.md — Agent Handoff State
 
 ## Last updated
-2026-05-13 — initiative complete; STEER.md retired. Two operator-
-directed follow-ups landed after the queue closed (see "Post-cycle
-operator-directed work" below).
+2026-05-13 — **cycle FP8 complete** (2nd autonomous cycle on this
+repo). STEER.md retired. All eight queue entries `passes:true`.
 
 ## Status
-Idle. All eight queue entries `passes:true`. STEER.md deleted as the
-final commit per its own stop clause.
+Idle. The 2×2 router matrix on `docs/index.html` is now populated
+end-to-end: bf16 + fp8 vLLM rollouts × FSDP-bf16 + Megatron-bf16
+trainers. Spot is torn down (3 MiB / GPU).
+
+## Cycle FP8 final result (the matrix)
+
+|              | vLLM bf16 rollout | vLLM fp8 rollout |
+|--------------|------------------:|-----------------:|
+| FSDP-bf16    | 6.01% (n=19)      | 8.29% (n=16)     |
+| Megatron-bf16| 5.72% (n=19)      | 8.34% (n=16)     |
+
+(Color band: all amber 5–15%. Per-cell n is the number of
+probe-bearing assistant turns across 6 Hermes-Agent tasks.)
+
+Two findings:
+- **FP8 quantization adds ~2.3-2.6 pp to router_flip_rate** vs bf16
+  rollouts. The trainer is always bf16, so this is the marketplace
+  cost of accepting FP8-quantized rollouts.
+- **The trainer engine choice barely matters** (FSDP and Megatron
+  agree within 0.3 pp on every cell — strong consistency signal
+  for the metric itself).
+
+## Cycle FP8 — iterations (in order completed)
+
+1. `spot_pull_qwen3_moe_fp8` — Qwen3-30B-A3B-FP8 cached (~31 GB).
+2. `spot_smoke_test_moe_fp8_serve` — FP8 serve via patched HTTP
+   shim emits `routed_experts` shape `[gen_tokens, 48, 8]`.
+3. `spot_drive_fp8_task_batch` — 6 FP8 trajectories captured
+   (16 probe-bearing assistant turns).
+4. `spot_drive_bf16_task_batch` — 6 bf16 trajectories captured
+   (19 probe-bearing assistant turns incl. preserved no-op-trivia).
+5. `spot_fsdp_teacher_force_both_precisions` — FSDP MoE × bf16
+   rollouts (19 payloads, 290s) and × fp8 rollouts (16 payloads,
+   229s); MODEL env override forces bf16 trainer regardless of
+   rollout precision.
+6. `spot_megatron_teacher_force_both_precisions` — Megatron MoE ×
+   both precisions in 5min12s wall after the launcher's five
+   patches (see iter06 evidence).
+7. `laptop_pair_all_reports` — 70 router_mismatch_reports across
+   four cells via `pair_hermes_moe_reports.py` × 4.
+8. `laptop_aggregate_republish_2x2_matrix` — extended
+   `_render_hermes_router_matrix` to take `rollout_engines` as a
+   tuple (one column per rollout precision); 4 traffic-light tiles
+   on `docs/index.html`.
+
+## Cycle FP8 — launcher / pipeline fixes worth keeping
+
+- `scripts/live/megatron_moe_reference_launch.sh` gained:
+  * auto-detection of single-dict vs list rollouts file
+  * `HF_FLAT_REUSE` env var to skip the ~60 GB `cp -rL` on
+    back-to-back launches
+  * `--network=host` (defensive against the broken docker0
+    bridge teardown loop)
+  * dropped `--ipc=host` (was causing containers to stay in
+    Created state indefinitely)
+  * `OUT_SUFFIX` env var so parallel launches don't trample each
+    other's outputs.
+- `scripts/live/vllm_serve_moe_fp8_dev.sh` — thin sibling of the
+  bf16 launcher, overrides MODEL + LOG.
+- `scripts/live/publish_dashboards._render_hermes_router_matrix`
+  now accepts a tuple of `rollout_engines` for multi-column
+  matrices.
+
+## How to start a new initiative
+
+(Unchanged from above — Plan Mode → `/seed-from-plan` →
+`/autonomous-loop`.)
+
+## Reproduction (durable)
+
+`CLAUDE.md` "End-to-end reproduction". Cycle-FP8 specifically:
+swap the bf16 serve for `vllm_serve_moe_fp8_dev.sh` in step 1 and
+run the laptop pipeline with `--precision-class fp8`.
 
 ## Post-cycle operator-directed work (2026-05-13)
 - **Megatron MoE router tile filled.** HF→torch-dist conversion ran
