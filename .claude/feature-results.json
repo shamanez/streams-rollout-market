@@ -20,8 +20,8 @@
     "directive": "### 3. spot_drive_bf16_task_batch: capture 4-6 bf16 MoE trajectories (run AFTER FP8 batch — switch launchers, kept proxy running)\n\nDrive the bf16 MoE (the existing `vllm_serve_moe_dev.sh` path) via `minimal_agent_driver.py` against a fixed task list — pick 4 tasks from `scripts/live/agent_tasks_hermes.json` (e.g. `math-tokens-per-gpu-day`, `code-fix-factorial`, `mixed-research-and-math`, `plan-3step-experiment`) plus the 2 `agent_tasks_cwc_repo.json` tasks = 6 tasks total. Run each one through the proxy on port 8001 so per-token logprobs + routed_experts land in `/tmp/hermes_probes.jsonl`. Merge into `runs/live/agent/hermes/qwen3-30b-a3b/bf16/` and build `/tmp/rollouts_bf16.json` for the trainer side. Acceptance: 6 trajectory JSONs under `runs/live/agent/hermes/qwen3-30b-a3b/bf16/` each with non-null `response_routed_experts`."
   },
   "spot_fsdp_teacher_force_both_precisions": {
-    "passes": false,
-    "evidence": null,
+    "passes": true,
+    "evidence": ".claude/evidence/iter05_fsdp_both/iter05.md",
     "directive": "### 5. spot_fsdp_teacher_force_both_precisions\n\nPush both `/tmp/rollouts_bf16.json` and `/tmp/rollouts_fp8.json` through `scripts/live/run_fsdp_moe_reference.py`. The trainer always runs in **bf16** (FSDP weights are loaded from the bf16 HF dir; we only vary the rollout side). Outputs: `/tmp/trainers_fsdp_moe_bf16_rollouts.json` and `/tmp/trainers_fsdp_moe_fp8_rollouts.json` plus their `_router.json` siblings. Acceptance: each output has shape `[gen_tokens, 48, 8]` matching the corresponding rollout window."
   },
   "spot_megatron_teacher_force_both_precisions": {
