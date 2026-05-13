@@ -81,6 +81,8 @@ exec vllm serve "$MODEL" \
     --enable-return-routed-experts \
     --enable-expert-parallel \
     --no-async-scheduling \
+    --enable-auto-tool-choice \
+    --tool-call-parser hermes \
     --host "$HOST" \
     --port "$PORT" \
     >> "$LOG" 2>&1
