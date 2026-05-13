@@ -77,3 +77,6 @@
 {"timestamp":"20260513T043210Z","iter":"client_side_capture_driver","evidence":".claude/evidence/iter02_client_capture/iter02.md"}
 {"timestamp":"20260513T043211Z","command":"echo \"}
 {"timestamp":"20260513T043251Z","command":"git diff HEAD .claude/evidence/evidence_log.jsonl 2>&1 | tail -10"}
+{"timestamp":"20260513T083322Z","command":"git status && echo \"}
+{"timestamp":"20260513T083428Z","command":"echo \"}
+{"timestamp":"20260513T083520Z","command":"rm docs/git_plan_v2.md docs/problem_design_survey.md docs/k_of_n_reload_quorum.md docs/evaluation_plan.md\necho \"}
