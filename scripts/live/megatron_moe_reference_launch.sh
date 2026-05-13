@@ -65,7 +65,17 @@ fi
 
 WORK_DIR="$(mktemp -d)"
 chmod -R a+rwx "$WORK_DIR"
-cp "$ROLLOUT_FILE_HOST" "$WORK_DIR/rollout.json"
+# Detect single-dict vs multi-rollout list and name the file the
+# inside-container runner expects (rollouts.json for lists,
+# rollout.json for single dicts — see run_megatron_moe_reference.py
+# --rollouts-path / --rollouts-path-fallback).
+if python3 -c "import json,sys;d=json.load(open(sys.argv[1]));sys.exit(0 if isinstance(d,list) else 1)" "$ROLLOUT_FILE_HOST"; then
+  cp "$ROLLOUT_FILE_HOST" "$WORK_DIR/rollouts.json"
+  echo "[launch] input is a list — copied as WORK_DIR/rollouts.json"
+else
+  cp "$ROLLOUT_FILE_HOST" "$WORK_DIR/rollout.json"
+  echo "[launch] input is a single dict — copied as WORK_DIR/rollout.json"
+fi
 
 # The HF snapshot dir is full of relative symlinks pointing to
 # `../../blobs/<hash>` outside the mount, so a naive bind-mount makes
@@ -102,9 +112,23 @@ docker run --rm \
   bash -lc "/root/runner.sh && \
     chown \"\$HOST_UID:\$HOST_GID\" /host_tmp/*.json"
 
-cp "$WORK_DIR/trainer_megatron-bf16.json" /tmp/trainer_megatron-bf16.json
-if [[ -f "$WORK_DIR/megatron_router.json" ]]; then
-  cp "$WORK_DIR/megatron_router.json" /tmp/megatron_router.json
-  echo "[launch] wrote /tmp/megatron_router.json"
+# Optional per-run suffix so multiple consecutive launches (e.g.
+# bf16 then fp8 rollouts) don't trample each other's outputs. Set
+# OUT_SUFFIX=-bf16_rollouts to get /tmp/trainer_megatron-bf16-bf16_rollouts.json etc.
+OUT_SUFFIX="${OUT_SUFFIX:-}"
+
+# Single-rollout mode writes trainer_megatron-bf16.json; multi-mode
+# writes BOTH trainer_megatron-bf16.json (first entry) AND
+# trainers_megatron-bf16.json (full list). Mirror both.
+if [[ -f "$WORK_DIR/trainer_megatron-bf16.json" ]]; then
+  cp "$WORK_DIR/trainer_megatron-bf16.json" "/tmp/trainer_megatron-bf16${OUT_SUFFIX}.json"
+  echo "[launch] wrote /tmp/trainer_megatron-bf16${OUT_SUFFIX}.json"
 fi
-echo "[launch] wrote /tmp/trainer_megatron-bf16.json"
+if [[ -f "$WORK_DIR/trainers_megatron-bf16.json" ]]; then
+  cp "$WORK_DIR/trainers_megatron-bf16.json" "/tmp/trainers_megatron-bf16${OUT_SUFFIX}.json"
+  echo "[launch] wrote /tmp/trainers_megatron-bf16${OUT_SUFFIX}.json"
+fi
+if [[ -f "$WORK_DIR/megatron_router.json" ]]; then
+  cp "$WORK_DIR/megatron_router.json" "/tmp/megatron_router${OUT_SUFFIX}.json"
+  echo "[launch] wrote /tmp/megatron_router${OUT_SUFFIX}.json"
+fi
