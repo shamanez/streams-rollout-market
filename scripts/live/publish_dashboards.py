@@ -923,6 +923,15 @@ def render_index(card_data: list[dict]) -> str:
         "would be dropped. The card below the matrices surfaces the "
         "<em>worst-token</em> |Δlogprob| spike — a sequence-level "
         "robustness check that ESS averaging can hide.</p>"
+        "<p><strong>How to read each tile.</strong> The big number is "
+        "mean ESS for that (rollout, trainer) cell. The sub-label "
+        "decodes as: <code>n=N run(s)</code> is the number of probe-"
+        "bearing assistant turns the cell averages over (a single "
+        "trajectory contributes one turn per Hermes-Agent step that "
+        "called a tool or emitted a final answer); <code>mean "
+        "|Δlogprob|=X</code> is the average <em>per-token</em> log-"
+        "probability gap between rollout and trainer over those turns. "
+        "ESS is a sequence-level rollup of that per-token gap.</p>"
     )
     hermes_moe_blurb = (
         "<p><strong>Same metric, MoE rollouts.</strong> Hermes-Agent "
@@ -965,6 +974,17 @@ def render_index(card_data: list[dict]) -> str:
         "per layer; Megatron hooks <code>mlp.router</code> directly. We "
         "currently only compare expert <em>identities</em>, not their "
         "routing weights — the weight-disagreement signal is a follow-up.</p>"
+        "<p><strong>How to read each tile.</strong> The big percentage "
+        "is the <em>mean</em> top-1 router_flip_rate across every "
+        "(response_token, MoE_layer) position in that cell. The sub-label "
+        "decodes as: <code>n=N run(s)</code> is the number of <em>probe-"
+        "bearing assistant turns</em> the cell averages over (one tool-"
+        "calling Hermes-Agent task usually contributes 2–4 turns, so "
+        "n=19 ≈ 6 tasks × 3 turns avg); <code>703 tok</code> is the sum "
+        "of response tokens across those turns (the cell's denominator "
+        "for the % above); <code>worst layer 33.3%</code> is the single "
+        "MoE layer with the highest flip rate in this cell — a sanity "
+        "check that the mean isn't hiding a wildly out-of-band layer.</p>"
     )
     # ``dense_payload`` already holds the aggregated dense_dashboard.json
     # (engine_pairs + rows). Both Hermes matrices read from the same
