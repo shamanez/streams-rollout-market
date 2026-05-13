@@ -10,8 +10,8 @@
     "directive": "### 2. spot_smoke_test_moe_fp8_serve: vLLM-dev FP8 serve + routed_experts probe\n\nAdapt `scripts/live/vllm_serve_moe_dev.sh` (or write a sibling `vllm_serve_moe_fp8_dev.sh`) to launch Qwen3-30B-A3B-FP8 with the patched dev wheel, `--enable-return-routed-experts`, `--enable-expert-parallel`, `--no-async-scheduling`. After `/v1/models` returns 200, call `/v1/chat/completions` directly with a single user turn and verify the response carries `choices[0].routed_experts` with shape `[gen_tokens, 48, 8]`. Acceptance: routed_experts shape correct, GPU memory usage roughly half of the bf16 case (FP8 is half the precision width)."
   },
   "spot_drive_fp8_task_batch": {
-    "passes": false,
-    "evidence": null,
+    "passes": true,
+    "evidence": ".claude/evidence/iter03_fp8_batch/iter03.md",
     "directive": "### 4. spot_drive_fp8_task_batch: capture matching fp8 MoE trajectories (run FIRST after iter 2 re-sort, while FP8 serve is hot)\n\nRepeat iter 3 against the FP8 serve from iter 2 over the *same* 6 tasks. Output trajectories under `runs/live/agent/hermes/qwen3-30b-a3b/fp8/` (note the `/fp8/` subdir keeps the precision in the path). Build `/tmp/rollouts_fp8.json`. Acceptance: 6 fp8 trajectory JSONs, all with `response_routed_experts` populated."
   },
   "spot_drive_bf16_task_batch": {
