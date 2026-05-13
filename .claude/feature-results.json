@@ -5,8 +5,8 @@
     "directive": "Spot — build vLLM dev with `routed_experts_replay` (side-by-side venv).\n\n- Pin to commit `a7b801e26d6b9d96bb49e939c0b6b3acf1d85796` (the commit the user-supplied docs URL points to). This is the minimum that exposes `prompt_routed_experts` + `choices[i].routed_experts` over the OpenAI HTTP endpoint.\n- New venv `~/rmenv-dev/` (Python 3.12). Build from source: `git clone https://github.com/vllm-project/vllm.git && git checkout a7b801e && pip install -e .` plus `transformers requests`.\n- Do NOT touch `~/rmenv/`. Every launcher will pick the venv via an explicit `source` line.\n\nVerification (from plan §Verification step 2, first bullet): `source ~/rmenv-dev/bin/activate && python -c \"from vllm import __version__; print(__version__)\"` prints a dev version string from the pinned commit."
   },
   "spot_serve_moe_router_replay": {
-    "passes": false,
-    "evidence": null,
+    "passes": true,
+    "evidence": ".claude/evidence/iter02_serve_moe_dev/iter02.md",
     "directive": "Spot — serve Qwen3-30B-A3B with router replay flag.\n\nModify `scripts/live/megatron_moe_reference_launch.sh` is **not** what serves vLLM — that's the trainer side. The serving side is currently embedded in `CLAUDE.md`'s \"step 1\" snippet. Add a new launcher:\n\n- New file: `scripts/live/vllm_serve_moe_dev.sh` — equivalent of CLAUDE.md step 1 for the MoE leg, but sourcing `~/rmenv-dev/` and passing:\n  - `--enable-return-routed-experts`\n  - `--enable-expert-parallel`\n  - `--no-async-scheduling` (required: routed_experts is incompatible with async sched per the docs)\n  - `--tensor-parallel-size 4 --dtype auto --max-model-len 40960 --gpu-memory-utilization 0.85 --host 0.0.0.0 --port 8000`\n- No request-side changes needed. The proxy already injects `logprobs=True, top_logprobs=1, return_token_ids=True`; the routed-experts trace rides along on the response automatically.\n\nVerification (from plan §Verification step 2, second bullet): curl `vllm serve` directly (without the proxy) and assert `choices[0].routed_experts` is a 3-D list shaped `[*, 48, 8]` and `prompt_routed_experts` is similar."
   },
   "spot_start_capture_proxy": {
