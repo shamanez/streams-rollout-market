@@ -126,6 +126,16 @@ def pair_reports(
 
         t_entry = trainers_by_idx[prompt_idx]
         trainer_expert_ids = t_entry["expert_ids"]
+        # The trainer-side trace covers all `prompt_len + response_len - 1`
+        # predicting positions (see `routed_position_indices`). The rollout
+        # sidecar is trimmed by the capture proxy to the response-token
+        # window only (the engine emits prompt+gen-1 entries; the proxy
+        # keeps the last `completion_tokens`). Slice the trainer trace to
+        # the same response window so the per-token, per-layer flip rate
+        # is computed on the same positions.
+        rollout_len = len(rollout_routed)
+        if len(trainer_expert_ids) > rollout_len:
+            trainer_expert_ids = trainer_expert_ids[-rollout_len:]
         num_layers = int(t_entry["num_layers"])
         num_experts = int(t_entry["num_experts"])
         top_k = int(t_entry["top_k"])

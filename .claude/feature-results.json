@@ -30,8 +30,8 @@
     "directive": "Spot — trainer-side router traces over the SAME captured token IDs.\n\n- **FSDP**: `scripts/live/run_fsdp_moe_reference.py` already exists and is `output_router_logits=True`-aware. We push the trajectory's `(prompt_token_ids, response_token_ids)` into `/tmp/rollouts.json`, run via `torchrun --nproc-per-node=4`, and pull `/tmp/fsdp_router.json` back to the laptop.\n- **Megatron**: `scripts/live/megatron_moe_reference_launch.sh` already runs `run_megatron_moe_reference.py --emit-router` inside docker with `PYTHONPATH=/root/Megatron-LM/`. Forward hooks on `mlp.router` already produce `/tmp/megatron_router.json` of shape `[token][layer][top_k]`. Reuse as-is.\n- Both already align positions via `routed_position_indices()` (`prompt_len + response_len - 1` predicting positions).\n\nBefore running trainers: kill `vllm serve` on the spot (it holds all 4 GPUs)."
   },
   "laptop_pair_rollout_vs_trainer": {
-    "passes": false,
-    "evidence": null,
+    "passes": true,
+    "evidence": ".claude/evidence/iter07_pair_router/iter07.md",
     "directive": "Laptop — pair rollout vs trainer (per trainer cell).\n\n`scripts/live/pair_hermes_moe_reports.py` already exists. Drive it twice — once with `--trainers /tmp/fsdp_router.json --trainer-engine-label fsdp-bf16-moe`, once with `--trainers /tmp/megatron_router.json --trainer-engine-label megatron-bf16-moe` — outputting `router_mismatch_report.json` under `runs/live/router/hermes-qwen3-30b-a3b-bf16-vs-{fsdp,megatron}-bf16-moe/`.\n\nVerification (from plan §Verification step 5): each `router_mismatch_report.json` has `router_flip_rate ∈ [0,1]` and `layer_flip_rates` of length 48."
   },
   "laptop_aggregate_republish_dashboard": {
