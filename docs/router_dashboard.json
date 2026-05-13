@@ -1,5 +1,35 @@
 {
-  "num_runs": 0,
-  "engine_pairs": [],
-  "rows": []
+  "num_runs": 1,
+  "engine_pairs": [
+    {
+      "rollout_engine": "hermes-qwen3-30b-a3b-bf16",
+      "trainer_engine": "fsdp-bf16-moe",
+      "count": 1,
+      "mean_router_flip_rate": 0.035037878787878785,
+      "mean_token_expert_disagreement_rate": 1.0,
+      "worst_layer_flip_rate": 0.13636363636363635,
+      "total_tokens": 22,
+      "layer_count": 48
+    }
+  ],
+  "rows": [
+    {
+      "run_id": "hermes-qwen3-30b-a3b-bf16-vs-fsdp-bf16-moe-no-op-trivia-turn0",
+      "model_id": "Qwen/Qwen3-30B-A3B",
+      "rollout_engine": "hermes-qwen3-30b-a3b-bf16",
+      "trainer_engine": "fsdp-bf16-moe",
+      "num_tokens": 22,
+      "num_layers": 48,
+      "top_k": 8,
+      "num_experts": 128,
+      "router_flip_rate": 0.035037878787878785,
+      "token_expert_disagreement_rate": 1.0,
+      "layer_flip_rate_min": 0.0,
+      "layer_flip_rate_mean": 0.03503787878787878,
+      "layer_flip_rate_max": 0.13636363636363635,
+      "created_at": "2026-05-13T00:55:21.436747+00:00",
+      "precision_class": "bf16",
+      "device_bucket": "L40S (g6e.12xlarge)"
+    }
+  ]
 }
