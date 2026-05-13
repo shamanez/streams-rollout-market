@@ -96,4 +96,153 @@ footer{margin-top:2rem;color:var(--muted);font-size:.82rem;text-align:center}
 .atv-toolcall-head{font-size:.85rem;color:#5b21b6;margin-bottom:.2rem}
 .atv-toolcall-args{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
   font-size:.78rem;background:transparent;margin:0;white-space:pre}
-</style><section class="card" data-section="trajectories"><h2>Captured trajectories (2)</h2><p class='sub'>Each block shows one task's prompt, the response tokens the rollout produced, and the tool calls embedded in the response. This page is a viewer; the training-inference mismatch on these tokens is on the Dense and Router matrices on the home page.</p><details class="atv-trajectory" data-task-id="no-op-trivia"><summary><strong>no-op-trivia</strong> · Qwen/Qwen3-30B-A3B <span class='atv-pill atv-term'>answered</span> <span class='atv-meta'>1 assistant · 0 tool · engine <code>hermes-qwen3-30b-a3b-bf16</code></span></summary><div class="atv-prompt"><div class="atv-prompt-head">task prompt</div><pre class="atv-content">Trivia: which two cities are the famous start and end of the Tokaido road in feudal Japan? Answer in one short sentence. You do NOT need to call any tools for this — just answer from background knowledge.</pre></div><div class="atv-step atv-role-assistant"><div class="atv-step-head"><span class="atv-role">assistant</span> <span class="atv-step-idx">step #0</span></div><pre class="atv-content">The Tokaido road in feudal Japan started in Edo (now Tokyo) and ended in Kyoto.</pre></div><div class="atv-final"><div class="atv-final-head">final answer</div><pre class="atv-content">The Tokaido road in feudal Japan started in Edo (now Tokyo) and ended in Kyoto.</pre></div></details><details class="atv-trajectory" data-task-id="no-op-trivia"><summary><strong>no-op-trivia</strong> · Qwen/Qwen3-32B <span class='atv-pill atv-term'>answered</span> <span class='atv-meta'>1 assistant · 0 tool · engine <code>hermes-qwen3-32b-bf16</code></span></summary><div class="atv-prompt"><div class="atv-prompt-head">task prompt</div><pre class="atv-content">Trivia: which two cities are the famous start and end of the Tokaido road in feudal Japan? Answer in one short sentence. You do NOT need to call any tools for this — just answer from background knowledge.</pre></div><div class="atv-step atv-role-assistant"><div class="atv-step-head"><span class="atv-role">assistant</span> <span class="atv-step-idx">step #0</span></div><pre class="atv-content">The famous start and end cities of the Tokaido road in feudal Japan are Edo (modern-day Tokyo) and Kyoto.</pre></div><div class="atv-final"><div class="atv-final-head">final answer</div><pre class="atv-content">The famous start and end cities of the Tokaido road in feudal Japan are Edo (modern-day Tokyo) and Kyoto.</pre></div></details></section><footer>streams-rollout-market — generated from runs/live/</footer></body></html>
+</style><section class="card" data-section="trajectories"><h2>Captured trajectories (4)</h2><p class='sub'>Each block shows one task's prompt, the response tokens the rollout produced, and the tool calls embedded in the response. This page is a viewer; the training-inference mismatch on these tokens is on the Dense and Router matrices on the home page.</p><details class="atv-trajectory" data-task-id="cwc-repo-quality-loop"><summary><strong>cwc-repo-quality-loop</strong> · Qwen/Qwen3-30B-A3B <span class='atv-pill atv-term'>answered</span> <span class='atv-meta'>2 assistant · 2 tool · engine <code>hermes-qwen3-30b-a3b-bf16</code></span></summary><div class="atv-prompt"><div class="atv-prompt-head">task prompt</div><pre class="atv-content">The local repo at /home/ubuntu/hermes-traj/cwc-long-running-agents/ ships example primitives for long-running Claude agents. (1) Use read_file on /home/ubuntu/hermes-traj/cwc-long-running-agents/README.md to learn the three primitives of the repo&#x27;s &#x27;quality loop&#x27; and name them in one sentence. (2) Use read_file on /home/ubuntu/hermes-traj/cwc-long-running-agents/claude-code-config/.claude/hooks/kill-switch.sh and state in one sentence what filename the kill-switch checks for to halt the agent. Final answer: one short paragraph stitching both findings together.</pre></div><div class="atv-step atv-role-assistant"><div class="atv-step-head"><span class="atv-role">assistant</span> <span class="atv-step-idx">step #0</span></div><pre class="atv-content">&lt;tool_call&gt;
+{&quot;name&quot;: &quot;read_file&quot;, &quot;arguments&quot;: {&quot;path&quot;: &quot;/home/ubuntu/hermes-traj/cwc-long-running-agents/README.md&quot;}}
+&lt;/tool_call&gt;
+&lt;tool_call&gt;
+{&quot;name&quot;: &quot;read_file&quot;, &quot;arguments&quot;: {&quot;path&quot;: &quot;/home/ubuntu/hermes-traj/cwc-long-running-agents/claude-code-config/.claude/hooks/kill-switch.sh&quot;}}
+&lt;/tool_call&gt;</pre><div class="atv-toolcall"><div class="atv-toolcall-head">→ <code>read_file</code></div><pre class="atv-toolcall-args">{
+  &quot;path&quot;: &quot;/home/ubuntu/hermes-traj/cwc-long-running-agents/README.md&quot;
+}</pre></div><div class="atv-toolcall"><div class="atv-toolcall-head">→ <code>read_file</code></div><pre class="atv-toolcall-args">{
+  &quot;path&quot;: &quot;/home/ubuntu/hermes-traj/cwc-long-running-agents/claude-code-config/.claude/hooks/kill-switch.sh&quot;
+}</pre></div></div><div class="atv-step atv-role-tool"><div class="atv-step-head"><span class="atv-role">tool</span> <span class="atv-step-idx">step #0</span></div><pre class="atv-content"># Harness Primitives for Long-Running Claude Agents
+
+Claude Code&#x27;s built-in [`/goal`](https://code.claude.com/docs/en/goal) command gives you a generator/evaluator loop out of the box: set a completion condition and a separate fast model checks it after every turn until it&#x27;s met. This repo ships the same underlying primitives as short, readable [hooks](https://code.claude.com/docs/en/hooks) and a [subagent](https://code.claude.com/docs/en/sub-agents), so you can see how each mechanism works and assemble a harness tuned to your project. The patterns come from [Effective Harnesses for Long-Running Agents](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents) (Nov 2025) and [Harness Design for Long-Running Application Development](https://www.anthropic.com/engineering/harness-design-long-running-apps) (Mar 2026). We recommend trying both the in-product features and a custom harness to see which fits your workflow.
+
+| | In-product | Custom harness (this repo) |
+|---|---|---|
+| **What runs the loop** | [`/goal`](https://code.claude.com/docs/en/goal) | the [primitives below](#the-quality-loop) + a [loop you write](#running-the-loop) |
+| **Who judges &quot;done&quot;** | a separate fast model checking your condition | your [`agents/evaluator.md`](./claude-code-config/.claude/agents/evaluator.md) with your prompt |
+| **Where it works** | Claude Code interactive, [`-p`](https://code.claude.com/docs/en/headless), Remote Control | Claude Code, headless, or [Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk) |
+
+Three primitives form the quality loop:
+
+- **Default-FAIL contract.** Every criterion starts `false`; the agent can&#x27;t mark it passing without opening evidence first.
+- **Fresh-context evaluator.** A separate agent with no Write/Edit tools grades the work from a context window that never saw the build.
+- **Agent-maintained handoff.** The agent writes its own progress notes and commits to git so the next session picks up cleanly.
+
+Two more operator-control hooks are included for when you want to watch or intervene. The same patterns translate directly to `PreToolUse`/`Stop` callbacks in the [Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk).
+
+&gt; Built as the take-home for the Long-Running Agents station at Code with Claude 2026. **These are example ingredients, not a turnkey harness.** Event demo; not maintained and not accepting contributions.
+
+## How to use this repo
+
+**Read and cherry-pick.** Each primitive is one standalone file with no dependency on the others. The [quality-loop table](#the-quality-loop) below maps every one to its example here and its Agent SDK equivalent. Open the file, see how the mechanism works, copy what fits.
+
+**Or copy all of them as a starting point.** In your project, run `claude` and paste:
+
+&gt; Clone github.com/anthropics/cwc-long-running-agents into /tmp, copy its `claude-code-config/.claude/` directory into this project&#x27;s root, make the hook scripts executable, then walk me through what each hook and the evaluator subagent does and what I&#x27;ll need to adapt for this project.
+
+or do it yourself:
+
+```bash
+cp -r claude-code-config/.claude /path/to/your/project/
+chmod +x /path/to/your/project/.claude/hooks/*.sh
+```
+
+Either way, this gives you all the examples wired into `.claude/` at once. Before relying on them: point `RESULTS_FILE` at your project&#x27;s actual results file, adjust the evidence-file pattern in `track-read.sh`, and run `claude` from the directory that contains `.claude/` (hooks are not loaded when launching from a subdirectory).
+
+**If you&#x27;re on the Agent SDK,** this repo is a pattern reference. The shell hooks here translate one-to-one to `PreToolUse`/`Stop` callbacks. To scaffold an SDK agent from inside Claude Code, install the [`agent-sdk-dev` plugin](https://github.com/anthropics/claude-plugins-official/tree/main/plugins/agent-sdk-dev) and ask Claude to build an agent that implements whichever of these primitives you want. For a hand-written starting point, see the [autonomous-coding quickstart](https://github.com/anthropics/claude-quickstarts/tree/main/autonomous-coding) or the [agent-sdk-workshop](https://github.com/anthropics/agent-sdk-workshop) curriculum.
+
+## The quality loop
+
+| Primitive | Claude Code example | Agent SDK equivalent | Enforcement |
+|---|---|---|---|
+| **Default-FAIL contract** | [`hooks/track-read.sh`](./claude-code-config/.claude/hooks/track-read.sh) + [`hooks/verify-gate.sh`](./claude-code-config/.claude/hooks/verify-gate.sh) | `PreToolUse` callback | hook |
+| **Fresh-context evaluator** | [`agents/evaluator.md`](./claude-code-config/.claude/agents/evaluator.md) subagent (no Write/Edit) | [`evaluator_optimizer.ipynb`](https://github.com/anthropics/claude-cookbooks/blob/main/patterns/agents/evaluator_optimizer.ipynb) | you invoke it |
+| **Agent-maintained handoff** | [`CLAUDE.md`](./claude-code-config/.claude/CLAUDE.md) + [`hooks/commit-on-stop.sh`](./claude-code-config/.claude/hooks/commit-on-stop.sh) | system prompt + `Stop` callback | convention + hook backstop |
+
+### Default-FAIL contract
+
+Agents will mark a feature &quot;passing&quot; after a unit test or a curl when the UI is visibly broken. Asking nicely in the prompt doesn&#x27;t reliably stop this. The harness makes &quot;done&quot; structural. Every feature is a row in a `test-results.json` file you create in your project:
+
+```json
+{ &quot;feature-1&quot;: { &quot;passes&quot;: false }, &quot;feature-2&quot;: { &quot;passes&quot;: false } }
+```
+
+The only evidence that counts is a file matching the patterns in `track-read.sh` (screenshots, console logs, result files), and a `PreToolUse` hook denies any write to the results file unless the agent has first opened one with the Read tool. The agent can&#x27;t claim success it hasn&#x27;t observed. (The shipped hook is intentionally simple; see the comments in `verify-gate.sh` for the gaps a production version would close.)
+
+### Fresh-context evaluator
+
+The builder shouldn&#x27;t grade its own work. After each feature, you (or your wrapper script) invoke a separate subagent (`agents/evaluator.md`) with no Write/Edit tools that reviews the diff and the screenshots from a context window that never saw the build, then returns `PASS` or `NEEDS_WORK` with specific findings. On `NEEDS_WORK` the findings become the next builder session&#x27;s starting prompt, closing the build/evaluate/rebuild loop. Invoke it from your wrapper with `claude --agent evaluator -p &quot;&lt;review prompt&gt;&quot;`; what your loop does with the verdict is up to you.
+
+### Agent-maintained handoff
+
+A fresh session has no memory of what the previous one did, and when a long session fills its context window Claude Code summarizes the history, which loses detail. So the agent maintains the handoff itself: it scopes each session to one feature, writes to a structured `PROGRESS.md` as it works and re-reads it first thing on every restart, and `git add`s and commits at meaningful checkpoints so `git log` is a second record. `commit-on-stop.sh` is the backstop that catches whatever&#x27;s still uncommitted at session end. This is the layer most sensitive to model capability; newer models drift less and self-scope better, so re-evaluate how much of `CLAUDE.md` you still need after each model release (see [Re-simplify on model upgrades](#going-further)).
+
+A fourth core piece, a **rubric for subjective work**, isn&#x27;t shipped here because it&#x27;s project-specific; see [Going further](#going-further) for how to add one to the evaluator.
+
+## Running the loop
+
+Two ways to keep the build → evaluate → rebuild cycle going. `/goal` is built into Claude Code and works with or without this repo&#x27;s primitives; the second path wires the contract file and your own `evaluator.md` directly into the loop.
+
+### `/goal`: built-in completion checker
+
+```
+/goal every feature in PROGRESS.md is implemented, committed, and its tests pass
+```
+
+After every turn a separate fast model checks the condition and keeps the session going until it&#x27;s met. One line, no contract file or hooks. Works the same in interactive Claude Code, [`claude -p`](https://code.claude.com/docs/en/headless), and Remote Control. See the docs for [writing an effective condition](https://code.claude.com/docs/en/goal#write-an-effective-cond</pre></div><div class="atv-step atv-role-tool"><div class="atv-step-head"><span class="atv-role">tool</span> <span class="atv-step-idx">step #0</span></div><pre class="atv-content">#!/usr/bin/env bash
+# Copyright 2026 Anthropic PBC
+# SPDX-License-Identifier: Apache-2.0
+# Halt every tool call while ./AGENT_STOP exists. `touch AGENT_STOP` to engage; `rm AGENT_STOP` to resume.
+if [ -e &quot;${AGENT_STOP_FILE:-./AGENT_STOP}&quot; ]; then
+  cat &lt;&lt;&#x27;JSON&#x27;
+{&quot;decision&quot;:&quot;block&quot;,&quot;reason&quot;:&quot;Kill switch engaged: AGENT_STOP file exists. Agent is halted. Remove the file to resume.&quot;}
+JSON
+fi
+</pre></div><div class="atv-step atv-role-assistant"><div class="atv-step-head"><span class="atv-role">assistant</span> <span class="atv-step-idx">step #1</span></div><pre class="atv-content">The three primitives of the repo&#x27;s &#x27;quality loop&#x27; are the Default-FAIL contract, the Fresh-context evaluator, and the Agent-maintained handoff. The kill-switch checks for the filename &quot;AGENT_STOP&quot; to halt the agent. Together, these mechanisms ensure structured evaluation, independent assessment, and seamless continuation of long-running agent tasks.</pre></div><div class="atv-final"><div class="atv-final-head">final answer</div><pre class="atv-content">The three primitives of the repo&#x27;s &#x27;quality loop&#x27; are the Default-FAIL contract, the Fresh-context evaluator, and the Agent-maintained handoff. The kill-switch checks for the filename &quot;AGENT_STOP&quot; to halt the agent. Together, these mechanisms ensure structured evaluation, independent assessment, and seamless continuation of long-running agent tasks.</pre></div></details><details class="atv-trajectory" data-task-id="cwc-repo-which-hook-commits"><summary><strong>cwc-repo-which-hook-commits</strong> · Qwen/Qwen3-30B-A3B <span class='atv-pill atv-term'>answered</span> <span class='atv-meta'>3 assistant · 2 tool · engine <code>hermes-qwen3-30b-a3b-bf16</code></span></summary><div class="atv-prompt"><div class="atv-prompt-head">task prompt</div><pre class="atv-content">The repo at /home/ubuntu/hermes-traj/cwc-long-running-agents/ has a hooks directory under claude-code-config/.claude/hooks/. (1) Use read_file on /home/ubuntu/hermes-traj/cwc-long-running-agents/claude-code-config/README.md to find the table that maps hook files to their primitives, and identify which hook file commits work at the end of every session. (2) Use read_file on the file you identified, and state in one sentence what git command it would run. Final answer: name the hook file and its core git operation in one short paragraph.</pre></div><div class="atv-step atv-role-assistant"><div class="atv-step-head"><span class="atv-role">assistant</span> <span class="atv-step-idx">step #0</span></div><pre class="atv-content">&lt;tool_call&gt;
+{&quot;name&quot;: &quot;read_file&quot;, &quot;arguments&quot;: {&quot;path&quot;: &quot;/home/ubuntu/hermes-traj/cwc-long-running-agents/claude-code-config/README.md&quot;}}
+&lt;/tool_call&gt;</pre><div class="atv-toolcall"><div class="atv-toolcall-head">→ <code>read_file</code></div><pre class="atv-toolcall-args">{
+  &quot;path&quot;: &quot;/home/ubuntu/hermes-traj/cwc-long-running-agents/claude-code-config/README.md&quot;
+}</pre></div></div><div class="atv-step atv-role-tool"><div class="atv-step-head"><span class="atv-role">tool</span> <span class="atv-step-idx">step #0</span></div><pre class="atv-content"># Claude Code config: long-running primitives
+
+Example implementations of the long-running primitives as native Claude Code hooks. Copy `.claude/` into your project as a starting point and adapt the file paths and matching rules to fit.
+
+**Requires:** `bash`, `git`, `python3` (the hooks parse JSON via python3; without it they silently no-op).
+
+```bash
+cp -r .claude/ /path/to/your/project/
+chmod +x /path/to/your/project/.claude/hooks/*.sh
+cd /path/to/your/project &amp;&amp; claude
+```
+
+| File | Primitive |
+|---|---|
+| `.claude/hooks/kill-switch.sh` | Halt every tool call while `./AGENT_STOP` exists |
+| `.claude/hooks/steer.sh` | Surface `./STEER.md` content to the agent once, then clear it |
+| `.claude/hooks/track-read.sh` + `verify-gate.sh` | Deny marking a test passing until evidence (screenshot/console log) has been Read |
+| `.claude/hooks/commit-on-stop.sh` | Commit at the end of every session |
+| `.claude/CLAUDE.md` | Progress-file convention, one-feature-at-a-time, proof-before-passing |
+
+The verify gate guards a results file you create in your project (default name `test-results.json`; override with `RESULTS_FILE`). Shape it however you like; the hook only cares that the file exists and that the agent opened evidence before touching it. A minimal starting point:
+
+```json
+{ &quot;feature-1&quot;: { &quot;passes&quot;: false }, &quot;feature-2&quot;: { &quot;passes&quot;: false } }
+```
+
+The gate tracks evidence at the session level (any screenshot opened unlocks one write). For per-test evidence tracking, extend `track-read.sh` to record which test ID each screenshot belongs to and have `verify-gate.sh` match on that.
+
+For unattended multi-session runs, pair this config with the [`ralph-loop`](https://github.com/anthropics/claude-plugins-official/tree/main/plugins/ralph-loop) plugin or a wrapper script that calls `claude -p &quot;continue from PROGRESS.md&quot;` in a loop.
+</pre></div><div class="atv-step atv-role-assistant"><div class="atv-step-head"><span class="atv-role">assistant</span> <span class="atv-step-idx">step #1</span></div><pre class="atv-content">&lt;tool_call&gt;
+{&quot;name&quot;: &quot;read_file&quot;, &quot;arguments&quot;: {&quot;path&quot;: &quot;/home/ubuntu/hermes-traj/cwc-long-running-agents/claude-code-config/.claude/hooks/commit-on-stop.sh&quot;}}
+&lt;/tool_call&gt;</pre><div class="atv-toolcall"><div class="atv-toolcall-head">→ <code>read_file</code></div><pre class="atv-toolcall-args">{
+  &quot;path&quot;: &quot;/home/ubuntu/hermes-traj/cwc-long-running-agents/claude-code-config/.claude/hooks/commit-on-stop.sh&quot;
+}</pre></div></div><div class="atv-step atv-role-tool"><div class="atv-step-head"><span class="atv-role">tool</span> <span class="atv-step-idx">step #1</span></div><pre class="atv-content">#!/usr/bin/env bash
+# Copyright 2026 Anthropic PBC
+# SPDX-License-Identifier: Apache-2.0
+#
+# Commit tracked changes at the end of every session so work is durable across
+# restarts. Uses `commit -am` (tracked files only) on purpose: ephemeral
+# artifacts (screenshots, logs, scratch files) shouldn&#x27;t land in history. The
+# agent is expected to `git add` new source files itself per CLAUDE.md.
+#
+# Fails silently if commit can&#x27;t be made (no git user.name, hook rejects, etc);
+# check `git log` periodically when relying on this as a backstop.
+if git rev-parse --git-dir &gt;/dev/null 2&gt;&amp;1; then
+  if ! git diff --quiet || ! git diff --cached --quiet; then
+    git commit -am &quot;session checkpoint: $(date &#x27;+%Y-%m-%d %H:%M&#x27;)&quot; &gt;/dev/null 2&gt;&amp;1
+  fi
+fi
+exit 0
+</pre></div><div class="atv-step atv-role-assistant"><div class="atv-step-head"><span class="atv-role">assistant</span> <span class="atv-step-idx">step #2</span></div><pre class="atv-content">The hook file is `commit-on-stop.sh`, and its core git operation is committing tracked changes at the end of every session using `git commit -am`.</pre></div><div class="atv-final"><div class="atv-final-head">final answer</div><pre class="atv-content">The hook file is `commit-on-stop.sh`, and its core git operation is committing tracked changes at the end of every session using `git commit -am`.</pre></div></details><details class="atv-trajectory" data-task-id="no-op-trivia"><summary><strong>no-op-trivia</strong> · Qwen/Qwen3-30B-A3B <span class='atv-pill atv-term'>answered</span> <span class='atv-meta'>1 assistant · 0 tool · engine <code>hermes-qwen3-30b-a3b-bf16</code></span></summary><div class="atv-prompt"><div class="atv-prompt-head">task prompt</div><pre class="atv-content">Trivia: which two cities are the famous start and end of the Tokaido road in feudal Japan? Answer in one short sentence. You do NOT need to call any tools for this — just answer from background knowledge.</pre></div><div class="atv-step atv-role-assistant"><div class="atv-step-head"><span class="atv-role">assistant</span> <span class="atv-step-idx">step #0</span></div><pre class="atv-content">The Tokaido road in feudal Japan started in Edo (now Tokyo) and ended in Kyoto.</pre></div><div class="atv-final"><div class="atv-final-head">final answer</div><pre class="atv-content">The Tokaido road in feudal Japan started in Edo (now Tokyo) and ended in Kyoto.</pre></div></details><details class="atv-trajectory" data-task-id="no-op-trivia"><summary><strong>no-op-trivia</strong> · Qwen/Qwen3-32B <span class='atv-pill atv-term'>answered</span> <span class='atv-meta'>1 assistant · 0 tool · engine <code>hermes-qwen3-32b-bf16</code></span></summary><div class="atv-prompt"><div class="atv-prompt-head">task prompt</div><pre class="atv-content">Trivia: which two cities are the famous start and end of the Tokaido road in feudal Japan? Answer in one short sentence. You do NOT need to call any tools for this — just answer from background knowledge.</pre></div><div class="atv-step atv-role-assistant"><div class="atv-step-head"><span class="atv-role">assistant</span> <span class="atv-step-idx">step #0</span></div><pre class="atv-content">The famous start and end cities of the Tokaido road in feudal Japan are Edo (modern-day Tokyo) and Kyoto.</pre></div><div class="atv-final"><div class="atv-final-head">final answer</div><pre class="atv-content">The famous start and end cities of the Tokaido road in feudal Japan are Edo (modern-day Tokyo) and Kyoto.</pre></div></details></section><footer>streams-rollout-market — generated from runs/live/</footer></body></html>

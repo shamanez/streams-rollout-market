@@ -423,9 +423,11 @@ def _render_step(step: AgentStep) -> str:
         parts.append(f'<pre class="atv-content">{_html.escape(step.content)}</pre>')
     for call in step.tool_calls:
         try:
-            args_pretty = json.dumps(call.arguments, indent=2, ensure_ascii=False)
+            args_pretty = json.dumps(
+                json.loads(call.arguments_json), indent=2, ensure_ascii=False
+            )
         except (TypeError, ValueError):
-            args_pretty = str(call.arguments)
+            args_pretty = call.arguments_json
         parts.append(
             f'<div class="atv-toolcall">'
             f'<div class="atv-toolcall-head">→ <code>{_html.escape(call.name)}</code></div>'
