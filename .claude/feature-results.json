@@ -1,7 +1,7 @@
 {
   "spot_build_vllm_dev_routed_experts": {
-    "passes": false,
-    "evidence": null,
+    "passes": true,
+    "evidence": ".claude/evidence/iter01_spot_vllm_dev/iter01.md",
     "directive": "Spot — build vLLM dev with `routed_experts_replay` (side-by-side venv).\n\n- Pin to commit `a7b801e26d6b9d96bb49e939c0b6b3acf1d85796` (the commit the user-supplied docs URL points to). This is the minimum that exposes `prompt_routed_experts` + `choices[i].routed_experts` over the OpenAI HTTP endpoint.\n- New venv `~/rmenv-dev/` (Python 3.12). Build from source: `git clone https://github.com/vllm-project/vllm.git && git checkout a7b801e && pip install -e .` plus `transformers requests`.\n- Do NOT touch `~/rmenv/`. Every launcher will pick the venv via an explicit `source` line.\n\nVerification (from plan §Verification step 2, first bullet): `source ~/rmenv-dev/bin/activate && python -c \"from vllm import __version__; print(__version__)\"` prints a dev version string from the pinned commit."
   },
   "spot_serve_moe_router_replay": {
