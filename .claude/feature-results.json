@@ -1,42 +1,42 @@
 {
-  "spot_build_vllm_dev_routed_experts": {
-    "passes": true,
-    "evidence": ".claude/evidence/iter01_spot_vllm_dev/iter01.md",
-    "directive": "Spot — build vLLM dev with `routed_experts_replay` (side-by-side venv).\n\n- Pin to commit `a7b801e26d6b9d96bb49e939c0b6b3acf1d85796` (the commit the user-supplied docs URL points to). This is the minimum that exposes `prompt_routed_experts` + `choices[i].routed_experts` over the OpenAI HTTP endpoint.\n- New venv `~/rmenv-dev/` (Python 3.12). Build from source: `git clone https://github.com/vllm-project/vllm.git && git checkout a7b801e && pip install -e .` plus `transformers requests`.\n- Do NOT touch `~/rmenv/`. Every launcher will pick the venv via an explicit `source` line.\n\nVerification (from plan §Verification step 2, first bullet): `source ~/rmenv-dev/bin/activate && python -c \"from vllm import __version__; print(__version__)\"` prints a dev version string from the pinned commit."
+  "spot_pull_qwen3_moe_fp8": {
+    "passes": false,
+    "evidence": null,
+    "directive": "### 1. spot_pull_qwen3_moe_fp8: download Qwen/Qwen3-30B-A3B-FP8 to the spot\n\nFetch the FP8 quantized MoE weights from HuggingFace into the spot's `~/hf-cache/`. Use the existing huggingface-cli (or `from huggingface_hub import snapshot_download`) in `~/rmenv-dev/`. Verify the cache layout matches the bf16 model's: `~/hf-cache/hub/models--Qwen--Qwen3-30B-A3B-FP8/snapshots/<sha>/` with `config.json`, `tokenizer.json`, `*.safetensors`. Then create a convenience symlink at `~/checkpoint/qwen3-30b-a3b-fp8/hf` → the snapshot dir (matching the bootstrap layout). Acceptance: `ls ~/checkpoint/qwen3-30b-a3b-fp8/hf/config.json` exists and reports `\"quantization_config\": {\"quant_method\": \"fp8\"...}`."
   },
-  "spot_serve_moe_router_replay": {
-    "passes": true,
-    "evidence": ".claude/evidence/iter02_serve_moe_dev/iter02.md",
-    "directive": "Spot — serve Qwen3-30B-A3B with router replay flag.\n\nModify `scripts/live/megatron_moe_reference_launch.sh` is **not** what serves vLLM — that's the trainer side. The serving side is currently embedded in `CLAUDE.md`'s \"step 1\" snippet. Add a new launcher:\n\n- New file: `scripts/live/vllm_serve_moe_dev.sh` — equivalent of CLAUDE.md step 1 for the MoE leg, but sourcing `~/rmenv-dev/` and passing:\n  - `--enable-return-routed-experts`\n  - `--enable-expert-parallel`\n  - `--no-async-scheduling` (required: routed_experts is incompatible with async sched per the docs)\n  - `--tensor-parallel-size 4 --dtype auto --max-model-len 40960 --gpu-memory-utilization 0.85 --host 0.0.0.0 --port 8000`\n- No request-side changes needed. The proxy already injects `logprobs=True, top_logprobs=1, return_token_ids=True`; the routed-experts trace rides along on the response automatically.\n\nVerification (from plan §Verification step 2, second bullet): curl `vllm serve` directly (without the proxy) and assert `choices[0].routed_experts` is a 3-D list shaped `[*, 48, 8]` and `prompt_routed_experts` is similar."
+  "spot_smoke_test_moe_fp8_serve": {
+    "passes": false,
+    "evidence": null,
+    "directive": "### 2. spot_smoke_test_moe_fp8_serve: vLLM-dev FP8 serve + routed_experts probe\n\nAdapt `scripts/live/vllm_serve_moe_dev.sh` (or write a sibling `vllm_serve_moe_fp8_dev.sh`) to launch Qwen3-30B-A3B-FP8 with the patched dev wheel, `--enable-return-routed-experts`, `--enable-expert-parallel`, `--no-async-scheduling`. After `/v1/models` returns 200, call `/v1/chat/completions` directly with a single user turn and verify the response carries `choices[0].routed_experts` with shape `[gen_tokens, 48, 8]`. Acceptance: routed_experts shape correct, GPU memory usage roughly half of the bf16 case (FP8 is half the precision width)."
   },
-  "spot_start_capture_proxy": {
-    "passes": true,
-    "evidence": ".claude/evidence/iter03_capture_proxy/iter03.md",
-    "directive": "Spot — start the existing capture proxy on port 8001 (unchanged).\n\n`scripts/live/logprob_capture_proxy.py` already extracts `choice.routed_experts` and `rsp.prompt_routed_experts` into the sidecar JSONL. No code change. Smoke-test with `curl http://localhost:8001/v1/chat/completions` and confirm the sidecar entry has a non-null `response_routed_experts` of shape `[gen_len, 48, 8]`.\n\nVerification (from plan §Verification step 3): drive one chat-completions request via curl on port 8001, then `tail -1 /tmp/hermes_probes.jsonl` and confirm `response_routed_experts` and `prompt_routed_experts` are populated."
+  "spot_drive_bf16_task_batch": {
+    "passes": false,
+    "evidence": null,
+    "directive": "### 3. spot_drive_bf16_task_batch: capture 4-6 bf16 MoE trajectories\n\nDrive the bf16 MoE (the existing `vllm_serve_moe_dev.sh` path) via `minimal_agent_driver.py` against a fixed task list — pick 4 tasks from `scripts/live/agent_tasks_hermes.json` (e.g. `math-tokens-per-gpu-day`, `code-fix-factorial`, `mixed-research-and-math`, `plan-3step-experiment`) plus the 2 `agent_tasks_cwc_repo.json` tasks = 6 tasks total. Run each one through the proxy on port 8001 so per-token logprobs + routed_experts land in `/tmp/hermes_probes.jsonl`. Merge into `runs/live/agent/hermes/qwen3-30b-a3b/bf16/` and build `/tmp/rollouts_bf16.json` for the trainer side. Acceptance: 6 trajectory JSONs under `runs/live/agent/hermes/qwen3-30b-a3b/bf16/` each with non-null `response_routed_experts`."
   },
-  "spot_drive_no_op_trivia": {
-    "passes": true,
-    "evidence": ".claude/evidence/iter04_drive_no_op_trivia/iter04.md",
-    "directive": "Spot — drive `no-op-trivia` through `minimal_agent_driver.py` (unchanged).\n\nAlready non-streaming (the hermes CLI is streaming and would lose the routed_experts top-level field, since the docs note streaming is unsupported). One command, identical to the dense Hermes recipe but with `--model Qwen/Qwen3-30B-A3B` and the MoE trajectory dir.\n\nUse `--base-url http://localhost:8001 --model Qwen/Qwen3-30B-A3B --tasks scripts/live/agent_tasks_hermes.json --task-id no-op-trivia --out /tmp/minimal_sharegpt.jsonl --max-steps 5 --max-tokens 512 --timeout 180`."
+  "spot_drive_fp8_task_batch": {
+    "passes": false,
+    "evidence": null,
+    "directive": "### 4. spot_drive_fp8_task_batch: capture matching fp8 MoE trajectories\n\nRepeat iter 3 against the FP8 serve from iter 2 over the *same* 6 tasks. Output trajectories under `runs/live/agent/hermes/qwen3-30b-a3b/fp8/` (note the `/fp8/` subdir keeps the precision in the path). Build `/tmp/rollouts_fp8.json`. Acceptance: 6 fp8 trajectory JSONs, all with `response_routed_experts` populated."
   },
-  "laptop_merge_probes": {
-    "passes": true,
-    "evidence": ".claude/evidence/iter05_merge_probes/iter05.md",
-    "directive": "Laptop — merge probes into the AgentTrajectory (unchanged).\n\n`scripts/live/merge_probes_into_trajectories.py` already includes `response_routed_experts` in `_PROBE_KEYS`. The output `runs/live/agent/hermes/qwen3-30b-a3b/bf16/no-op-trivia.json` will, for the first time, have a non-null `response_routed_experts` on its assistant step(s).\n\nSteps: rsync `/tmp/minimal_sharegpt.jsonl` and `/tmp/hermes_probes.jsonl` back from the spot; carve a one-task `tasks_one.json` for `no-op-trivia`; run `merge_probes_into_trajectories.py --sharegpt … --probes … --tasks … --model-id Qwen/Qwen3-30B-A3B --engine-label hermes-qwen3-30b-a3b-bf16 --engine-fingerprint sha256:hermes-qwen3-30b-a3b-bf16-tp4-l40s --out-dir runs/live/agent/hermes/qwen3-30b-a3b/bf16/`.\n\nVerification (from plan §Verification step 4): the merged trajectory JSON has a non-null `response_routed_experts` on its assistant step."
+  "spot_fsdp_teacher_force_both_precisions": {
+    "passes": false,
+    "evidence": null,
+    "directive": "### 5. spot_fsdp_teacher_force_both_precisions\n\nPush both `/tmp/rollouts_bf16.json` and `/tmp/rollouts_fp8.json` through `scripts/live/run_fsdp_moe_reference.py`. The trainer always runs in **bf16** (FSDP weights are loaded from the bf16 HF dir; we only vary the rollout side). Outputs: `/tmp/trainers_fsdp_moe_bf16_rollouts.json` and `/tmp/trainers_fsdp_moe_fp8_rollouts.json` plus their `_router.json` siblings. Acceptance: each output has shape `[gen_tokens, 48, 8]` matching the corresponding rollout window."
   },
-  "spot_trainer_router_traces": {
-    "passes": true,
-    "evidence": ".claude/evidence/iter06_trainer_router/iter06.md",
-    "directive": "Spot — trainer-side router traces over the SAME captured token IDs.\n\n- **FSDP**: `scripts/live/run_fsdp_moe_reference.py` already exists and is `output_router_logits=True`-aware. We push the trajectory's `(prompt_token_ids, response_token_ids)` into `/tmp/rollouts.json`, run via `torchrun --nproc-per-node=4`, and pull `/tmp/fsdp_router.json` back to the laptop.\n- **Megatron**: `scripts/live/megatron_moe_reference_launch.sh` already runs `run_megatron_moe_reference.py --emit-router` inside docker with `PYTHONPATH=/root/Megatron-LM/`. Forward hooks on `mlp.router` already produce `/tmp/megatron_router.json` of shape `[token][layer][top_k]`. Reuse as-is.\n- Both already align positions via `routed_position_indices()` (`prompt_len + response_len - 1` predicting positions).\n\nBefore running trainers: kill `vllm serve` on the spot (it holds all 4 GPUs)."
+  "spot_megatron_teacher_force_both_precisions": {
+    "passes": false,
+    "evidence": null,
+    "directive": "### 6. spot_megatron_teacher_force_both_precisions\n\nSame as iter 5 but Megatron. Write `/tmp/rollout.json` for the bf16 batch first, run `megatron_moe_reference_launch.sh`, capture `/tmp/trainer_megatron-bf16-moe-bf16-rollouts.json` and `/tmp/megatron_router-bf16-rollouts.json`. Repeat with the fp8 batch. Use the same patched launcher (already fixed to dereference HF symlinks). Acceptance: both batches produce valid router traces."
   },
-  "laptop_pair_rollout_vs_trainer": {
-    "passes": true,
-    "evidence": ".claude/evidence/iter07_pair_router/iter07.md",
-    "directive": "Laptop — pair rollout vs trainer (per trainer cell).\n\n`scripts/live/pair_hermes_moe_reports.py` already exists. Drive it twice — once with `--trainers /tmp/fsdp_router.json --trainer-engine-label fsdp-bf16-moe`, once with `--trainers /tmp/megatron_router.json --trainer-engine-label megatron-bf16-moe` — outputting `router_mismatch_report.json` under `runs/live/router/hermes-qwen3-30b-a3b-bf16-vs-{fsdp,megatron}-bf16-moe/`.\n\nVerification (from plan §Verification step 5): each `router_mismatch_report.json` has `router_flip_rate ∈ [0,1]` and `layer_flip_rates` of length 48."
+  "laptop_pair_all_reports": {
+    "passes": false,
+    "evidence": null,
+    "directive": "### 7. laptop_pair_all_reports\n\nPull all four trainer outputs to the laptop. Run `pair_hermes_moe_reports.py` four times with the matching `--rollout-engine-label hermes-qwen3-30b-a3b-{bf16,fp8}` and `--trainer-engine-label {fsdp,megatron}-bf16-moe`. This produces 4 × 6 = 24 `router_mismatch_report.json` files under `runs/live/router/<rollout-vs-trainer>/<run>/`. Acceptance: 24 reports written, all with `router_flip_rate` and `token_expert_disagreement_rate` populated."
   },
-  "laptop_aggregate_republish_dashboard": {
-    "passes": true,
-    "evidence": ".claude/evidence/iter08_dashboard/iter08.md",
-    "directive": "Laptop — aggregate + republish dashboard.\n\n- `python -m rollout_market.cli.router_dashboard --reports-glob 'runs/live/router/**/router_mismatch_report.json' --out-dir runs/live/router_dashboard` populates `runs/live/router_dashboard/router_dashboard.json` (currently 0 runs).\n- `scripts/live/publish_dashboards.py` copies the populated JSON to `docs/router_dashboard.json` and re-renders `docs/router_dashboard.html`.\n- **One required edit** to `scripts/live/publish_dashboards.py`: the current `index.html` builder emits the yellow `<section data-section='router-flip-rate-placeholder'>` block with the TBD copy regardless of dashboard state. Replace it with a real `mx-section` MoE-router matrix (mirroring `hermes-agent-moe-matrix`) that reads the engine-pair aggregates from `router_dashboard.json` and renders one tile per `(rollout × trainer)` cell with `router_flip_rate` as the value and the existing color bands (green ≤ 5%, amber 5-15%, red > 15% — picking thresholds here is a small judgement call we should sanity-check against the first real numbers).\n- Also edit `CLAUDE.md`: update the \"End-to-end reproduction\" MoE substitutions to point step 1 at the new `vllm_serve_moe_dev.sh`, and update the \"Why this matters\" paragraph since `routed_experts` is no longer the missing piece.\n\nVerification (from plan §Verification step 1, 6, 7):\n- `pytest -q && ruff check .` — all 470 baseline tests still pass after editing `publish_dashboards.py` (tests under `tests/test_publish_dashboards.py` cover the rendered HTML).\n- Open `docs/index.html` in a browser. The `Router flip rate (TBD)` yellow section is gone; in its place a `Hermes Agent — MoE router` matrix renders two tiles (FSDP, Megatron) with concrete percentages and tile colors.\n- Commit only after every step is green."
+  "laptop_aggregate_republish_2x2_matrix": {
+    "passes": false,
+    "evidence": null,
+    "directive": "### 8. laptop_aggregate_republish_2x2_matrix\n\nRe-aggregate via `python -m rollout_market.cli.router_dashboard --reports-glob 'runs/live/router/**/router_mismatch_report.json' --out-dir runs/live/router_dashboard`. The aggregator already keys on `(rollout_engine, trainer_engine)` pairs, so the 2x2 matrix populates automatically. Republish via `publish_dashboards.py`. Update `_select_hermes_router_cells` in publish_dashboards.py if a new column header (`bf16 + fp8 - L40S`) is required. Acceptance: `docs/index.html` shows a 2x2 router matrix with 4 traffic-light tiles, each tile reporting `n >= 3 run(s)` and a flip-rate value; `docs/router_dashboard.html` shows per-precision per-trainer breakdown; tests + ruff green."
   }
 }
