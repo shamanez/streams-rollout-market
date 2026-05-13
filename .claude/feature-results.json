@@ -25,8 +25,8 @@
     "directive": "### 5. spot_fsdp_teacher_force_both_precisions\n\nPush both `/tmp/rollouts_bf16.json` and `/tmp/rollouts_fp8.json` through `scripts/live/run_fsdp_moe_reference.py`. The trainer always runs in **bf16** (FSDP weights are loaded from the bf16 HF dir; we only vary the rollout side). Outputs: `/tmp/trainers_fsdp_moe_bf16_rollouts.json` and `/tmp/trainers_fsdp_moe_fp8_rollouts.json` plus their `_router.json` siblings. Acceptance: each output has shape `[gen_tokens, 48, 8]` matching the corresponding rollout window."
   },
   "spot_megatron_teacher_force_both_precisions": {
-    "passes": false,
-    "evidence": null,
+    "passes": true,
+    "evidence": ".claude/evidence/iter06_megatron_both/iter06.md",
     "directive": "### 6. spot_megatron_teacher_force_both_precisions\n\nSame as iter 5 but Megatron. Write `/tmp/rollout.json` for the bf16 batch first, run `megatron_moe_reference_launch.sh`, capture `/tmp/trainer_megatron-bf16-moe-bf16-rollouts.json` and `/tmp/megatron_router-bf16-rollouts.json`. Repeat with the fp8 batch. Use the same patched launcher (already fixed to dereference HF symlinks). Acceptance: both batches produce valid router traces."
   },
   "laptop_pair_all_reports": {
