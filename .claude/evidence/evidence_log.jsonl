@@ -75,3 +75,5 @@
 {"timestamp":"20260513T042930Z","command":"ruff check . 2>&1 | head -15"}
 {"timestamp":"20260513T042941Z","command":"pytest -q 2>&1 | tail -3 && ruff check . 2>&1 | tail -2"}
 {"timestamp":"20260513T043210Z","iter":"client_side_capture_driver","evidence":".claude/evidence/iter02_client_capture/iter02.md"}
+{"timestamp":"20260513T043211Z","command":"echo \"}
+{"timestamp":"20260513T043251Z","command":"git diff HEAD .claude/evidence/evidence_log.jsonl 2>&1 | tail -10"}
