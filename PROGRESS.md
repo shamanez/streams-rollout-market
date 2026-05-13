@@ -1,11 +1,35 @@
 # PROGRESS.md — Agent Handoff State
 
 ## Last updated
-2026-05-13 — initiative complete; STEER.md retired.
+2026-05-13 — initiative complete; STEER.md retired. Two operator-
+directed follow-ups landed after the queue closed (see "Post-cycle
+operator-directed work" below).
 
 ## Status
 Idle. All eight queue entries `passes:true`. STEER.md deleted as the
 final commit per its own stop clause.
+
+## Post-cycle operator-directed work (2026-05-13)
+- **Megatron MoE router tile filled.** HF→torch-dist conversion ran
+  on the spot (~62 GB distcp shards under `~/checkpoint/qwen3-30b-
+  a3b/megatron/release/`). First teacher-force attempt failed on
+  tokenizer instantiation inside the slime container because the HF
+  snapshot dir is full of relative symlinks pointing *outside* the
+  bind-mount; fixed `scripts/live/megatron_moe_reference_launch.sh`
+  to dereference with `cp -rL` to a temp dir before mounting. Run
+  completed in 55.3s. Paired vs the existing rollout: `router_flip_
+  rate = 3.03%` (green, worst layer 9.1%). Both MoE × FSDP (3.50%)
+  and MoE × Megatron (3.03%) tiles are now live. Merged as
+  `582aacf`.
+- **cwc-long-running-agents Q&A trajectories.** Drove the patched
+  MoE dev wheel via `minimal_agent_driver` against two new tasks in
+  `scripts/live/agent_tasks_cwc_repo.json`. The agent used parallel
+  read_file in one task and sequential read_file in the other; both
+  trajectories captured full per-token logprobs + per-(token, MoE
+  layer, top-8) `response_routed_experts`. Fixed an `agent_dashboard
+  ._render_step` bug (`ToolCallRecord.arguments` → `arguments_json`)
+  that had been silently producing an empty viewer on prior
+  publishes. Viewer now shows 4 trajectories. Merged as `11fd7dc`.
 
 ## Completed this cycle
 - `spot_build_vllm_dev_routed_experts` (iter 01) — wheel + four-file
@@ -41,9 +65,10 @@ final commit per its own stop clause.
 - The MoE-router matrix has one (count=1) data point. Repeating
   iter 04 → iter 07 with the other tasks in `agent_tasks_hermes.json`
   would tighten per-cell statistics.
-- Megatron MoE distcp shards at
+- ~~Megatron MoE distcp shards at
   `~/checkpoint/qwen3-30b-a3b/megatron/release/` remain empty on the
-  current spot; provisioning them would unlock the Megatron tile.
+  current spot; provisioning them would unlock the Megatron tile.~~
+  **Resolved 2026-05-13** — see Post-cycle operator-directed work.
 
 ## How to start a new initiative
 
