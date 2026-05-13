@@ -26,7 +26,9 @@ def test_cards_does_not_contain_endpoint_slug():
     assert "dense" in slugs
     assert "router" in slugs
     assert "agent" in slugs
-    assert "marketplace" in slugs
+    # Marketplace simulation retired — the public surface is now
+    # strictly about training-inference mismatch (logprob + routing).
+    assert "marketplace" not in slugs
 
 
 def test_headlines_does_not_contain_endpoint_key():
@@ -59,7 +61,7 @@ def test_rendered_index_headline_has_no_endpoint_dashboard_string():
     # Sanity: the three target dashboards still render.
     assert "Dense mismatch dashboard" in headline
     assert "MoE router dashboard" in headline
-    assert "Agent trajectory dashboard" in headline
+    assert "Agent trajectory viewer" in headline
 
 
 def test_rendered_index_hermes_router_matrix_empty_payload_renders_tbd():

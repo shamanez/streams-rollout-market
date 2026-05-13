@@ -18,19 +18,28 @@ from typing import Iterable
 from ._dashboard_style import (
     badge,
     chart_block,
-    kpi_block,
     page_shell,
     palette_for,
     quality_badge_for_match_rate,
     raw_numbers_block,
-    render_research_question,
     traffic_light_row,
     traffic_light_tile,
 )
 from ._device import device_bucket_label
-from ._engine_filter import is_headline_pair
-from ._glossary import render_glossary_card
-from .agent_trajectory_lab import TrajectoryDivergenceReport
+from .agent_trajectory_lab import (
+    AgentStep,
+    AgentTrajectory,
+    TrajectoryDivergenceReport,
+    load_trajectory,
+)
+
+
+# Default search root for the trajectory viewer. The CLI / publish script
+# may pass an explicit directory via ``render_html(dashboard, trajectory_dir=...)``;
+# unit tests can override too. When the directory does not exist (e.g. a
+# fresh checkout with no captured trajectories yet) the viewer renders an
+# empty-state message instead of failing.
+_DEFAULT_TRAJECTORY_DIR = Path("runs/live/agent")
 
 
 @dataclass(frozen=True)
@@ -390,90 +399,198 @@ def _agent_engine_view(
     )
 
 
-def render_html(dashboard: AgentDashboard) -> str:
-    aggs = dashboard.engine_pair_aggregates()
-    headline_aggs = [a for a in aggs if is_headline_pair(a.rollout_engine, a.trainer_engine)]
-    appendix_aggs = [a for a in aggs if not is_headline_pair(a.rollout_engine, a.trainer_engine)]
-    headline_rows = [r for r in dashboard.rows if is_headline_pair(r.rollout_engine, r.trainer_engine)]
-    appendix_rows = [r for r in dashboard.rows if not is_headline_pair(r.rollout_engine, r.trainer_engine)]
+def _render_step(step: AgentStep) -> str:
+    """Render one assistant or tool turn as an HTML block."""
+    role_class = "atv-role-" + step.role
+    parts = [f'<div class="atv-step {role_class}">']
+    parts.append(
+        f'<div class="atv-step-head">'
+        f'<span class="atv-role">{_html.escape(step.role)}</span>'
+        f' <span class="atv-step-idx">step #{step.step_idx}</span>'
+        + (
+            f' · <span class="atv-tok">{step.response_token_count} tok</span>'
+            if step.response_token_count
+            else ""
+        )
+        + (
+            f' · <span class="atv-finish">{_html.escape(step.finish_reason)}</span>'
+            if step.finish_reason
+            else ""
+        )
+        + "</div>"
+    )
+    if step.content:
+        parts.append(f'<pre class="atv-content">{_html.escape(step.content)}</pre>')
+    for call in step.tool_calls:
+        try:
+            args_pretty = json.dumps(call.arguments, indent=2, ensure_ascii=False)
+        except (TypeError, ValueError):
+            args_pretty = str(call.arguments)
+        parts.append(
+            f'<div class="atv-toolcall">'
+            f'<div class="atv-toolcall-head">→ <code>{_html.escape(call.name)}</code></div>'
+            f'<pre class="atv-toolcall-args">{_html.escape(args_pretty)}</pre>'
+            f"</div>"
+        )
+    parts.append("</div>")
+    return "".join(parts)
 
-    pool = headline_aggs or aggs
-    if pool:
-        all_match_rates = [a.final_answer_match_rate for a in pool]
-        worst_match = min(all_match_rates)
-        best_match = max(all_match_rates)
-    else:
-        worst_match = best_match = 0.0
 
-    kpis = kpi_block([
-        (str(len(headline_rows)), "headline comparisons"),
-        (str(len(headline_aggs)), "headline engine pairs"),
-        (f"{best_match * 100:.0f}%", "best answer-match rate"),
-        (f"{worst_match * 100:.0f}%", "worst answer-match rate"),
-    ])
+def _render_trajectory_card(traj: AgentTrajectory) -> str:
+    """One <details> block per trajectory: task header + the conversation."""
+    success_badge = (
+        "<span class='atv-pill atv-ok'>completed</span>"
+        if traj.success
+        else (
+            f"<span class='atv-pill atv-term'>"
+            f"{_html.escape(traj.terminal_reason or 'unfinished')}</span>"
+            if traj.terminal_reason
+            else "<span class='atv-pill atv-term'>unfinished</span>"
+        )
+    )
+    n_assistant = sum(1 for s in traj.steps if s.role == "assistant")
+    n_tool = sum(1 for s in traj.steps if s.role == "tool")
+    summary = (
+        f"<summary>"
+        f"<strong>{_html.escape(traj.task_id)}</strong>"
+        f" · {_html.escape(traj.model_id)}"
+        f" {success_badge}"
+        f" <span class='atv-meta'>"
+        f"{n_assistant} assistant · {n_tool} tool · "
+        f"engine <code>{_html.escape(traj.rollout_engine.name)}</code>"
+        f"</span>"
+        f"</summary>"
+    )
+    prompt_block = (
+        f'<div class="atv-prompt"><div class="atv-prompt-head">task prompt</div>'
+        f'<pre class="atv-content">{_html.escape(traj.task_text)}</pre></div>'
+    )
+    final_block = (
+        f'<div class="atv-final"><div class="atv-final-head">final answer</div>'
+        f'<pre class="atv-content">{_html.escape(traj.final_answer or "(none)")}</pre></div>'
+    )
+    steps_html = "".join(_render_step(s) for s in traj.steps)
+    return (
+        f'<details class="atv-trajectory" data-task-id="{_html.escape(traj.task_id)}">'
+        f"{summary}{prompt_block}{steps_html}{final_block}"
+        f"</details>"
+    )
 
-    headline_view = _agent_engine_view(headline_aggs, headline_rows, "headline")
-    # Inference-only redirect: drop the appendix block from rendered HTML.
-    appendix_block = ""
-    _ = appendix_aggs, appendix_rows
 
-    glossary = render_glossary_card([
-        "answer_match_rate",
-        "tool_call_jaccard",
-        "tool_choice_disagreement_rate",
-        "first_divergence_step",
-    ])
+_TRAJECTORY_VIEWER_STYLES = """
+<style>
+.atv-empty{padding:1rem;color:var(--muted);font-style:italic}
+.atv-trajectory{background:var(--surface);border:1px solid var(--border);
+  border-radius:10px;padding:.6rem 1rem;margin:.6rem 0}
+.atv-trajectory > summary{cursor:pointer;font-size:.98rem;list-style:none}
+.atv-trajectory > summary::-webkit-details-marker{display:none}
+.atv-trajectory[open] > summary{margin-bottom:.6rem;border-bottom:1px dashed var(--border);
+  padding-bottom:.5rem}
+.atv-meta{color:var(--muted);font-size:.85rem;margin-left:.4rem}
+.atv-pill{display:inline-block;font-size:.72rem;padding:.05rem .45rem;border-radius:6px;
+  margin-left:.3rem;vertical-align:middle}
+.atv-pill.atv-ok{background:#dcfce7;color:#166534}
+.atv-pill.atv-term{background:#fef3c7;color:#854d0e}
+.atv-prompt,.atv-final{background:#f8fafc;border:1px solid var(--border);
+  border-radius:8px;padding:.5rem .7rem;margin:.4rem 0}
+.atv-prompt-head,.atv-final-head{font-size:.75rem;text-transform:uppercase;
+  letter-spacing:.05em;color:var(--muted);margin-bottom:.25rem}
+.atv-step{border-left:3px solid #cbd5e1;padding:.35rem .6rem;margin:.4rem 0 .4rem .2rem}
+.atv-step.atv-role-assistant{border-left-color:#2563eb}
+.atv-step.atv-role-tool{border-left-color:#7c3aed}
+.atv-step-head{font-size:.78rem;color:var(--muted);margin-bottom:.25rem}
+.atv-role{font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text)}
+.atv-step-idx,.atv-tok,.atv-finish{font-variant-numeric:tabular-nums}
+.atv-content{white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:.85rem;margin:0;background:transparent}
+.atv-toolcall{background:#f5f3ff;border:1px solid #ddd6fe;border-radius:6px;
+  padding:.4rem .6rem;margin:.35rem 0}
+.atv-toolcall-head{font-size:.85rem;color:#5b21b6;margin-bottom:.2rem}
+.atv-toolcall-args{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:.78rem;background:transparent;margin:0;white-space:pre}
+</style>
+""".strip()
 
-    if pool:
-        pool_worst = min(a.final_answer_match_rate for a in pool)
-        scope = "headline" if headline_aggs else "full-engine fallback"
-        observed = (
-            f"Across the {scope} set ({len(pool)} engine pair"
-            f"{'s' if len(pool) != 1 else ''}, "
-            f"{sum(a.count for a in pool)} multi-step trajectories), the worst "
-            f"engine pair reached the same final answer as the reference only "
-            f"{pool_worst * 100:.0f}% of the time. Token-level ESS deltas of "
-            "~0.025 compound, via tool-call selection, into a different agent. "
-            "The full-engine data is in the appendix below."
+
+def _list_trajectories(trajectory_dir: Path) -> list[AgentTrajectory]:
+    if not trajectory_dir.is_dir():
+        return []
+    out: list[AgentTrajectory] = []
+    for p in sorted(trajectory_dir.rglob("*.json")):
+        # Skip files that don't look like a trajectory (e.g. aggregator
+        # outputs) by trying load_trajectory and ignoring failures.
+        try:
+            out.append(load_trajectory(p))
+        except Exception:
+            continue
+    return out
+
+
+def render_html(
+    dashboard: AgentDashboard,
+    *,
+    trajectory_dir: Path | str | None = None,
+) -> str:
+    """Render the agent-trajectory page as a plain *viewer*.
+
+    Per operator direction (2026-05-13), this page is no longer a
+    rollout-vs-trainer comparison dashboard. The trainer only ever sees
+    the tokens the rollout generated, so per-token / sequence-level
+    mismatch is the relevant story and is already covered by the dense
+    + router matrices on the index. This page just lets a reader page
+    through the actual captured trajectories — prompt, response tokens,
+    tool calls embedded in the response. No engine comparison, no
+    answer-match, no Jaccard, no first-divergence-step.
+
+    The ``dashboard`` parameter is retained so the surrounding CLI
+    (which calls ``build_dashboard(...)`` first) still works; its
+    contents are not displayed.
+    """
+    _ = dashboard  # intentionally unused on this page
+    traj_dir = Path(trajectory_dir) if trajectory_dir is not None else _DEFAULT_TRAJECTORY_DIR
+    trajectories = _list_trajectories(traj_dir)
+    if trajectories:
+        cards = "".join(_render_trajectory_card(t) for t in trajectories)
+        body_inner = (
+            '<section class="card" data-section="trajectories">'
+            f"<h2>Captured trajectories ({len(trajectories)})</h2>"
+            "<p class='sub'>Each block shows one task's prompt, the response tokens "
+            "the rollout produced, and the tool calls embedded in the response. "
+            "This page is a viewer; the training-inference mismatch on these tokens "
+            "is on the Dense and Router matrices on the home page.</p>"
+            f"{cards}"
+            "</section>"
         )
     else:
-        observed = "No comparisons in this snapshot."
-    rq = render_research_question(
-        question="Does engine and precision drift propagate from token-level "
-                 "logprob deltas into agent-level behaviour on multi-step, "
-                 "tool-using tasks?",
-        observed=observed,
-        next_step="More tasks (n>30), longer horizons, real (vs simulated) tools.",
-    )
-
-    body = (
-        f"{rq}"
-        f'<section class="card" data-section="headline">{kpis}</section>'
-        f'<div data-section="headline-engines">{headline_view}</div>'
-        f"{appendix_block}"
-        f"{glossary}"
-    )
-
-    devices = sorted({r.device_bucket for r in dashboard.rows})
-    devices_str = ", ".join(devices) if devices else "(none)"
-    title = "Agent trajectory dashboard"
+        body_inner = (
+            '<section class="card" data-section="trajectories">'
+            "<h2>Captured trajectories (0)</h2>"
+            "<p class='atv-empty'>No trajectories found under "
+            f"<code>{_html.escape(str(traj_dir))}</code>. Run a capture pass (see "
+            "<code>CLAUDE.md</code> § End-to-end reproduction) to populate.</p>"
+            "</section>"
+        )
+    body = f"{_TRAJECTORY_VIEWER_STYLES}{body_inner}"
+    title = "Agent trajectory viewer"
     lede = (
-        f"{len(headline_rows)} headline comparison"
-        f"{'s' if len(headline_rows) != 1 else ''} across "
-        f"{len(headline_aggs)} engine pair{'' if len(headline_aggs) == 1 else 's'}; "
-        f"{len(appendix_rows)} additional comparison"
-        f"{'' if len(appendix_rows) == 1 else 's'} "
-        f"in the full-engine appendix. Devices observed: {devices_str}. "
-        "Reference is on the right of each → arrow."
+        "Plain viewer for captured Hermes-Agent trajectories. "
+        "Comparison metrics moved to the Dense and Router matrices on the home page."
     )
     return page_shell(title, lede, body)
 
 
-def write_dashboard(dashboard: AgentDashboard, out_dir: Path | str) -> dict[str, Path]:
+def write_dashboard(
+    dashboard: AgentDashboard,
+    out_dir: Path | str,
+    *,
+    trajectory_dir: Path | str | None = None,
+) -> dict[str, Path]:
     out_path = Path(out_dir)
     out_path.mkdir(parents=True, exist_ok=True)
     json_path = out_path / "agent_dashboard.json"
     html_path = out_path / "agent_dashboard.html"
     json_path.write_text(json.dumps(dashboard.as_dict(), indent=2), encoding="utf-8")
-    html_path.write_text(render_html(dashboard), encoding="utf-8")
+    html_path.write_text(
+        render_html(dashboard, trajectory_dir=trajectory_dir), encoding="utf-8"
+    )
     return {"json": json_path, "html": html_path}

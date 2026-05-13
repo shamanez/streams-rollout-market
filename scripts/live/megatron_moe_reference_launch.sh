@@ -67,9 +67,18 @@ WORK_DIR="$(mktemp -d)"
 chmod -R a+rwx "$WORK_DIR"
 cp "$ROLLOUT_FILE_HOST" "$WORK_DIR/rollout.json"
 
+# The HF snapshot dir is full of relative symlinks pointing to
+# `../../blobs/<hash>` outside the mount, so a naive bind-mount makes
+# `tokenizer.json` etc. unreadable inside the container. Dereference
+# into a flat directory and bind-mount that instead.
+HF_FLAT="$(mktemp -d)"
+chmod -R a+rwx "$HF_FLAT"
+cp -rL "$HF_MODEL_DIR"/. "$HF_FLAT"/
+
 echo "[launch] CKPT_DIR=$CKPT_DIR"
 echo "[launch] ROLLOUT_FILE_HOST=$ROLLOUT_FILE_HOST"
 echo "[launch] WORK_DIR=$WORK_DIR (mounted as /host_tmp)"
+echo "[launch] HF_MODEL_DIR=$HF_MODEL_DIR (dereferenced to $HF_FLAT)"
 echo "[launch] RUNNER_PY=$RUNNER_PY"
 echo "[launch] RUNNER_SH=$RUNNER_SH"
 
@@ -83,7 +92,7 @@ docker run --rm \
   --shm-size=64g \
   --ulimit memlock=-1 --ulimit stack=67108864 \
   -v "$CKPT_DIR":/root/Qwen3-30B-A3B_torch_dist:ro \
-  -v "$HF_MODEL_DIR":/root/Qwen3-30B-A3B:ro \
+  -v "$HF_FLAT":/root/Qwen3-30B-A3B:ro \
   -v "$RUNNER_PY":/root/run_megatron_reference.py:ro \
   -v "$RUNNER_SH":/root/runner.sh:ro \
   -v "$WORK_DIR":/host_tmp \

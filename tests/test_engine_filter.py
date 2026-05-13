@@ -183,7 +183,11 @@ def _agent_report(rollout: str, trainer: str, *, idx: int) -> TrajectoryDivergen
     )
 
 
-def test_agent_dashboard_purges_blocked_engines_from_html():
+def test_agent_dashboard_json_still_holds_engine_pairs():
+    """The HTML side became a plain viewer (no engine comparison), but
+    the underlying JSON dashboard still aggregates engine pairs for
+    consumers of the JSON contract. This test guards the JSON shape
+    only — the HTML purge invariant no longer applies."""
     reports = [
         _agent_report("vllm", "fsdp", idx=1),
         _agent_report("vllm", "megatron", idx=2),
@@ -192,25 +196,26 @@ def test_agent_dashboard_purges_blocked_engines_from_html():
         _agent_report("sglang", "hf-transformers", idx=5),
     ]
     dashboard = build_agent_dashboard(reports)
-    page = render_agent_html(dashboard)
-    assert "fsdp" in page.lower()
-    assert "megatron" in page.lower()
-    assert "vllm" in page.lower()
-    assert "sglang" not in page.lower()
-    assert "hf-transformers" not in page.lower()
-    assert "data-section=\"all-engines\"" not in page
     payload = dashboard.as_dict()
     assert payload["num_runs"] == 5
     assert len(payload["engine_pairs"]) == 5
 
 
 def test_empty_dashboards_render_without_appendix():
-    """An empty dashboard still emits the headline skeleton and no appendix."""
+    """An empty dashboard still emits the headline skeleton and no
+    appendix. Only the comparison matrices (dense/router) are checked
+    here — the agent page is a plain viewer with a different
+    structure."""
     for renderer, empty in [
         (render_dense_html, DenseDashboard()),
         (render_router_html, RouterDashboard()),
-        (render_agent_html, AgentDashboard()),
     ]:
         page = renderer(empty)
         assert "data-section=\"headline-engines\"" in page
         assert "data-section=\"all-engines\"" not in page
+    # Agent page: empty viewer shows the empty-state card.
+    agent_page = render_agent_html(
+        AgentDashboard(), trajectory_dir="/tmp/_nonexistent_agent_dir_"
+    )
+    assert "data-section=\"trajectories\"" in agent_page
+    assert "Captured trajectories (0)" in agent_page

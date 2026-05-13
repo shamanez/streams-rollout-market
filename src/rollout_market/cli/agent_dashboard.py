@@ -27,8 +27,21 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--reports-glob",
-        required=True,
-        help="Glob matching agent_divergence_report.json files",
+        default=None,
+        help=(
+            "Optional: glob matching agent_divergence_report.json files. "
+            "The rendered page is now a plain trajectory viewer (no engine "
+            "comparison), so this is kept only for the JSON dashboard "
+            "artifact's backward compatibility. Default: no reports."
+        ),
+    )
+    parser.add_argument(
+        "--trajectory-dir",
+        default="runs/live/agent",
+        help=(
+            "Directory containing captured AgentTrajectory JSON files. "
+            "The viewer walks this tree and lists every loadable trajectory."
+        ),
     )
     parser.add_argument("--out-dir", required=True, help="Where to write the dashboard files")
     return parser
@@ -37,11 +50,13 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    reports = load_reports_glob(args.reports_glob)
-    if not reports:
+    reports = load_reports_glob(args.reports_glob) if args.reports_glob else []
+    if args.reports_glob and not reports:
         print(f"warning: no reports matched {args.reports_glob!r}", file=sys.stderr)
     dashboard = build_dashboard(reports)
-    paths = write_dashboard(dashboard, Path(args.out_dir))
+    paths = write_dashboard(
+        dashboard, Path(args.out_dir), trajectory_dir=Path(args.trajectory_dir)
+    )
     print(str(paths["json"]))
     print(str(paths["html"]))
     return 0
