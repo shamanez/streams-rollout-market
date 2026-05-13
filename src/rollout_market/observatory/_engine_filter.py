@@ -23,7 +23,7 @@ from __future__ import annotations
 
 APPENDIX_HEADER = "All engines (full data)"
 
-_HEADLINE_ROLLOUTS = ("vllm",)
+_HEADLINE_ROLLOUTS = ("vllm", "hermes")
 _HEADLINE_TRAINERS = ("fsdp", "megatron")
 _BLOCKED_ROLLOUTS = ("sglang",)
 _BLOCKED_TRAINERS = ("hf-transformers", "hf")
